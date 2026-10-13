@@ -1169,9 +1169,74 @@
     <script>
         const EVENT_SLUG = location.pathname.split('/')[2] || '';
         function eventUrl(p) { return `/e/${EVENT_SLUG}${p}`; }
-        function adminHeaders() { return { 'x-admin-password': adminPassword, 'Content-Type': 'application/json' }; }
+        function adminHeaders() { return Object.assign(adminAuthHeaders(), { 'Content-Type': 'application/json' }); }
 
         let adminPassword = '';
+
+        // ---- Admin session: stays unlocked across reloads, locks after 30 minutes of inactivity ----
+        // The browser keeps a server-issued token (never the password) in localStorage,
+        // shared by the admin and scheduler tabs of this event. "Activity" is any
+        // click/key/touch/scroll/mouse move in either tab.
+        const ADMIN_IDLE_LOCK_MS = 30 * 60 * 1000;
+        const ADMIN_SESSION_KEY = 'cuelistr_admin_session:' + EVENT_SLUG;
+        let adminToken = '';
+        let lastActivityWrite = 0;
+        function readAdminSession() { try { return JSON.parse(localStorage.getItem(ADMIN_SESSION_KEY) || 'null'); } catch (e) { return null; } }
+        function writeAdminSession(token, lastActive) { try { localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify({ token, lastActive })); } catch (e) { /* storage blocked */ } }
+        function clearAdminSession() { try { localStorage.removeItem(ADMIN_SESSION_KEY); } catch (e) { /* ignore */ } }
+        function markAdminActive() {
+            if (!adminToken) return;
+            const now = Date.now();
+            if (now - lastActivityWrite < 10000) return;
+            lastActivityWrite = now;
+            writeAdminSession(adminToken, now);
+        }
+        ['keydown', 'click', 'touchstart', 'mousemove', 'scroll'].forEach(ev => window.addEventListener(ev, markAdminActive, { passive: true }));
+        function storedSessionFresh(s) { return !!(s && s.token && Date.now() - (s.lastActive || 0) < ADMIN_IDLE_LOCK_MS); }
+        async function startAdminSession(password) {
+            try {
+                const res = await fetch(eventUrl('/api/admin/session'), { method: 'POST', headers: { 'x-admin-password': password } });
+                if (!res.ok) return false;
+                const d = await res.json();
+                adminToken = d.token;
+                lastActivityWrite = Date.now();
+                writeAdminSession(adminToken, lastActivityWrite);
+                return true;
+            } catch (e) { return false; }
+        }
+        function adminAuthHeaders() {
+            return adminToken ? { 'x-admin-token': adminToken } : { 'x-admin-password': adminPassword };
+        }
+        function lockAdmin(message) {
+            const tok = adminToken;
+            adminToken = '';
+            adminPassword = '';
+            clearAdminSession();
+            if (tok) { try { _origFetch(eventUrl('/api/admin/session-end'), { method: 'POST', headers: { 'x-admin-token': tok } }).catch(() => {}); } catch (e) { /* ignore */ } }
+            const lock = document.getElementById('lock-screen');
+            lock.style.display = '';
+            lock.style.visibility = 'visible';
+            document.getElementById('dashboard').classList.remove('show');
+            const em = document.getElementById('lock-error-msg');
+            em.textContent = message || 'Locked.';
+            em.style.display = 'block';
+            const input = document.getElementById('password-input');
+            input.value = '';
+            input.focus();
+        }
+        // Any 401 on a token-authenticated call (expired session, server restarted) locks the page.
+        const _origFetch = window.fetch.bind(window);
+        window.fetch = async function (input, init) {
+            const res = await _origFetch(input, init);
+            if (res.status === 401 && adminToken && init && init.headers && init.headers['x-admin-token']) {
+                lockAdmin('Your session expired. Enter the admin password to continue.');
+            }
+            return res;
+        };
+        setInterval(() => {
+            if (!adminToken) return;
+            if (!storedSessionFresh(readAdminSession())) lockAdmin('Locked after 30 minutes of inactivity. Enter the admin password to continue.');
+        }, 30000);
         let playlists = [];
         let rules = [];
         let ambientMedia = []; // { id, url, filename, type: 'photo'|'video', createdAt } - this event's Ambient Visuals library
@@ -1337,14 +1402,23 @@
             toastTimer = setTimeout(() => { el.className = 'toast'; }, 3000);
         }
 
-        async function verifyLogin() {
+        let statusPollStarted = false;
+        async function verifyLogin(storedToken) {
             const input = document.getElementById('password-input');
             const errorMsg = document.getElementById('lock-error-msg');
             const attempt = input.value;
+            const viaToken = typeof storedToken === 'string' && storedToken;
             try {
-                const res = await fetch(eventUrl('/api/admin/scheduler'), { headers: { 'x-admin-password': attempt } });
+                const res = await fetch(eventUrl('/api/admin/scheduler'), { headers: viaToken ? { 'x-admin-token': viaToken } : { 'x-admin-password': attempt } });
                 if (res.ok) {
-                    adminPassword = attempt;
+                    if (viaToken) {
+                        adminToken = viaToken;
+                        lastActivityWrite = 0;
+                        markAdminActive();
+                    } else {
+                        adminPassword = attempt;
+                        if (await startAdminSession(attempt)) adminPassword = ''; // keep the password only if a session couldn't be started
+                    }
                     const data = await res.json();
                     playlists = data.playlists || [];
                     rules = data.rules || [];
@@ -1364,15 +1438,28 @@
                     document.getElementById('dashboard').classList.add('show');
                     renderAll();
                     refreshStatus();
-                    setInterval(refreshStatus, 10000);
+                    if (!statusPollStarted) { statusPollStarted = true; setInterval(refreshStatus, 10000); }
+                    document.getElementById('lock-screen').style.visibility = 'visible';
                     return;
                 }
+                if (viaToken) clearAdminSession();
             } catch (e) { /* fall through */ }
+            document.getElementById('lock-screen').style.visibility = 'visible';
+            if (viaToken) return; // silent: just show the normal lock screen
+            errorMsg.textContent = 'Incorrect password.';
             errorMsg.style.display = 'block';
             input.value = '';
             input.focus();
         }
         document.getElementById('password-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') verifyLogin(); });
+
+        // Reloading (or opening this page from admin) restores a recent session without asking for the password again.
+        (function restoreSchedulerSession() {
+            const s = readAdminSession();
+            if (!storedSessionFresh(s)) { clearAdminSession(); return; }
+            document.getElementById('lock-screen').style.visibility = 'hidden';
+            verifyLogin(s.token);
+        })();
 
         // When embedded in an iframe on the admin page, the admin page
         // posts its already-entered password over so this doesn't make
