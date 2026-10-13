@@ -3240,7 +3240,7 @@ function getThemes(event) {
 
 // Paths (relative to /e/:slug) still available in Basic mode.
 const BASIC_ALLOWED_PUBLIC = /^\/(?:$|data$|api\/(?:public-config|site-config|search|request|set-username|now-playing|verify-code|show-code)$)/;
-const BASIC_ALLOWED_ADMIN = /^\/(?:data|config|toggle|toggle-explicit|toggle-location-lock|toggle-spotify-auto-queue|action|reorder|site-mode|theme|spotify-login-ticket|spotify-disconnect|playback\/(?:play|pause|next|previous|volume|seek))$/;
+const BASIC_ALLOWED_ADMIN = /^\/(?:session|session-end|data|config|toggle|toggle-explicit|toggle-location-lock|toggle-spotify-auto-queue|action|reorder|site-mode|theme|spotify-login-ticket|spotify-disconnect|playback\/(?:play|pause|next|previous|volume|seek))$/;
 const BASIC_ALLOWED_PAGES = /^\/(?:admin(?:\/spotify-login)?)?\/?$/;
 
 function basicBlockedPage(res) {
@@ -3311,7 +3311,27 @@ function verifyMasterPassword(provided) {
 // a snapshot taken at event-creation time, so changing your account
 // password later doesn't lock you out of events you made before the
 // change). Any one of the three is enough to manage (and close) the event.
+// Admin login tokens: after a correct password the browser is handed a random
+// token (see POST /api/admin/session below) and uses that instead of resending -
+// or ever storing - the password. This is what lets admin/scheduler survive a
+// page reload. The 30-minute inactivity lock is enforced in the browser (polling
+// requests would keep a server-side idle timer alive forever); the server adds a
+// hard cap and forgets every token on restart.
+const ADMIN_SESSION_MAX_MS = 12 * 60 * 60 * 1000;
+const adminSessions = new Map(); // token -> { slug, createdAt }
+setInterval(() => {
+    const now = Date.now();
+    for (const [t, s] of adminSessions) if (now - s.createdAt > ADMIN_SESSION_MAX_MS) adminSessions.delete(t);
+}, 10 * 60 * 1000).unref();
+
 async function requireAdminAuth(req, res, next) {
+    const token = req.headers['x-admin-token'];
+    if (token) {
+        const sess = typeof token === 'string' ? adminSessions.get(token) : null;
+        if (sess && sess.slug === req.event.slug && Date.now() - sess.createdAt < ADMIN_SESSION_MAX_MS) return next();
+        if (sess) adminSessions.delete(token);
+        return res.status(401).json({ error: 'Session expired.', sessionExpired: true });
+    }
     const provided = req.headers['x-admin-password'];
     if (verifyMasterPassword(provided)) {
         return next();
@@ -3325,6 +3345,19 @@ async function requireAdminAuth(req, res, next) {
     return res.status(401).json({ error: 'Unauthorized.' });
 }
 app.use('/e/:slug/api/admin', adminAuthLimiter, requireAdminAuth);
+
+// Exchange a correct password (checked by requireAdminAuth above) for a login token.
+app.post('/e/:slug/api/admin/session', (req, res) => {
+    if (req.headers['x-admin-token']) return res.status(400).json({ error: 'Log in with the password to start a session.' });
+    const token = crypto.randomBytes(32).toString('hex');
+    adminSessions.set(token, { slug: req.event.slug, createdAt: Date.now() });
+    res.json({ token });
+});
+app.post('/e/:slug/api/admin/session-end', (req, res) => {
+    const token = req.headers['x-admin-token'];
+    if (typeof token === 'string') adminSessions.delete(token);
+    res.json({ success: true });
+});
 
 // Master-only, not scoped to any one event: lists every event that exists
 // (slug, name, venue, created date) so a DJ who's lost track of an event's
