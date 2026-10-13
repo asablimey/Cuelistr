@@ -397,6 +397,62 @@
             overflow-y: auto;
         }
         .sidebar-panel.is-visible { transform: translateX(0); }
+
+        /* --- Account: sidebar My Events + login popup --- */
+        .sidebar-my-events { display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto; }
+        .sidebar-my-events-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); font-weight: 700; margin-top: 4px; }
+        .sidebar-event-link {
+            display: block; text-decoration: none; color: var(--text); background: var(--card-bg);
+            border: 1px solid var(--border-strong); border-radius: 8px; padding: 8px 10px; font-size: 0.82rem;
+        }
+        .sidebar-event-link:hover { border-color: #555; }
+        .sidebar-event-link.current { border-color: var(--spotify-green); }
+        .sidebar-event-link .ev-name { font-weight: 700; display: block; }
+        .sidebar-event-link .ev-meta { color: var(--text-muted); font-size: 0.74rem; }
+        .sidebar-account-login {
+            background: var(--spotify-green); border: none; color: #000; border-radius: 6px;
+            padding: 9px; font-size: 0.85rem; font-weight: 700; cursor: pointer;
+        }
+        #account-modal-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 10000;
+            display: none; align-items: center; justify-content: center; padding: 20px; overflow-y: auto;
+        }
+        #account-modal-overlay.open { display: flex; }
+        .acct-modal {
+            background: var(--panel-bg); border: 1px solid var(--border); border-radius: 16px;
+            padding: 28px; width: 100%; max-width: 380px; position: relative; box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+        }
+        .acct-modal h2 { margin: 0 0 16px 0; font-size: 1.3rem; text-align: center; color: var(--text); }
+        .acct-close { position: absolute; top: 10px; right: 12px; background: none; border: none; color: var(--text-muted); font-size: 1.1rem; cursor: pointer; }
+        .acct-tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+        .acct-tab {
+            flex: 1; background: var(--card-bg); border: 1px solid var(--border-strong); color: var(--text-muted);
+            padding: 9px; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 0.85rem;
+        }
+        .acct-tab.active { color: var(--text); border-color: var(--spotify-green); }
+        .acct-form { display: none; }
+        .acct-form.active { display: block; }
+        .acct-field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
+        .acct-field label { font-size: 0.72rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700; letter-spacing: 0.5px; }
+        .acct-field input {
+            background: var(--card-bg); border: 1px solid var(--border-strong); color: var(--text);
+            padding: 11px 12px; border-radius: 6px; font-size: 0.95rem; width: 100%;
+        }
+        .acct-field input:focus { outline: none; border-color: var(--spotify-green); }
+        .acct-submit { width: 100%; background: var(--text); color: var(--spotify-black); border: none; padding: 12px; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 0.95rem; }
+        .acct-submit:disabled { opacity: 0.5; cursor: default; }
+        .acct-link { background: none; border: none; color: var(--spotify-green); font-size: 0.8rem; cursor: pointer; text-decoration: underline; padding: 0; margin: 0 0 12px 0; }
+        .acct-error { color: #e91429; font-size: 0.82rem; margin-top: 10px; display: none; }
+        .acct-ok { color: var(--spotify-green); font-size: 0.82rem; margin-top: 10px; display: none; }
+
+        /* --- Rotating venue code (sidebar) --- */
+        .sidebar-venue-code { margin: 16px 20px 0 20px; padding: 14px; border: 1px solid var(--border-strong); border-radius: 10px; background: var(--card-bg); text-align: center; flex-shrink: 0; }
+        .sidebar-venue-code.asked { border-color: var(--spotify-green); }
+        .sidebar-venue-code .vc-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); font-weight: 700; }
+        .sidebar-venue-code .vc-digits { font-size: 2rem; font-weight: 800; letter-spacing: 0.25em; margin: 6px 0 2px 0; font-variant-numeric: tabular-nums; padding-left: 0.25em; color: var(--text); }
+        .sidebar-venue-code .vc-sub { font-size: 0.74rem; color: var(--text-muted); }
+        .sidebar-venue-code .vc-bar { height: 3px; background: var(--border-strong); border-radius: 2px; margin-top: 8px; overflow: hidden; }
+        .sidebar-venue-code .vc-bar > div { height: 100%; background: var(--spotify-green); width: 100%; transition: width 1s linear; }
         .sidebar-account-footer {
             margin-top: auto; padding: 16px 20px; border-top: 1px solid var(--border);
             display: flex; flex-direction: column; gap: 8px; font-size: 0.85rem; flex-shrink: 0;
@@ -923,9 +979,23 @@
              above). Logging out here doesn't lock you out of this admin
              page; it only ends your account session used for creating
              events and viewing My Events. -->
+        <!-- Rotating 6-digit venue code: guests outside the venue perimeter type
+             this in to request songs. Shown here so the DJ can read it out. -->
+        <div class="sidebar-venue-code" id="sidebar-venue-code" style="display:none;">
+            <div class="vc-label">Venue Code</div>
+            <div class="vc-digits" id="sidebar-venue-code-digits">------</div>
+            <div class="vc-sub" id="sidebar-venue-code-sub">Changes every couple of minutes</div>
+            <div class="vc-bar"><div id="sidebar-venue-code-bar"></div></div>
+        </div>
+
         <div class="sidebar-account-footer" id="sidebar-account-footer">
             <div class="sidebar-account-status" id="sidebar-account-status">...</div>
-            <a class="sidebar-account-link" href="/new-event.html">My Events</a>
+            <button type="button" class="sidebar-account-login" id="sidebar-account-login-btn" onclick="openAccountModal()" style="display:none;">Log In</button>
+            <div id="sidebar-my-events-wrap" style="display:none;">
+                <div class="sidebar-my-events-label">My Events</div>
+                <div class="sidebar-my-events" id="sidebar-my-events"></div>
+                <a class="sidebar-account-link" href="/new" style="display:inline-block; margin-top:8px;">+ Create new event</a>
+            </div>
             <button type="button" class="sidebar-account-logout" id="sidebar-account-logout-btn" onclick="accountLogout()" style="display:none;">Log Out</button>
         </div>
     </div>
@@ -1218,6 +1288,20 @@
                                     <input type="number" id="input-location-radius" min="10" max="5000" step="10">
                                 </div>
                                 <button class="save-config-btn" onclick="saveLocationRadius()">Update Distance</button>
+                            </div>
+                        </div>
+
+                        <div class="settings-card full-only">
+                            <div class="settings-section-label">Venue Code Display Time</div>
+                            <p class="settings-card-hint" style="margin-top: 0;">
+                                Guests outside the check-in distance can tap Display Code to show the rotating 6-digit code in a small grey box in the top right of your Ambient Visuals screen. This is how long it stays up (5 to 300 seconds). The screen must be opened from the admin Visuals button.
+                            </p>
+                            <div class="config-dashboard">
+                                <div class="input-group">
+                                    <label>Show For (Seconds)</label>
+                                    <input type="number" id="input-code-display-seconds" min="5" max="300" step="5">
+                                </div>
+                                <button class="save-config-btn" onclick="saveCodeDisplaySeconds()">Update Time</button>
                             </div>
                         </div>
                     </div>
@@ -2021,11 +2105,30 @@ async function verifyPassword() {
             }
         }
 
+        async function saveCodeDisplaySeconds() {
+            if (!isAuthorized) return;
+            const seconds = parseInt(document.getElementById('input-code-display-seconds').value, 10);
+            if (!Number.isInteger(seconds) || seconds < 5 || seconds > 300) {
+                return showToast('Time must be between 5 and 300 seconds.', 'error');
+            }
+            const res = await fetch(eventUrl('/api/admin/code-display-seconds'), {
+                method: 'POST',
+                headers: adminHeaders({ 'Content-Type': 'application/json' }),
+                body: JSON.stringify({ seconds })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                showToast('Venue code display time updated.', 'success');
+            } else {
+                showToast(data.error || 'Could not update time.', 'error');
+            }
+        }
+
         function openKioskPage() {
-            window.open(eventUrl('/kiosk'), '_blank', 'noopener');
+            window.open(eventUrl('/kiosk') + (venueScreenKey ? '?screen=' + encodeURIComponent(venueScreenKey) : ''), '_blank', 'noopener');
         }
         function openVisualsPage() {
-            window.open(eventUrl('/visuals'), '_blank', 'noopener');
+            window.open(eventUrl('/visuals') + (venueScreenKey ? '?screen=' + encodeURIComponent(venueScreenKey) : ''), '_blank', 'noopener');
         }
 
         async function toggleKioskRequests() {
@@ -2600,6 +2703,8 @@ async function verifyPassword() {
                 const data = await res.json();
                 applyAdminMode(data.siteMode);
                 applyThemesFromData(data.themes);
+                venueScreenKey = data.screenKey || '';
+                renderVenueCode(data.venueCode);
                 
                 if(document.activeElement !== document.getElementById('input-event-name')) {
                     document.getElementById('input-event-name').value = data.eventName || '';
@@ -2650,6 +2755,9 @@ async function verifyPassword() {
                 locationLockBtn.innerText = locationLockEnabled ? "Location Lock: ON" : "Location Lock: OFF";
                 locationLockBtn.className = locationLockEnabled ? "toggle-btn open-status" : "toggle-btn closed-status";
 
+                if (document.activeElement !== document.getElementById('input-code-display-seconds')) {
+                    document.getElementById('input-code-display-seconds').value = data.codeDisplaySeconds || 45;
+                }
                 if (document.activeElement !== document.getElementById('input-location-radius')) {
                     document.getElementById('input-location-radius').value = data.locationRadiusMeters || 300;
                 }
@@ -3294,20 +3402,48 @@ async function verifyPassword() {
         async function refreshAccountFooter() {
             const statusEl = document.getElementById('sidebar-account-status');
             const logoutBtn = document.getElementById('sidebar-account-logout-btn');
+            const loginBtn = document.getElementById('sidebar-account-login-btn');
+            const eventsWrap = document.getElementById('sidebar-my-events-wrap');
             try {
                 const res = await fetch('/api/account/me');
                 const data = await res.json();
                 if (data.loggedIn) {
                     statusEl.innerHTML = `Logged in as <strong>${escapeHtml(data.username)}</strong>`;
                     logoutBtn.style.display = 'block';
+                    loginBtn.style.display = 'none';
+                    eventsWrap.style.display = 'block';
+                    loadSidebarMyEvents();
                 } else {
-                    statusEl.innerHTML = '<a class="sidebar-account-link" href="/new-event.html">Log in</a> to create events';
+                    statusEl.textContent = 'Log in to see your events and create new ones.';
                     logoutBtn.style.display = 'none';
+                    loginBtn.style.display = 'block';
+                    eventsWrap.style.display = 'none';
                 }
             } catch (err) {
                 statusEl.textContent = '';
                 logoutBtn.style.display = 'none';
+                loginBtn.style.display = 'none';
+                eventsWrap.style.display = 'none';
             }
+        }
+
+        async function loadSidebarMyEvents() {
+            const box = document.getElementById('sidebar-my-events');
+            try {
+                const res = await fetch('/api/account/my-events');
+                if (!res.ok) { box.innerHTML = ''; return; }
+                const data = await res.json();
+                const list = data.events || [];
+                if (list.length === 0) {
+                    box.innerHTML = '<div class="ev-meta" style="color:var(--text-muted); font-size:0.8rem;">No events yet.</div>';
+                    return;
+                }
+                box.innerHTML = list.map(ev => `
+                    <a class="sidebar-event-link${ev.slug === EVENT_SLUG ? ' current' : ''}" href="/e/${encodeURIComponent(ev.slug)}/admin">
+                        <span class="ev-name">${escapeHtml(ev.eventName || ev.slug)}</span>
+                        <span class="ev-meta">${ev.venueName ? escapeHtml(ev.venueName) + ' &middot; ' : ''}${ev.slug === EVENT_SLUG ? 'Current event' : (ev.requestsAllowed ? 'Requests open' : 'Requests off')}</span>
+                    </a>`).join('');
+            } catch (err) { box.innerHTML = ''; }
         }
 
         async function accountLogout() {
@@ -3315,6 +3451,97 @@ async function verifyPassword() {
                 await fetch('/api/account/logout', { method: 'POST' });
             } catch (err) { /* proceed regardless */ }
             refreshAccountFooter();
+        }
+
+        // ---- Login popup ----
+        function openAccountModal() {
+            document.getElementById('account-modal-overlay').classList.add('open');
+            switchAcctTab('login');
+            setTimeout(() => { const f = document.getElementById('acct-login-username'); if (f) f.focus(); }, 50);
+        }
+        function closeAccountModal() {
+            document.getElementById('account-modal-overlay').classList.remove('open');
+        }
+        function acctMsg(kind, text) {
+            const err = document.getElementById('acct-error');
+            const ok = document.getElementById('acct-ok');
+            err.style.display = 'none'; ok.style.display = 'none';
+            if (!text) return;
+            const el = kind === 'ok' ? ok : err;
+            el.textContent = text;
+            el.style.display = 'block';
+        }
+        function switchAcctTab(name) {
+            ['login', 'signup', 'forgot'].forEach(n => {
+                document.getElementById(`acct-form-${n}`).classList.toggle('active', n === name);
+            });
+            document.getElementById('acct-tab-login').classList.toggle('active', name === 'login');
+            document.getElementById('acct-tab-signup').classList.toggle('active', name === 'signup');
+            acctMsg(null, '');
+        }
+        async function acctPost(url, body, btnId, busyText) {
+            const btn = document.getElementById(btnId);
+            const original = btn.textContent;
+            btn.disabled = true; btn.textContent = busyText;
+            try {
+                const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+                const data = await res.json().catch(() => ({}));
+                return { ok: res.ok, data };
+            } catch (err) {
+                return { ok: false, data: { error: 'Could not reach the server. Try again.' } };
+            } finally {
+                btn.disabled = false; btn.textContent = original;
+            }
+        }
+        async function acctLogin() {
+            const username = document.getElementById('acct-login-username').value.trim();
+            const password = document.getElementById('acct-login-password').value;
+            acctMsg(null, '');
+            const r = await acctPost('/api/account/login', { username, password }, 'acct-login-btn', 'Logging in...');
+            if (!r.ok) return acctMsg('err', r.data.error || 'Could not log in.');
+            document.getElementById('acct-login-password').value = '';
+            closeAccountModal();
+            showToast(`Logged in as ${r.data.username}`, 'success');
+            refreshAccountFooter();
+        }
+        async function acctSignup() {
+            const username = document.getElementById('acct-signup-username').value.trim();
+            const email = document.getElementById('acct-signup-email').value.trim();
+            const password = document.getElementById('acct-signup-password').value;
+            acctMsg(null, '');
+            const r = await acctPost('/api/account/signup', { username, email, password }, 'acct-signup-btn', 'Creating...');
+            if (!r.ok) return acctMsg('err', r.data.error || 'Could not create the account.');
+            document.getElementById('acct-signup-password').value = '';
+            closeAccountModal();
+            showToast(`Account created. Logged in as ${r.data.username}`, 'success');
+            refreshAccountFooter();
+        }
+        async function acctForgot() {
+            const email = document.getElementById('acct-forgot-email').value.trim();
+            acctMsg(null, '');
+            const r = await acctPost('/api/account/forgot-password', { email }, 'acct-forgot-btn', 'Sending...');
+            if (!r.ok) return acctMsg('err', r.data.error || 'Could not send the reset link.');
+            acctMsg('ok', r.data.message || 'If that email is registered, a reset link has been sent.');
+        }
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeAccountModal(); });
+
+        // ---- Rotating venue code (sidebar) ----
+        let venueScreenKey = '';
+        let lastGuestAskedForDisplay = false;
+        function renderVenueCode(vc) {
+            const box = document.getElementById('sidebar-venue-code');
+            if (!vc || !vc.code) { box.style.display = 'none'; return; }
+            box.style.display = 'block';
+            document.getElementById('sidebar-venue-code-digits').textContent = vc.code;
+            const msLeft = Math.max(0, vc.expiresAt - Date.now());
+            const pct = Math.max(0, Math.min(100, (msLeft / vc.periodMs) * 100));
+            document.getElementById('sidebar-venue-code-bar').style.width = pct + '%';
+            document.getElementById('sidebar-venue-code-sub').textContent = `Changes in ${Math.ceil(msLeft / 1000)}s`;
+            box.classList.toggle('asked', !!vc.guestAskedForDisplay);
+            if (vc.guestAskedForDisplay && !lastGuestAskedForDisplay) {
+                showToast('A guest asked for the venue code. It is showing on your Visuals screen.', 'success');
+            }
+            lastGuestAskedForDisplay = !!vc.guestAskedForDisplay;
         }
 
         window.onload = () => {
@@ -3331,6 +3558,41 @@ async function verifyPassword() {
         pollCurrentMusicVideoMatch();
         loadFamilyLists();
     </script>
+    <!-- Account login popup (replaces the old redirect to the New Event page) -->
+    <div id="account-modal-overlay" onclick="if(event.target === this) closeAccountModal()">
+        <div class="acct-modal" role="dialog" aria-modal="true" aria-labelledby="acct-title">
+            <button type="button" class="acct-close" onclick="closeAccountModal()" aria-label="Close">&#10005;</button>
+            <h2 id="acct-title">Your Account</h2>
+            <div class="acct-tabs">
+                <button type="button" class="acct-tab active" id="acct-tab-login" onclick="switchAcctTab('login')">Log In</button>
+                <button type="button" class="acct-tab" id="acct-tab-signup" onclick="switchAcctTab('signup')">Create Account</button>
+            </div>
+
+            <div class="acct-form active" id="acct-form-login">
+                <div class="acct-field"><label>Username</label><input type="text" id="acct-login-username" autocapitalize="off" autocorrect="off" autocomplete="username"></div>
+                <div class="acct-field"><label>Password</label><input type="password" id="acct-login-password" autocomplete="current-password" onkeydown="if(event.key === 'Enter') acctLogin()"></div>
+                <button type="button" class="acct-link" onclick="switchAcctTab('forgot')">Forgot password?</button>
+                <button type="button" class="acct-submit" id="acct-login-btn" onclick="acctLogin()">Log In</button>
+            </div>
+
+            <div class="acct-form" id="acct-form-signup">
+                <div class="acct-field"><label>Username</label><input type="text" id="acct-signup-username" autocapitalize="off" autocorrect="off" placeholder="3-30 characters, no spaces" autocomplete="username"></div>
+                <div class="acct-field"><label>Email</label><input type="email" id="acct-signup-email" autocapitalize="off" autocorrect="off" autocomplete="email"></div>
+                <div class="acct-field"><label>Password</label><input type="password" id="acct-signup-password" placeholder="At least 8 characters" autocomplete="new-password" onkeydown="if(event.key === 'Enter') acctSignup()"></div>
+                <button type="button" class="acct-submit" id="acct-signup-btn" onclick="acctSignup()">Create Account</button>
+            </div>
+
+            <div class="acct-form" id="acct-form-forgot">
+                <div class="acct-field"><label>Account email</label><input type="email" id="acct-forgot-email" autocapitalize="off" autocorrect="off" autocomplete="email" onkeydown="if(event.key === 'Enter') acctForgot()"></div>
+                <button type="button" class="acct-submit" id="acct-forgot-btn" onclick="acctForgot()">Send Reset Link</button>
+                <div style="text-align:center; margin-top:12px;"><button type="button" class="acct-link" onclick="switchAcctTab('login')">Back to log in</button></div>
+            </div>
+
+            <div class="acct-error" id="acct-error"></div>
+            <div class="acct-ok" id="acct-ok"></div>
+        </div>
+    </div>
+
     <div id="toast-container"></div>
 
     <!-- Now Playing bar - live from the DJ's connected Spotify account. The
