@@ -32,6 +32,38 @@
             --text-soft: #cccccc;
         }
 
+
+        /* --- Venue code popup (shown when the guest isn't recognised as inside the venue perimeter) --- */
+        #venue-code-overlay {
+            position: fixed; inset: 0; z-index: 10001; display: none;
+            align-items: center; justify-content: center; padding: 20px;
+            background: rgba(0,0,0,0.82); overflow-y: auto;
+        }
+        .vc-card {
+            position: relative; width: 100%; max-width: 440px; text-align: center;
+            background: var(--panel-bg); border: 1px solid var(--border-strong); border-radius: 20px;
+            padding: 36px 28px 28px 28px; box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+        }
+        .vc-close { position: absolute; top: 12px; right: 14px; background: none; border: none; color: var(--text-muted); font-size: 1.2rem; cursor: pointer; }
+        .vc-card h2 { margin: 0 0 8px 0; font-size: 1.5rem; color: var(--text); }
+        .vc-card p { margin: 0 0 22px 0; color: var(--text-muted); font-size: 0.95rem; line-height: 1.45; }
+        #vc-input {
+            width: 100%; background: var(--card-bg); border: 2px solid var(--border-strong); color: var(--text);
+            border-radius: 12px; padding: 16px 12px; font-size: 2rem; font-weight: 800; text-align: center;
+            letter-spacing: 0.35em; padding-left: calc(12px + 0.35em); font-variant-numeric: tabular-nums;
+        }
+        #vc-input:focus { outline: none; border-color: var(--spotify-green); }
+        #vc-input::placeholder { color: var(--text-muted); opacity: 0.45; }
+        .vc-error { color: var(--red-action); font-size: 0.85rem; min-height: 1.2em; margin-top: 10px; }
+        .vc-hint { color: var(--spotify-green); font-size: 0.85rem; min-height: 1.2em; margin-top: 4px; }
+        .vc-actions { display: flex; gap: 12px; margin-top: 14px; }
+        .vc-btn { flex: 1; padding: 15px 10px; border-radius: 12px; font-size: 1rem; font-weight: 700; cursor: pointer; border: 1px solid transparent; }
+        .vc-btn:disabled { opacity: 0.5; cursor: default; }
+        .vc-btn-secondary { background: var(--card-bg); color: var(--text); border-color: var(--border-strong); }
+        .vc-btn-secondary:hover:not(:disabled) { border-color: #555; }
+        .vc-btn-primary { background: var(--spotify-green); color: #000; }
+        .vc-note { margin-top: 16px; font-size: 0.78rem; color: var(--text-muted); }
+
         /* ---- Light theme (html[data-theme="light"], set by theme.js) ---- */
         html[data-theme="light"] {
             --spotify-green: #16a34a;
@@ -1676,6 +1708,8 @@
         let venueGeoLon = null;
         let geofenceWatchId = null;
         let outOfGeofenceRange = false;
+        let venueVerified = false;             // guest typed a valid venue code (server-confirmed via /data)
+        let venueCodePopupDismissed = false;   // guest closed the popup; it reopens if they try to request
 
         function startGeofenceWatch() {
             if (geofenceWatchId !== null || !navigator.geolocation) return;
@@ -1711,10 +1745,11 @@
         function updateLocationCreditState() {
             const badge = document.getElementById('credits-status');
             if (!badge) return;
-            badge.classList.toggle('out-of-range', outOfGeofenceRange);
+            const locBlocked = outOfGeofenceRange && !venueVerified;
+            badge.classList.toggle('out-of-range', locBlocked);
             // Only exposed as a button to keyboard/screen-reader users while
             // it's actually the yellow pin.
-            if (outOfGeofenceRange) {
+            if (locBlocked) {
                 badge.setAttribute('role', 'button');
                 badge.setAttribute('tabindex', '0');
                 badge.setAttribute('aria-label', "Not at the venue - open the venue map");
@@ -1832,6 +1867,7 @@
                 explicitBlockActive = data.explicitBlockActive || false;
                 queueIsFull = data.queueFull || false;
                 isBlockedGuest = data.blocked || false;
+                venueVerified = !!data.venueVerified;
 
                 // Only venues the organizer actually pinned a location for
                 // (at creation) get the geofence check - unpinned venues
@@ -1884,8 +1920,11 @@
                 // the DJ manually pausing them, or the queue length cap auto-closing
                 // once it hits the configured max - each gets its own message.
                 const searchInput = document.getElementById('search-input');
-                const effectivelyOpen = systemRequestsAllowed && !queueIsFull && !outOfGeofenceRange && !isBlockedGuest && hasUsername();
+                const locationBlocked = outOfGeofenceRange && !venueVerified;
+                const effectivelyOpen = systemRequestsAllowed && !queueIsFull && !locationBlocked && !isBlockedGuest && hasUsername();
                 updateLocationCreditState();
+                if (locationBlocked && !isBlockedGuest) showVenueCodePopup();
+                else if (venueVerified) hideVenueCodePopup();
                 if (!effectivelyOpen) {
                     searchInput.disabled = true;
                     searchInput.value = "";
@@ -1893,8 +1932,8 @@
                         ? "Enter your name above to request songs..."
                         : isBlockedGuest
                         ? "Requests unavailable now"
-                        : outOfGeofenceRange
-                        ? "You are no longer at this location"
+                        : locationBlocked
+                        ? "Enter the venue code to request songs"
                         : queueIsFull
                         ? "Queue is full right now — wait for songs to play, it'll reopen automatically."
                         : "Song submissions are currently paused by the admin.";
@@ -2189,6 +2228,10 @@
                     return true;
                 } else {
                     const errorData = await res.json();
+                    if (errorData.codeRequired && !venueVerified) {
+                        showVenueCodePopup(true);
+                        return false;
+                    }
                     showToast(errorData.error || "Submission rejected.", "error");
                     return false;
                 }
@@ -2208,6 +2251,80 @@
             }
         }
 
+        // ---- Venue code popup ----
+        function showVenueCodePopup(force) {
+            if (venueVerified) return;
+            if (!force && venueCodePopupDismissed) return;
+            const overlay = document.getElementById('venue-code-overlay');
+            if (overlay.style.display === 'flex') return;
+            document.getElementById('vc-error').textContent = '';
+            document.getElementById('vc-hint').textContent = '';
+            overlay.style.display = 'flex';
+            setTimeout(() => { const f = document.getElementById('vc-input'); if (f) f.focus(); }, 50);
+        }
+        function hideVenueCodePopup() {
+            const overlay = document.getElementById('venue-code-overlay');
+            if (overlay) overlay.style.display = 'none';
+        }
+        function dismissVenueCodePopup() {
+            venueCodePopupDismissed = true;
+            hideVenueCodePopup();
+        }
+        async function submitVenueCode() {
+            const input = document.getElementById('vc-input');
+            const errEl = document.getElementById('vc-error');
+            const hintEl = document.getElementById('vc-hint');
+            const btn = document.getElementById('vc-enter-btn');
+            const code = input.value.replace(/\D/g, '');
+            errEl.textContent = ''; hintEl.textContent = '';
+            if (code.length !== 6) { errEl.textContent = 'Enter the 6-digit code.'; return; }
+            btn.disabled = true;
+            try {
+                const res = await fetch(eventUrl('/api/verify-code'), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code })
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                    errEl.textContent = data.error || 'That code did not work.';
+                    input.select();
+                    return;
+                }
+                venueVerified = true;
+                input.value = '';
+                hideVenueCodePopup();
+                showToast("You're in! You can request songs now.", "success");
+                fetchSystemState();
+            } catch (e) {
+                errEl.textContent = 'Could not reach the server. Try again.';
+            } finally {
+                btn.disabled = false;
+            }
+        }
+        async function requestCodeDisplay() {
+            const errEl = document.getElementById('vc-error');
+            const hintEl = document.getElementById('vc-hint');
+            const btn = document.getElementById('vc-display-btn');
+            errEl.textContent = ''; hintEl.textContent = '';
+            btn.disabled = true;
+            try {
+                const res = await fetch(eventUrl('/api/show-code'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+                const data = await res.json().catch(() => ({}));
+                if (res.ok) {
+                    hintEl.textContent = `The code is on the venue screen for the next ${data.seconds || 45} seconds. If you can't see it, ask the DJ.`;
+                    document.getElementById('vc-input').focus();
+                } else if (res.status === 403 && data.basicMode) {
+                    errEl.textContent = "This venue doesn't have a screen for codes. Ask the DJ for the code.";
+                } else {
+                    errEl.textContent = data.error || 'Could not show the code.';
+                }
+            } catch (e) {
+                errEl.textContent = 'Could not reach the server. Try again.';
+            } finally {
+                setTimeout(() => { btn.disabled = false; }, 5000);
+            }
+        }
         restoreSelectedVenue();
         fetchSystemState();
         setInterval(fetchSystemState, 4000);
@@ -2623,6 +2740,22 @@
         restoreGuestSpotifySession();
         completeGuestSpotifyLogin();
     </script>
+    <div id="venue-code-overlay" role="dialog" aria-modal="true" aria-labelledby="vc-title">
+        <div class="vc-card">
+            <button type="button" class="vc-close" onclick="dismissVenueCodePopup()" aria-label="Close">&#10005;</button>
+            <h2 id="vc-title">Are you at the venue?</h2>
+            <p>We can't tell that you're here. Enter the 6-digit code from the venue screen to request songs.</p>
+            <input id="vc-input" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code" placeholder="000000" aria-label="6-digit venue code" oninput="this.value = this.value.replace(/\D/g, '').slice(0, 6)" onkeydown="if(event.key === 'Enter') submitVenueCode()">
+            <div class="vc-error" id="vc-error" role="alert"></div>
+            <div class="vc-hint" id="vc-hint"></div>
+            <div class="vc-actions">
+                <button type="button" class="vc-btn vc-btn-secondary" id="vc-display-btn" onclick="requestCodeDisplay()">Display Code</button>
+                <button type="button" class="vc-btn vc-btn-primary" id="vc-enter-btn" onclick="submitVenueCode()">Enter</button>
+            </div>
+            <div class="vc-note">Display Code shows the current code on the venue's screen. It changes every couple of minutes.</div>
+        </div>
+    </div>
+
     <div id="toast-container"></div>
 
     <!-- Now Playing bar - live from the DJ's connected Spotify account. The
