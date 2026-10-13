@@ -3239,7 +3239,7 @@ function getThemes(event) {
 }
 
 // Paths (relative to /e/:slug) still available in Basic mode.
-const BASIC_ALLOWED_PUBLIC = /^\/(?:$|data$|api\/(?:public-config|site-config|search|request|set-username|now-playing)$)/;
+const BASIC_ALLOWED_PUBLIC = /^\/(?:$|data$|api\/(?:public-config|site-config|search|request|set-username|now-playing|verify-code|show-code)$)/;
 const BASIC_ALLOWED_ADMIN = /^\/(?:data|config|toggle|toggle-explicit|toggle-location-lock|toggle-spotify-auto-queue|action|reorder|site-mode|theme|spotify-login-ticket|spotify-disconnect|playback\/(?:play|pause|next|previous|volume|seek))$/;
 const BASIC_ALLOWED_PAGES = /^\/(?:admin(?:\/spotify-login)?)?\/?$/;
 
@@ -3712,6 +3712,139 @@ app.get('/e/:slug/api/search', publicActionLimiter, async (req, res) => {
     }
 });
 
+// =====================================================================
+// Rotating 6-digit venue code
+// =====================================================================
+// A guest whose phone isn't recognised as being inside the venue perimeter
+// (too far away, or location blocked/unavailable) can still request songs by
+// typing the code that is currently shown at the venue. The code is derived
+// from an HMAC of (event slug + time window), so nothing is stored and every
+// event has its own sequence. It rotates every VENUE_CODE_PERIOD_MS; the
+// previous window is also accepted so a code read just before a rotation
+// still works. Set VENUE_CODE_SECRET in the environment so the codes are
+// derived from a stable secret (without it a fallback secret is used).
+const VENUE_CODE_PERIOD_MS = 2 * 60 * 1000;
+const VENUE_VERIFY_TTL_MS = 3 * 60 * 60 * 1000;   // how long a correct code keeps a guest "at the venue"
+const CODE_DISPLAY_DEFAULT_SECONDS = 45;          // default for how long "Display Code" keeps the code on the venue screen
+function codeDisplayMs(event) {                   // set per event in Admin -> Settings -> Location
+    const n = parseInt(event.systemConfigs && event.systemConfigs.codeDisplaySeconds, 10);
+    return (Number.isInteger(n) && n >= 5 && n <= 300 ? n : CODE_DISPLAY_DEFAULT_SECONDS) * 1000;
+}
+const CODE_DISPLAY_COOLDOWN_MS = 20 * 1000;       // gap before it can be shown again, so it can't be pinned on screen
+const VENUE_CODE_MAX_FAILS = 5;
+const VENUE_CODE_LOCK_MS = 5 * 60 * 1000;
+const VENUE_CODE_KEY = crypto.createHash('sha256')
+    .update('venue-code|' + (process.env.VENUE_CODE_SECRET || ADMIN_PASSWORD || CLIENT_SECRET || crypto.randomBytes(32).toString('hex')))
+    .digest();
+
+function venueCodeForWindow(slug, windowIndex) {
+    const h = crypto.createHmac('sha256', VENUE_CODE_KEY).update(`${slug}:${windowIndex}`).digest();
+    return String(h.readUInt32BE(0) % 1000000).padStart(6, '0');
+}
+function getCurrentVenueCode(slug) {
+    const w = Math.floor(Date.now() / VENUE_CODE_PERIOD_MS);
+    return { code: venueCodeForWindow(slug, w), expiresAt: (w + 1) * VENUE_CODE_PERIOD_MS };
+}
+function isValidVenueCode(slug, provided) {
+    if (typeof provided !== 'string' || !/^\d{6}$/.test(provided)) return false;
+    const w = Math.floor(Date.now() / VENUE_CODE_PERIOD_MS);
+    const a = Buffer.from(provided);
+    return [w, w - 1].some(i => crypto.timingSafeEqual(a, Buffer.from(venueCodeForWindow(slug, i))));
+}
+// Screen key: lets the venue's own display pages (opened from the admin
+// dashboard) read the code while "Display Code" is active. Anyone without it
+// - including a remote guest who just pressed the button - gets nothing.
+function venueScreenKey(slug) {
+    return crypto.createHmac('sha256', VENUE_CODE_KEY).update(`screen:${slug}`).digest('hex').slice(0, 32);
+}
+function isValidScreenKey(slug, provided) {
+    if (typeof provided !== 'string' || provided.length !== 32) return false;
+    return crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(venueScreenKey(slug)));
+}
+
+const venueVerified = new Map();      // `${slug}:${voterId}` -> expiresAt
+const venueCodeFails = new Map();     // `${slug}:${voterId}` -> { count, lockedUntil, lastAt }
+const codeDisplayState = new Map();   // slug -> { until, cooldownUntil }
+const codeDisplayVoterLast = new Map();
+function isVenueVerified(slug, voterId) {
+    const exp = venueVerified.get(`${slug}:${voterId}`);
+    if (!exp) return false;
+    if (Date.now() > exp) { venueVerified.delete(`${slug}:${voterId}`); return false; }
+    return true;
+}
+setInterval(() => {
+    const now = Date.now();
+    for (const [k, exp] of venueVerified) if (now > exp) venueVerified.delete(k);
+    for (const [k, v] of venueCodeFails) if (now > v.lockedUntil && now - (v.lastAt || 0) > VENUE_CODE_LOCK_MS) venueCodeFails.delete(k);
+    for (const [k, t] of codeDisplayVoterLast) if (now - t > 60000) codeDisplayVoterLast.delete(k);
+}, 60 * 1000).unref();
+
+// Wrong guesses are what matter here, so only failures count against the IP
+// limit (generous, because a whole room can share one WiFi IP); each guest
+// also has their own 5-strikes lockout below.
+const venueCodeIpLimiter = rateLimit({
+    windowMs: 10 * 60 * 1000,
+    limit: 60,
+    standardHeaders: true,
+    legacyHeaders: false,
+    skipSuccessfulRequests: true,
+    keyGenerator: (req) => `${ipKeyGenerator(req)}:${req.params.slug}`,
+    message: { error: 'Too many wrong codes from this network. Try again in a few minutes.' }
+});
+
+app.post('/e/:slug/api/verify-code', venueCodeIpLimiter, publicActionLimiter, voterIdentityMiddleware, (req, res) => {
+    const event = req.event;
+    const voterId = req.serverVoterId;
+    if (isVoterBlocked(event, voterId)) return res.status(403).json({ error: "You've been blocked from requesting songs at this event." });
+    const key = `${event.slug}:${voterId}`;
+    const fails = venueCodeFails.get(key) || { count: 0, lockedUntil: 0, lastAt: 0 };
+    if (Date.now() < fails.lockedUntil) {
+        const mins = Math.ceil((fails.lockedUntil - Date.now()) / 60000);
+        return res.status(429).json({ error: `Too many wrong codes. Try again in ${mins} minute${mins === 1 ? '' : 's'}.` });
+    }
+    const code = typeof req.body.code === 'string' ? req.body.code.replace(/\s/g, '') : '';
+    if (isValidVenueCode(event.slug, code)) {
+        venueVerified.set(key, Date.now() + VENUE_VERIFY_TTL_MS);
+        venueCodeFails.delete(key);
+        return res.json({ success: true });
+    }
+    fails.count += 1;
+    fails.lastAt = Date.now();
+    if (fails.count >= VENUE_CODE_MAX_FAILS) { fails.lockedUntil = Date.now() + VENUE_CODE_LOCK_MS; fails.count = 0; }
+    venueCodeFails.set(key, fails);
+    res.status(400).json({ error: 'That code is not right, or it has expired. Check the screen for the current code.' });
+});
+
+// "Display Code" button: asks the venue screens (visuals / kiosk) to show the
+// current code for a short while.
+app.post('/e/:slug/api/show-code', publicActionLimiter, voterIdentityMiddleware, (req, res) => {
+    const event = req.event;
+    const voterId = req.serverVoterId;
+    if (isVoterBlocked(event, voterId)) return res.status(403).json({ error: "You've been blocked from requesting songs at this event." });
+    const now = Date.now();
+    const vKey = `${event.slug}:${voterId}`;
+    if (now - (codeDisplayVoterLast.get(vKey) || 0) < 5000) return res.status(429).json({ error: 'Please wait a moment.' });
+    codeDisplayVoterLast.set(vKey, now);
+    const st = codeDisplayState.get(event.slug) || { until: 0, cooldownUntil: 0 };
+    if (now < st.until) return res.json({ success: true, seconds: Math.ceil((st.until - now) / 1000) });
+    if (now < st.cooldownUntil) return res.status(429).json({ error: `The code was just shown. Try again in ${Math.ceil((st.cooldownUntil - now) / 1000)}s.` });
+    const showMs = codeDisplayMs(event);
+    st.until = now + showMs;
+    st.cooldownUntil = st.until + CODE_DISPLAY_COOLDOWN_MS;
+    codeDisplayState.set(event.slug, st);
+    res.json({ success: true, seconds: Math.ceil(showMs / 1000) });
+});
+
+// Polled by the venue's own screens. Only returns the code to a caller that
+// holds the screen key, and only while a Display Code request is active.
+app.get('/e/:slug/api/venue-code-display', publicReadLimiter, (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    const slug = req.event.slug;
+    const st = codeDisplayState.get(slug);
+    if (!st || Date.now() >= st.until || !isValidScreenKey(slug, req.query.screen)) return res.json({ show: false });
+    res.json({ show: true, code: getCurrentVenueCode(slug).code, secondsLeft: Math.ceil((st.until - Date.now()) / 1000) });
+});
+
 // Which config (system vs kiosk) applies used to be decided by an `isKiosk`
 // flag the CLIENT sent in the request body - trivially spoofable by anyone
 // on the regular guest page, letting them borrow the kiosk's (often more
@@ -3752,11 +3885,11 @@ function buildRequestHandler(isKiosk) {
         // and only if the organizer actually pinned one at creation AND
         // hasn't switched off Location Lock (defaults to on - see
         // systemConfigs.locationLockEnabled).
-        if (!isKiosk && event.systemConfigs.locationLockEnabled !== false && typeof event.venueLatitude === 'number' && typeof event.venueLongitude === 'number') {
+        if (!isKiosk && event.systemConfigs.locationLockEnabled !== false && typeof event.venueLatitude === 'number' && typeof event.venueLongitude === 'number' && !isVenueVerified(event.slug, voterId)) {
             const lat = parseFloat(req.body.lat);
             const lng = parseFloat(req.body.lng);
             if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-                return res.status(403).json({ error: "Location needed to request a song here.", locationRequired: true });
+                return res.status(403).json({ error: "Location needed to request a song here, or enter the venue code.", locationRequired: true, codeRequired: true });
             }
             const distanceMeters = haversineMeters(lat, lng, event.venueLatitude, event.venueLongitude);
             const radiusMeters = event.systemConfigs.locationRadiusMeters || REQUEST_RADIUS_METERS;
@@ -3764,6 +3897,7 @@ function buildRequestHandler(isKiosk) {
                 return res.status(403).json({
                     error: `You're too far from the venue to request a song here (${Math.round(distanceMeters / 1000 * 10) / 10}km away).`,
                     locationTooFar: true,
+                    codeRequired: true,
                     distanceMeters: Math.round(distanceMeters)
                 });
             }
@@ -4008,7 +4142,9 @@ app.get('/e/:slug/data', publicReadLimiter, voterIdentityMiddleware, (req, res) 
         // This guest's own block status (Blocked tab) - lets the guest page
         // grey out the search bar for just this one browser/device, instead
         // of only finding out when a request/vote gets rejected.
-        blocked: isVoterBlocked(event, req.serverVoterId)
+        blocked: isVoterBlocked(event, req.serverVoterId),
+        // True once this guest has typed a valid venue code (see verify-code).
+        venueVerified: isVenueVerified(event.slug, req.serverVoterId)
     });
 });
 
@@ -4037,7 +4173,12 @@ app.get('/e/:slug/kiosk-data', publicReadLimiter, voterIdentityMiddleware, (req,
 
 app.get('/e/:slug/api/admin/data', (req, res) => {
     const event = req.event;
+    const vc = getCurrentVenueCode(event.slug);
+    const cd = codeDisplayState.get(event.slug);
     res.json({
+        venueCode: { code: vc.code, expiresAt: vc.expiresAt, periodMs: VENUE_CODE_PERIOD_MS, guestAskedForDisplay: !!(cd && Date.now() < cd.until) },
+        screenKey: venueScreenKey(event.slug),
+        codeDisplaySeconds: Math.round(codeDisplayMs(event) / 1000),
         siteMode: isBasicMode(event) ? 'basic' : 'full',
         themes: getThemes(event),
         maxCredits: event.systemConfigs.maxCredits,
@@ -4734,6 +4875,17 @@ app.post('/e/:slug/api/admin/location-radius', (req, res) => {
     req.event.systemConfigs.locationRadiusMeters = meters;
     events.scheduleSave(req.event.slug);
     res.json({ success: true, locationRadiusMeters: meters });
+});
+
+// How long the venue code stays on the venue screen after a guest taps Display Code.
+app.post('/e/:slug/api/admin/code-display-seconds', (req, res) => {
+    const seconds = parseInt(req.body.seconds, 10);
+    if (!Number.isInteger(seconds) || seconds < 5 || seconds > 300) {
+        return res.status(400).json({ error: 'Time must be between 5 and 300 seconds.' });
+    }
+    req.event.systemConfigs.codeDisplaySeconds = seconds;
+    events.scheduleSave(req.event.slug);
+    res.json({ success: true, codeDisplaySeconds: seconds });
 });
 
 app.post('/e/:slug/api/admin/kiosk/toggle', (req, res) => {
