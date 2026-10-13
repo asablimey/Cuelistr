@@ -1742,6 +1742,96 @@
 
 let adminPassword = '';
 
+        // ---- Admin session: stays unlocked across reloads, locks after 30 minutes of inactivity ----
+        // The browser keeps a server-issued token (never the password) in localStorage,
+        // shared by the admin and scheduler tabs of this event. "Activity" is any
+        // click/key/touch/scroll/mouse move in either tab.
+        const ADMIN_IDLE_LOCK_MS = 30 * 60 * 1000;
+        const ADMIN_SESSION_KEY = 'cuelistr_admin_session:' + EVENT_SLUG;
+        let adminToken = '';
+        let lastActivityWrite = 0;
+        function readAdminSession() { try { return JSON.parse(localStorage.getItem(ADMIN_SESSION_KEY) || 'null'); } catch (e) { return null; } }
+        function writeAdminSession(token, lastActive) { try { localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify({ token, lastActive })); } catch (e) { /* storage blocked */ } }
+        function clearAdminSession() { try { localStorage.removeItem(ADMIN_SESSION_KEY); } catch (e) { /* ignore */ } }
+        function markAdminActive() {
+            if (!adminToken) return;
+            const now = Date.now();
+            if (now - lastActivityWrite < 10000) return;
+            lastActivityWrite = now;
+            writeAdminSession(adminToken, now);
+        }
+        ['keydown', 'click', 'touchstart', 'mousemove', 'scroll'].forEach(ev => window.addEventListener(ev, markAdminActive, { passive: true }));
+        function storedSessionFresh(s) { return !!(s && s.token && Date.now() - (s.lastActive || 0) < ADMIN_IDLE_LOCK_MS); }
+        async function startAdminSession(password) {
+            try {
+                const res = await fetch(eventUrl('/api/admin/session'), { method: 'POST', headers: { 'x-admin-password': password } });
+                if (!res.ok) return false;
+                const d = await res.json();
+                adminToken = d.token;
+                lastActivityWrite = Date.now();
+                writeAdminSession(adminToken, lastActivityWrite);
+                return true;
+            } catch (e) { return false; }
+        }
+        function adminAuthHeaders() {
+            return adminToken ? { 'x-admin-token': adminToken } : { 'x-admin-password': adminPassword };
+        }
+        function lockAdmin(message) {
+            const tok = adminToken;
+            adminToken = '';
+            adminPassword = '';
+            clearAdminSession();
+            if (tok) { try { _origFetch(eventUrl('/api/admin/session-end'), { method: 'POST', headers: { 'x-admin-token': tok } }).catch(() => {}); } catch (e) { /* ignore */ } }
+            isAuthorized = false;
+            const lock = document.getElementById('admin-lock-screen');
+            lock.style.display = '';
+            lock.style.visibility = 'visible';
+            const em = document.getElementById('lock-error-msg');
+            em.textContent = message || 'Locked.';
+            em.style.display = 'block';
+            const input = document.getElementById('password-input');
+            input.value = '';
+            input.focus();
+        }
+        // Any 401 on a token-authenticated call (expired session, server restarted) locks the page.
+        const _origFetch = window.fetch.bind(window);
+        window.fetch = async function (input, init) {
+            const res = await _origFetch(input, init);
+            if (res.status === 401 && adminToken && init && init.headers && init.headers['x-admin-token']) {
+                lockAdmin('Your session expired. Enter the admin password to continue.');
+            }
+            return res;
+        };
+        setInterval(() => {
+            if (!adminToken) return;
+            if (!storedSessionFresh(readAdminSession())) lockAdmin('Locked after 30 minutes of inactivity. Enter the admin password to continue.');
+        }, 30000);
+
+        async function restoreAdminSession() {
+            const s = readAdminSession();
+            if (!storedSessionFresh(s)) { clearAdminSession(); return false; }
+            const lock = document.getElementById('admin-lock-screen');
+            lock.style.visibility = 'hidden'; // avoid flashing the lock screen while we check
+            try {
+                const res = await fetch(eventUrl('/api/admin/data'), { headers: { 'x-admin-token': s.token } });
+                if (res.ok) {
+                    adminToken = s.token;
+                    adminPassword = '';
+                    isAuthorized = true;
+                    lastActivityWrite = 0;
+                    markAdminActive();
+                    lock.style.display = 'none';
+                    lock.style.visibility = 'visible';
+                    updateDashboard();
+                    renderGuestQR();
+                    return true;
+                }
+                clearAdminSession();
+            } catch (e) { /* offline - keep the stored session, fall back to the lock screen */ }
+            lock.style.visibility = 'visible';
+            return false;
+        }
+
 async function verifyPassword() {
             const inputField = document.getElementById('password-input');
             const errorMsg = document.getElementById('lock-error-msg');
@@ -1753,6 +1843,7 @@ async function verifyPassword() {
                 const res = await fetch(eventUrl('/api/admin/data'), { headers: { 'x-admin-password': attempt } });
                 if (res.ok) {
                     adminPassword = attempt;
+                    if (await startAdminSession(attempt)) adminPassword = ''; // keep the password only if a session couldn't be started
                     isAuthorized = true;
                     document.getElementById('admin-lock-screen').style.display = 'none';
                     updateDashboard();
@@ -1761,6 +1852,7 @@ async function verifyPassword() {
                 }
             } catch (e) { /* fall through to error state below */ }
 
+            errorMsg.textContent = 'Incorrect password. Access denied.';
             errorMsg.style.display = 'block';
             inputField.value = '';
             inputField.focus();
@@ -1808,7 +1900,7 @@ async function verifyPassword() {
         // Every authenticated admin call goes through this so the password header
         // is never forgotten on a new fetch.
         function adminHeaders(extra) {
-            return Object.assign({ 'x-admin-password': adminPassword }, extra || {});
+            return Object.assign(adminAuthHeaders(), extra || {});
         }
 
         async function duplicateAsTemplate() {
@@ -3546,6 +3638,7 @@ async function verifyPassword() {
 
         window.onload = () => {
             document.getElementById('password-input').focus();
+            restoreAdminSession();
             const savedHints = localStorage.getItem('adminHintsOn');
             // Default to hints visible if nothing saved yet.
             applyHintsVisibility(savedHints === null ? true : savedHints === '1');
