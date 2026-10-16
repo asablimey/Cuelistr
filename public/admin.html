@@ -66,8 +66,8 @@
         body.basic-mode #sidebar-nav-scheduler,
         body.basic-mode #settings-nav-kiosk,
         body.basic-mode #settings-nav-visuals,
-        body.basic-mode #toggle-radio-edits,
-        body.basic-mode #toggle-guest-spotify { display: none !important; }
+        body.basic-mode #row-radio-edits,
+        body.basic-mode #row-guest-spotify { display: none !important; }
 
 
         html { overflow-x: hidden; }
@@ -295,6 +295,40 @@
         .settings-nav-item.danger-nav:hover { background: var(--card-bg); color: #e97b7b; }
         .settings-nav-item.danger-nav.active-nav { background: var(--red-action); color: white; }
         .settings-nav-item .nav-icon { font-size: 1rem; flex-shrink: 0; }
+
+
+        /* ---- Settings as a list: label on the left, control on the right ---- */
+        .setting-list { display: flex; flex-direction: column; }
+        .setting-row {
+            display: flex; align-items: center; justify-content: space-between; gap: 16px;
+            padding: 14px 0; border-bottom: 1px solid var(--border);
+        }
+        .setting-row:first-child { padding-top: 4px; }
+        .setting-row:last-child { border-bottom: none; padding-bottom: 4px; }
+        .setting-label { font-size: 0.95rem; font-weight: 600; color: var(--text); min-width: 0; }
+        .switch {
+            position: relative; flex-shrink: 0; width: 46px; height: 26px; padding: 0;
+            border: none; border-radius: 999px; cursor: pointer;
+            background: var(--border-strong); transition: background-color 0.2s ease;
+        }
+        .switch::after {
+            content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px;
+            border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+            transition: transform 0.2s ease;
+        }
+        .switch[aria-checked="true"] { background: var(--spotify-green); }
+        .switch[aria-checked="true"]::after { transform: translateX(20px); }
+        .switch:focus-visible, .row-btn:focus-visible { outline: 2px solid var(--spotify-green); outline-offset: 2px; }
+        .row-btn {
+            flex-shrink: 0; padding: 8px 16px; border-radius: 8px; cursor: pointer;
+            font-size: 0.85rem; font-weight: 600;
+            background: var(--card-bg); color: var(--text); border: 1px solid var(--border-strong);
+            transition: background-color 0.15s ease;
+        }
+        .row-btn:hover { background: var(--hover-bg); }
+        .row-btn.danger { background: var(--red-action, #e91429); border-color: var(--red-action, #e91429); color: #fff; }
+        .setting-row .theme-seg { flex-shrink: 0; }
+        @media (prefers-reduced-motion: reduce) { .switch, .switch::after { transition: none; } }
 
         .settings-content { flex: 1; min-width: 0; }
         .settings-category-panel { display: none; }
@@ -1113,8 +1147,8 @@
                     <button type="button" id="settings-nav-access" class="settings-nav-item" onclick="switchSettingsCategory('access')">
                         Access &amp; Guests
                     </button>
-                    <button type="button" id="settings-nav-content" class="settings-nav-item" onclick="switchSettingsCategory('content')">
-                        Content
+                    <button type="button" id="settings-nav-music" class="settings-nav-item" onclick="switchSettingsCategory('music')">
+                        Music
                     </button>
                     <button type="button" id="settings-nav-location" class="settings-nav-item" onclick="switchSettingsCategory('location')">
                         Location
@@ -1137,12 +1171,15 @@
                     <div id="settings-category-general" class="settings-category-panel active-category">
                         <div class="settings-card">
                             <div class="settings-section-label">Site Mode</div>
-                            <div class="mode-row">
-                                <div class="theme-seg" id="site-mode-seg" role="group" aria-label="Site mode">
+                            <div class="setting-list">
+    <div class="setting-row">
+        <div class="setting-label">Interface mode</div>
+        <div class="theme-seg" id="site-mode-seg" role="group" aria-label="Site mode">
                                     <button type="button" data-mode="basic" onclick="setSiteMode('basic')">Basic</button>
                                     <button type="button" data-mode="full" onclick="setSiteMode('full')">Full</button>
                                 </div>
-                            </div>
+    </div>
+</div>
                             <p class="settings-card-hint" style="margin-top: 14px; margin-bottom: 0;">
                                 <strong>Basic</strong> is just search and request: guests search Spotify and send a song, and you see the queue and play it.
                                 Kiosk, visuals, the music scheduler, blocklists, stats, filters and music videos are switched off, on the server too.
@@ -1152,11 +1189,16 @@
 
                         <div class="settings-card">
                             <div class="settings-section-label">Admin Appearance</div>
-                            <div class="theme-seg" id="theme-seg-admin" role="group" aria-label="Admin appearance">
+                            <div class="setting-list">
+    <div class="setting-row">
+        <div class="setting-label">Appearance</div>
+        <div class="theme-seg" id="theme-seg-admin" role="group" aria-label="Admin appearance">
                                 <button type="button" data-mode="auto" onclick="setScreenTheme('admin','auto')">Auto</button>
                                 <button type="button" data-mode="light" onclick="setScreenTheme('admin','light')">Light</button>
                                 <button type="button" data-mode="dark" onclick="setScreenTheme('admin','dark')">Dark</button>
                             </div>
+    </div>
+</div>
                             <p class="settings-card-hint" style="margin-top: 14px; margin-bottom: 0;">Auto follows this device's own light/dark setting.</p>
                         </div>
 
@@ -1169,11 +1211,20 @@
                                         <label>Guest Link</label>
                                         <input type="text" id="guest-url-display" readonly onclick="this.select()">
                                     </div>
-                                    <div class="control-bar">
-                                        <button class="toggle-btn neutral-status" onclick="copyGuestUrl()">Copy Link</button>
-                                        <button class="toggle-btn neutral-status" onclick="downloadGuestQR()">Download QR</button>
-                                        <button class="toggle-btn neutral-status" onclick="printGuestQR()">Print QR</button>
-                                    </div>
+                                    <div class="setting-list">
+    <div class="setting-row">
+        <div class="setting-label">Copy guest link</div>
+        <button type="button" class="row-btn" onclick="copyGuestUrl()">Copy</button>
+    </div>
+    <div class="setting-row">
+        <div class="setting-label">Download QR code</div>
+        <button type="button" class="row-btn" onclick="downloadGuestQR()">Download</button>
+    </div>
+    <div class="setting-row">
+        <div class="setting-label">Print QR code</div>
+        <button type="button" class="row-btn" onclick="printGuestQR()">Print</button>
+    </div>
+</div>
                                 </div>
                             </div>
                             <p class="settings-card-hint" style="margin-top: 16px; margin-bottom: 0;">
@@ -1206,26 +1257,35 @@
 
                         <div class="settings-card full-only">
                             <div class="settings-section-label">Export</div>
-                            <div class="control-bar">
-                                <button class="save-config-btn" onclick="exportStatsCSV()">Export Night's Stats (CSV)</button>
-                            </div>
+                            <div class="setting-list">
+    <div class="setting-row">
+        <div class="setting-label">Export tonight's stats (CSV)</div>
+        <button type="button" class="row-btn" onclick="exportStatsCSV()">Export</button>
+    </div>
+</div>
                         </div>
 
                         <div class="settings-card full-only">
                             <div class="settings-section-label">Duplicate as Template</div>
                             <p class="settings-card-hint" style="margin-top: 0;">Carries over your credit/countdown/filter/kiosk rules to a brand-new event - not the name, password, venue, or tonight's queue and history.</p>
-                            <div class="control-bar">
-                                <button class="save-config-btn" onclick="duplicateAsTemplate()">Duplicate as Template for a New Event</button>
-                            </div>
+                            <div class="setting-list">
+    <div class="setting-row">
+        <div class="setting-label">Duplicate as template for a new event</div>
+        <button type="button" class="row-btn" onclick="duplicateAsTemplate()">Duplicate</button>
+    </div>
+</div>
                         </div>
                     </div>
 
                     <div id="settings-category-access" class="settings-category-panel">
                         <div class="settings-card">
                             <div class="settings-section-label">Access Controls</div>
-                            <div class="control-bar">
-                                <button id="toggle-requests" class="toggle-btn open-status" onclick="toggleRequests()">Requests: OPEN</button>
-                            </div>
+                            <div class="setting-list">
+    <div class="setting-row" id="row-requests">
+        <div class="setting-label">Accept song requests</div>
+        <button type="button" id="toggle-requests" class="switch" role="switch" aria-checked="false" aria-label="Accept song requests" onclick="toggleRequests()"></button>
+    </div>
+</div>
                         </div>
 
                         <div class="settings-card">
@@ -1245,8 +1305,13 @@
 
                         <div class="settings-card full-only">
                             <div class="settings-section-label">Queue Length Cap</div>
-                            <div class="config-dashboard">
-                                <button id="toggle-queue-cap" class="toggle-btn neutral-status" onclick="toggleQueueCap()">Queue Cap: OFF</button>
+                            <div class="setting-list">
+    <div class="setting-row" id="row-queue-cap">
+        <div class="setting-label">Limit queue length</div>
+        <button type="button" id="toggle-queue-cap" class="switch" role="switch" aria-checked="false" aria-label="Limit queue length" onclick="toggleQueueCap()"></button>
+    </div>
+</div>
+                            <div class="config-dashboard" style="margin-top: 16px;">
                                 <div class="input-group">
                                     <label>Max Queue Length</label>
                                     <input type="number" id="input-max-queue" min="1" value="50">
@@ -1263,13 +1328,19 @@
                         </div>
                     </div>
 
-                    <div id="settings-category-content" class="settings-category-panel">
+                    <div id="settings-category-music" class="settings-category-panel">
                         <div class="settings-card">
                             <div class="settings-section-label">Song Filters</div>
-                            <div class="control-bar">
-                                <button id="toggle-explicit" class="toggle-btn open-status" onclick="toggleExplicitLock()">Explicit: ALLOWED</button>
-                                <button id="toggle-radio-edits" class="toggle-btn open-status" onclick="toggleRadioEditsOnly()">Radio Edits Only: OFF</button>
-                            </div>
+                            <div class="setting-list">
+    <div class="setting-row" id="row-explicit">
+        <div class="setting-label">Allow explicit songs</div>
+        <button type="button" id="toggle-explicit" class="switch" role="switch" aria-checked="false" aria-label="Allow explicit songs" onclick="toggleExplicitLock()"></button>
+    </div>
+    <div class="setting-row" id="row-radio-edits">
+        <div class="setting-label">Radio edits only</div>
+        <button type="button" id="toggle-radio-edits" class="switch" role="switch" aria-checked="false" aria-label="Radio edits only" onclick="toggleRadioEditsOnly()"></button>
+    </div>
+</div>
                         </div>
 
                         <div class="settings-card full-only">
@@ -1286,9 +1357,12 @@
                     <div id="settings-category-location" class="settings-category-panel">
                         <div class="settings-card">
                             <div class="settings-section-label">Location Lock</div>
-                            <div class="control-bar">
-                                <button id="toggle-location-lock" class="toggle-btn open-status" onclick="toggleLocationLock()">Location Lock: ON</button>
-                            </div>
+                            <div class="setting-list">
+    <div class="setting-row" id="row-location-lock">
+        <div class="setting-label">Location lock</div>
+        <button type="button" id="toggle-location-lock" class="switch" role="switch" aria-checked="false" aria-label="Location lock" onclick="toggleLocationLock()"></button>
+    </div>
+</div>
                             <p class="settings-card-hint" style="margin-top: 16px; margin-bottom: 0;">
                                 When on, guests must be within the distance set below of the pinned venue location to request a song. Turn it off to let anyone check in and request from anywhere, regardless of distance.
                             </p>
@@ -1326,10 +1400,16 @@
                     <div id="settings-category-spotify" class="settings-category-panel">
                         <div class="settings-card">
                             <div class="settings-section-label">Spotify Queue Relay</div>
-                            <div class="control-bar">
-                                <button id="spotify-relay-status" class="toggle-btn closed-status" onclick="connectDjSpotify()">Checking...</button>
-                                <button id="toggle-spotify-auto-queue" class="toggle-btn open-status" onclick="toggleSpotifyAutoQueue()">Auto-Queue to Spotify: ON</button>
-                            </div>
+                            <div class="setting-list">
+    <div class="setting-row" id="row-spotify-relay-status">
+        <div class="setting-label">Spotify account connected</div>
+        <button type="button" id="spotify-relay-status" class="switch" role="switch" aria-checked="false" aria-label="Spotify account connected" onclick="connectDjSpotify()"></button>
+    </div>
+    <div class="setting-row" id="row-spotify-auto-queue">
+        <div class="setting-label">Auto-queue requests to Spotify</div>
+        <button type="button" id="toggle-spotify-auto-queue" class="switch" role="switch" aria-checked="false" aria-label="Auto-queue requests to Spotify" onclick="toggleSpotifyAutoQueue()"></button>
+    </div>
+</div>
                             <p class="settings-card-hint" style="margin-top: 16px; margin-bottom: 0;">
                                 When connected, every newly-accepted request is automatically added to your live Spotify app queue.
                                 This logs in as your own Spotify account (not guests') and requires Spotify Premium plus an active
@@ -1339,9 +1419,12 @@
 
                         <div class="settings-card full-only">
                             <div class="settings-section-label">Guest Spotify Connect</div>
-                            <div class="control-bar">
-                                <button id="toggle-guest-spotify" class="toggle-btn closed-status" onclick="toggleGuestSpotify()">Guest Spotify Connect: OFF</button>
-                            </div>
+                            <div class="setting-list">
+    <div class="setting-row" id="row-guest-spotify">
+        <div class="setting-label">Let guests connect Spotify</div>
+        <button type="button" id="toggle-guest-spotify" class="switch" role="switch" aria-checked="false" aria-label="Let guests connect Spotify" onclick="toggleGuestSpotify()"></button>
+    </div>
+</div>
                             <p class="settings-card-hint" style="margin-top: 16px; margin-bottom: 0;">
                                 When on, guests can connect their own Spotify account on the request page to browse and request from their playlists.
                             </p>
@@ -1371,11 +1454,16 @@
                     <div id="settings-category-kiosk" class="settings-category-panel">
                         <div class="settings-card">
                             <div class="settings-section-label">Kiosk Appearance</div>
-                            <div class="theme-seg" id="theme-seg-kiosk" role="group" aria-label="Kiosk Appearance">
+                            <div class="setting-list">
+    <div class="setting-row">
+        <div class="setting-label">Appearance</div>
+        <div class="theme-seg" id="theme-seg-kiosk" role="group" aria-label="Kiosk Appearance">
                                 <button type="button" data-mode="auto" onclick="setScreenTheme('kiosk','auto')">Auto</button>
                                 <button type="button" data-mode="light" onclick="setScreenTheme('kiosk','light')">Light</button>
                                 <button type="button" data-mode="dark" onclick="setScreenTheme('kiosk','dark')">Dark</button>
                             </div>
+    </div>
+</div>
                             <p class="settings-card-hint" style="margin-top: 14px; margin-bottom: 0;">Applies to the kiosk page within a few seconds. Auto follows the kiosk device's own light/dark setting.</p>
                         </div>
 
@@ -1384,12 +1472,24 @@
                             <p class="settings-card-hint" style="margin-top: 0;">
                                 Independent settings for an admin-attended kiosk device - separate on/off, Spotify button, and credit rules from regular guests. Each physical kiosk still gets its own credit bank, same as any guest's phone.
                             </p>
-                            <div class="control-bar" style="margin-bottom: 20px;">
-                                <button id="toggle-kiosk-requests" class="toggle-btn open-status" onclick="toggleKioskRequests()">Kiosk Requests: OPEN</button>
-                                <button id="toggle-kiosk-spotify" class="toggle-btn closed-status" onclick="toggleKioskSpotify()">Kiosk Spotify Connect: OFF</button>
-                                <button id="toggle-kiosk-display-only" class="toggle-btn closed-status" onclick="toggleKioskDisplayOnly()">Display-Only Mode: OFF</button>
-                                <button class="toggle-btn neutral-status" onclick="openKioskPage()">Open Kiosk Page</button>
-                            </div>
+                            <div class="setting-list" style="margin-bottom: 20px;">
+    <div class="setting-row" id="row-kiosk-requests">
+        <div class="setting-label">Accept kiosk requests</div>
+        <button type="button" id="toggle-kiosk-requests" class="switch" role="switch" aria-checked="false" aria-label="Accept kiosk requests" onclick="toggleKioskRequests()"></button>
+    </div>
+    <div class="setting-row" id="row-kiosk-spotify">
+        <div class="setting-label">Kiosk Spotify connect</div>
+        <button type="button" id="toggle-kiosk-spotify" class="switch" role="switch" aria-checked="false" aria-label="Kiosk Spotify connect" onclick="toggleKioskSpotify()"></button>
+    </div>
+    <div class="setting-row" id="row-kiosk-display-only">
+        <div class="setting-label">Display-only mode</div>
+        <button type="button" id="toggle-kiosk-display-only" class="switch" role="switch" aria-checked="false" aria-label="Display-only mode" onclick="toggleKioskDisplayOnly()"></button>
+    </div>
+    <div class="setting-row">
+        <div class="setting-label">Kiosk page</div>
+        <button type="button" class="row-btn" onclick="openKioskPage()">Open</button>
+    </div>
+</div>
                             <p class="settings-card-hint" style="margin-top: -10px;">
                                 <strong>Display-Only Mode</strong> turns the kiosk page into a full-screen, read-only "now playing" board -
                                 no search, no credits, no voting, just the Live Queue blown up big. Good for a TV or monitor at the venue
@@ -1412,11 +1512,16 @@
                     <div id="settings-category-visuals" class="settings-category-panel">
                         <div class="settings-card">
                             <div class="settings-section-label">Visuals Appearance</div>
-                            <div class="theme-seg" id="theme-seg-visuals" role="group" aria-label="Visuals Appearance">
+                            <div class="setting-list">
+    <div class="setting-row">
+        <div class="setting-label">Appearance</div>
+        <div class="theme-seg" id="theme-seg-visuals" role="group" aria-label="Visuals Appearance">
                                 <button type="button" data-mode="auto" onclick="setScreenTheme('visuals','auto')">Auto</button>
                                 <button type="button" data-mode="light" onclick="setScreenTheme('visuals','light')">Light</button>
                                 <button type="button" data-mode="dark" onclick="setScreenTheme('visuals','dark')">Dark</button>
                             </div>
+    </div>
+</div>
                             <p class="settings-card-hint" style="margin-top: 14px; margin-bottom: 0;">Applies to the visuals display within a few seconds. Auto follows the display device's own light/dark setting.</p>
                         </div>
 
@@ -1427,9 +1532,12 @@
                                 photos/videos scheduled in the Music Scheduler, and automatically falls back to a live
                                 Now Playing + Up Next board whenever no Ambient Visuals block is running.
                             </p>
-                            <div class="control-bar">
-                                <button class="toggle-btn neutral-status" onclick="openVisualsPage()">Open Visuals Display</button>
-                            </div>
+                            <div class="setting-list">
+    <div class="setting-row">
+        <div class="setting-label">Visuals display</div>
+        <button type="button" class="row-btn" onclick="openVisualsPage()">Open</button>
+    </div>
+</div>
                         </div>
 
                         <div class="settings-card">
@@ -1438,11 +1546,20 @@
                                 Quick overrides for whatever's currently on the venue screen - handy for a speech,
                                 an announcement, or any moment you need the room's attention off the visuals.
                             </p>
-                            <div class="control-bar">
-                                <button id="toggle-mute-visuals" class="toggle-btn closed-status" onclick="toggleMuteVisuals()">Mute Visuals: OFF</button>
-                                <button id="toggle-mute-all" class="toggle-btn closed-status" onclick="toggleMuteAll()">Mute All: OFF</button>
-                                <button id="toggle-show-queue" class="toggle-btn closed-status" onclick="toggleShowQueue()">Show Queue: OFF</button>
-                            </div>
+                            <div class="setting-list">
+    <div class="setting-row" id="row-mute-visuals">
+        <div class="setting-label">Mute visuals</div>
+        <button type="button" id="toggle-mute-visuals" class="switch" role="switch" aria-checked="false" aria-label="Mute visuals" onclick="toggleMuteVisuals()"></button>
+    </div>
+    <div class="setting-row" id="row-mute-all">
+        <div class="setting-label">Mute all (also pauses playback)</div>
+        <button type="button" id="toggle-mute-all" class="switch" role="switch" aria-checked="false" aria-label="Mute all (also pauses playback)" onclick="toggleMuteAll()"></button>
+    </div>
+    <div class="setting-row" id="row-show-queue">
+        <div class="setting-label">Show queue on screen</div>
+        <button type="button" id="toggle-show-queue" class="switch" role="switch" aria-checked="false" aria-label="Show queue on screen" onclick="toggleShowQueue()"></button>
+    </div>
+</div>
                             <p class="settings-card-hint" style="margin-top: 16px; margin-bottom: 0;">
                                 <strong>Mute Visuals</strong> turns the visuals display fully black. <strong>Mute All</strong> does
                                 the same and also pauses playback (resuming it when switched back off). <strong>Show Queue</strong>
@@ -1461,10 +1578,16 @@
                                 stay in sync with the Spotify audio once it's playing, the ambient visuals just take
                                 back over as usual.
                             </p>
-                            <div class="control-bar">
-                                <button id="toggle-music-videos" class="toggle-btn closed-status" onclick="toggleMusicVideos()">Music Videos: OFF</button>
-                                <button id="toggle-music-video-subtitles" class="toggle-btn closed-status" onclick="toggleMusicVideoSubtitles()">Subtitles: OFF</button>
-                            </div>
+                            <div class="setting-list">
+    <div class="setting-row" id="row-music-videos">
+        <div class="setting-label">Music videos</div>
+        <button type="button" id="toggle-music-videos" class="switch" role="switch" aria-checked="false" aria-label="Music videos" onclick="toggleMusicVideos()"></button>
+    </div>
+    <div class="setting-row" id="row-music-video-subtitles">
+        <div class="setting-label">Subtitles</div>
+        <button type="button" id="toggle-music-video-subtitles" class="switch" role="switch" aria-checked="false" aria-label="Subtitles" onclick="toggleMusicVideoSubtitles()"></button>
+    </div>
+</div>
                             <p class="settings-card-hint" style="margin-top: 16px; margin-bottom: 0;">
                                 <strong>Subtitles</strong> turns on YouTube's caption track for whatever video is
                                 currently showing, when that video has one available.
@@ -1534,9 +1657,12 @@
                                 concluded. The denylist below applies regardless of Family Mode and blocks a song's video
                                 everywhere, for every event on this platform.
                             </p>
-                            <div class="control-bar">
-                                <button id="toggle-family-mode" class="toggle-btn closed-status" onclick="toggleFamilyMode()">Family Mode: OFF</button>
-                            </div>
+                            <div class="setting-list">
+    <div class="setting-row" id="row-family-mode">
+        <div class="setting-label">Family mode</div>
+        <button type="button" id="toggle-family-mode" class="switch" role="switch" aria-checked="false" aria-label="Family mode" onclick="toggleFamilyMode()"></button>
+    </div>
+</div>
 
                             <div class="settings-section-label" style="margin-top: 20px;">Denylist (blocked everywhere)</div>
                             <div class="input-group">
@@ -1559,13 +1685,22 @@
                     <div id="settings-category-danger" class="settings-category-panel">
                         <div class="settings-card danger-zone">
                             <div class="settings-section-label">Danger Zone</div>
-                            <div class="control-bar">
-                                <button class="utility-btn" onclick="clearSystem('clearQueue', 'Are you sure you want to completely empty the queue?')">Clear Active Queue</button>
-                                <button class="utility-btn" onclick="clearSystem('clearHistory', 'Are you sure you want to clear your played history log?')">Clear Played History</button>
-                            </div>
-                            <div class="control-bar" style="margin-top: 10px;">
-                                <button class="utility-btn" style="background: var(--red-action, #e91429); border-color: var(--red-action, #e91429); color: white;" onclick="closeEvent()">Close This Event</button>
-                            </div>
+                            <div class="setting-list">
+    <div class="setting-row">
+        <div class="setting-label">Clear active queue</div>
+        <button type="button" class="row-btn" onclick="clearSystem('clearQueue', 'Are you sure you want to completely empty the queue?')">Clear</button>
+    </div>
+    <div class="setting-row">
+        <div class="setting-label">Clear played history</div>
+        <button type="button" class="row-btn" onclick="clearSystem('clearHistory', 'Are you sure you want to clear your played history log?')">Clear</button>
+    </div>
+</div>
+                            <div class="setting-list" style="margin-top: 10px;">
+    <div class="setting-row">
+        <div class="setting-label">Close this event</div>
+        <button type="button" class="row-btn danger" onclick="closeEvent()">Close event</button>
+    </div>
+</div>
                             <p style="color: #a7a7a7; font-size: 0.8rem; margin: 8px 0 0 0;">Permanently deletes this event and everything in it - queue, history, settings, Spotify connection. This can't be undone, and the URL becomes free for anyone to reuse.</p>
                         </div>
                     </div>
@@ -1758,7 +1893,13 @@
             window.open(eventUrl('/admin/scheduler'), '_blank');
         }
 
-        const SETTINGS_CATEGORIES = ['general', 'access', 'content', 'location', 'spotify', 'kiosk', 'visuals', 'danger'];
+        // Settings switches: aria-checked is the single source of truth for how a switch looks.
+        function setSwitch(id, on) {
+            const el = document.getElementById(id);
+            if (el) el.setAttribute('aria-checked', on ? 'true' : 'false');
+        }
+
+        const SETTINGS_CATEGORIES = ['general', 'access', 'music', 'location', 'spotify', 'kiosk', 'visuals', 'danger'];
         function switchSettingsCategory(category) {
             SETTINGS_CATEGORIES.forEach(name => {
                 const isActive = name === category;
@@ -2840,39 +2981,33 @@ async function verifyPassword() {
 
                 const toggleBtn = document.getElementById('toggle-requests');
                 requestsAllowed = data.requestsAllowed;
-                toggleBtn.innerText = requestsAllowed ? "Requests: OPEN" : "Requests: CLOSED";
-                toggleBtn.className = requestsAllowed ? "toggle-btn open-status" : "toggle-btn closed-status";
+                setSwitch('toggle-requests', requestsAllowed);
 
                 const explicitBtn = document.getElementById('toggle-explicit');
                 explicitBlockActive = data.explicitBlockActive || false;
-                explicitBtn.innerText = explicitBlockActive ? "Explicit: BLOCKED" : "Explicit: ALLOWED";
-                explicitBtn.className = explicitBlockActive ? "toggle-btn closed-status" : "toggle-btn open-status";
+                setSwitch('toggle-explicit', !explicitBlockActive);
 
                 const radioEditsBtn = document.getElementById('toggle-radio-edits');
                 radioEditsOnly = data.radioEditsOnly || false;
-                radioEditsBtn.innerText = radioEditsOnly ? "Radio Edits Only: ON" : "Radio Edits Only: OFF";
-                radioEditsBtn.className = radioEditsOnly ? "toggle-btn closed-status" : "toggle-btn open-status";
+                setSwitch('toggle-radio-edits', radioEditsOnly);
 
                 if (document.activeElement !== document.getElementById('input-max-queue')) {
                     document.getElementById('input-max-queue').value = data.maxQueueLength;
                 }
                 const capBtn = document.getElementById('toggle-queue-cap');
                 queueCapEnabled = data.queueCapEnabled || false;
-                capBtn.innerText = queueCapEnabled ? "Queue Cap: ON" : "Queue Cap: OFF";
-                capBtn.className = queueCapEnabled ? "toggle-btn open-status" : "toggle-btn neutral-status";
+                setSwitch('toggle-queue-cap', queueCapEnabled);
                 document.getElementById('queue-cap-status-text').innerText = queueCapEnabled
                     ? `Current queue: ${data.queue.length} / ${data.maxQueueLength}${data.queueFull ? ' — FULL, requests auto-closed until it drains' : ''}`
                     : "Cap is off — the queue can grow without limit.";
 
                 const guestSpotifyBtn = document.getElementById('toggle-guest-spotify');
                 guestSpotifyEnabled = data.guestSpotifyConnectEnabled !== false;
-                guestSpotifyBtn.innerText = guestSpotifyEnabled ? "Guest Spotify Connect: ON" : "Guest Spotify Connect: OFF";
-                guestSpotifyBtn.className = guestSpotifyEnabled ? "toggle-btn open-status" : "toggle-btn closed-status";
+                setSwitch('toggle-guest-spotify', guestSpotifyEnabled);
 
                 const locationLockBtn = document.getElementById('toggle-location-lock');
                 locationLockEnabled = data.locationLockEnabled !== false;
-                locationLockBtn.innerText = locationLockEnabled ? "Location Lock: ON" : "Location Lock: OFF";
-                locationLockBtn.className = locationLockEnabled ? "toggle-btn open-status" : "toggle-btn closed-status";
+                setSwitch('toggle-location-lock', locationLockEnabled);
 
                 if (document.activeElement !== document.getElementById('input-code-display-seconds')) {
                     document.getElementById('input-code-display-seconds').value = data.codeDisplaySeconds || 45;
@@ -2883,13 +3018,11 @@ async function verifyPassword() {
 
                 const relayBtn = document.getElementById('spotify-relay-status');
                 djSpotifyQueueConnected = !!data.djSpotifyQueueConnected;
-                relayBtn.innerText = djSpotifyQueueConnected ? "Spotify Connected" : "Connect Spotify Account";
-                relayBtn.className = djSpotifyQueueConnected ? "toggle-btn open-status" : "toggle-btn closed-status";
+                setSwitch('spotify-relay-status', djSpotifyQueueConnected);
 
                 const autoQueueBtn = document.getElementById('toggle-spotify-auto-queue');
                 spotifyAutoQueueEnabled = data.spotifyAutoQueueEnabled !== false;
-                autoQueueBtn.innerText = spotifyAutoQueueEnabled ? "Auto-Queue to Spotify: ON" : "Auto-Queue to Spotify: OFF";
-                autoQueueBtn.className = spotifyAutoQueueEnabled ? "toggle-btn open-status" : "toggle-btn closed-status";
+                setSwitch('toggle-spotify-auto-queue', spotifyAutoQueueEnabled);
 
                 // The input box reflects the admin's own saved baseline
                 // (fallbackPlaylistUri), NOT whatever's playing right now -
@@ -2909,18 +3042,15 @@ async function verifyPassword() {
                 if (data.kiosk) {
                     const kioskReqBtn = document.getElementById('toggle-kiosk-requests');
                     kioskRequestsAllowed = data.kiosk.requestsAllowed;
-                    kioskReqBtn.innerText = kioskRequestsAllowed ? "Kiosk Requests: OPEN" : "Kiosk Requests: CLOSED";
-                    kioskReqBtn.className = kioskRequestsAllowed ? "toggle-btn open-status" : "toggle-btn closed-status";
+                    setSwitch('toggle-kiosk-requests', kioskRequestsAllowed);
 
                     const kioskSpotifyBtn = document.getElementById('toggle-kiosk-spotify');
                     kioskSpotifyEnabled = data.kiosk.spotifyConnectEnabled !== false;
-                    kioskSpotifyBtn.innerText = kioskSpotifyEnabled ? "Kiosk Spotify Connect: ON" : "Kiosk Spotify Connect: OFF";
-                    kioskSpotifyBtn.className = kioskSpotifyEnabled ? "toggle-btn open-status" : "toggle-btn closed-status";
+                    setSwitch('toggle-kiosk-spotify', kioskSpotifyEnabled);
 
                     const kioskDisplayBtn = document.getElementById('toggle-kiosk-display-only');
                     kioskDisplayOnlyMode = data.kiosk.displayOnlyMode || false;
-                    kioskDisplayBtn.innerText = kioskDisplayOnlyMode ? "Display-Only Mode: ON" : "Display-Only Mode: OFF";
-                    kioskDisplayBtn.className = kioskDisplayOnlyMode ? "toggle-btn open-status" : "toggle-btn closed-status";
+                    setSwitch('toggle-kiosk-display-only', kioskDisplayOnlyMode);
 
                     if (document.activeElement !== document.getElementById('input-kiosk-max-credits')) {
                         document.getElementById('input-kiosk-max-credits').value = data.kiosk.maxCredits;
@@ -2933,28 +3063,23 @@ async function verifyPassword() {
                 if (data.visuals) {
                     const muteVisualsBtn = document.getElementById('toggle-mute-visuals');
                     visualsMuted = !!data.visuals.muteVisuals;
-                    muteVisualsBtn.innerText = visualsMuted ? "Mute Visuals: ON" : "Mute Visuals: OFF";
-                    muteVisualsBtn.className = visualsMuted ? "toggle-btn open-status" : "toggle-btn closed-status";
+                    setSwitch('toggle-mute-visuals', visualsMuted);
 
                     const muteAllBtn = document.getElementById('toggle-mute-all');
                     visualsMuteAll = !!data.visuals.muteAll;
-                    muteAllBtn.innerText = visualsMuteAll ? "Mute All: ON" : "Mute All: OFF";
-                    muteAllBtn.className = visualsMuteAll ? "toggle-btn open-status" : "toggle-btn closed-status";
+                    setSwitch('toggle-mute-all', visualsMuteAll);
 
                     const showQueueBtn = document.getElementById('toggle-show-queue');
                     visualsShowQueue = !!data.visuals.showQueue;
-                    showQueueBtn.innerText = visualsShowQueue ? "Show Queue: ON" : "Show Queue: OFF";
-                    showQueueBtn.className = visualsShowQueue ? "toggle-btn open-status" : "toggle-btn closed-status";
+                    setSwitch('toggle-show-queue', visualsShowQueue);
 
                     const musicVideosBtn = document.getElementById('toggle-music-videos');
                     musicVideosEnabled = !!data.visuals.musicVideosEnabled;
-                    musicVideosBtn.innerText = musicVideosEnabled ? "Music Videos: ON" : "Music Videos: OFF";
-                    musicVideosBtn.className = musicVideosEnabled ? "toggle-btn open-status" : "toggle-btn closed-status";
+                    setSwitch('toggle-music-videos', musicVideosEnabled);
 
                     const musicVideoSubtitlesBtn = document.getElementById('toggle-music-video-subtitles');
                     musicVideoSubtitlesEnabled = !!data.visuals.musicVideoSubtitlesEnabled;
-                    musicVideoSubtitlesBtn.innerText = musicVideoSubtitlesEnabled ? "Subtitles: ON" : "Subtitles: OFF";
-                    musicVideoSubtitlesBtn.className = musicVideoSubtitlesEnabled ? "toggle-btn open-status" : "toggle-btn closed-status";
+                    setSwitch('toggle-music-video-subtitles', musicVideoSubtitlesEnabled);
 
                     if (document.activeElement !== document.getElementById('input-music-video-offset')) {
                         document.getElementById('input-music-video-offset').value = data.visuals.musicVideoOffsetMs;
@@ -2966,8 +3091,7 @@ async function verifyPassword() {
 
                     const familyModeBtn = document.getElementById('toggle-family-mode');
                     familyModeEnabled = !!data.visuals.familyModeEnabled;
-                    familyModeBtn.innerText = familyModeEnabled ? "Family Mode: ON" : "Family Mode: OFF";
-                    familyModeBtn.className = familyModeEnabled ? "toggle-btn open-status" : "toggle-btn closed-status";
+                    setSwitch('toggle-family-mode', familyModeEnabled);
                 }
 
                 if (!filtersInitialized) {
