@@ -353,6 +353,17 @@
         </div>
     </div>
 
+    <div class="vc-modal" id="vc-dup-modal" role="dialog" aria-modal="true" aria-labelledby="vc-dup-title">
+        <div class="vc-modal-card" style="max-width:460px">
+            <h2 id="vc-dup-title" style="margin:0 0 8px;font-size:1.1rem">Already in the catalog</h2>
+            <p class="vc-help" id="vc-dup-text" style="margin-bottom:0"></p>
+            <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+                <button class="btn btn-admin" id="vc-dup-cancel">Cancel</button>
+                <button class="btn btn-close" id="vc-dup-add" style="background:var(--spotify-green)">Add anyway</button>
+            </div>
+        </div>
+    </div>
+
     <div class="toast" id="toast"></div>
 
     <script>
@@ -837,6 +848,64 @@
             return !(p.song || p.artist || p.spotifyId || p.youtubeId || p.isrc || p.notes);
         }
 
+        /* ---------- duplicate check (same song + artist already in the catalog) ---------- */
+        // Same title AND artist, ignoring case, accents, spaces and punctuation. Different versions
+        // ("Song (Remastered)") are different titles on purpose and do not count as duplicates.
+        function vcDupKey(song, artist) {
+            const n = v => String(v == null ? '' : v).toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^\p{L}\p{N}]+/gu, '');
+            const a = n(song), b = n(artist);
+            return a && b ? a + '|' + b : '';
+        }
+        let vcDupQueue = Promise.resolve();
+        function vcConfirmDup(payload, other) {
+            const run = () => new Promise(resolve => {
+                const modal = document.getElementById('vc-dup-modal');
+                const cancelBtn = document.getElementById('vc-dup-cancel');
+                const addBtn = document.getElementById('vc-dup-add');
+                document.getElementById('vc-dup-text').textContent =
+                    '\u201C' + other.song + '\u201D by ' + other.artist + ' is already in the catalog' + (other._num ? ' (row ' + other._num + ')' : '') + '.';
+                const done = (add) => {
+                    modal.classList.remove('show');
+                    cancelBtn.onclick = addBtn.onclick = modal.onclick = null;
+                    document.removeEventListener('keydown', onKey, true);
+                    resolve(add);
+                };
+                const onKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); done(false); } };
+                cancelBtn.onclick = () => done(false);
+                addBtn.onclick = () => done(true);
+                modal.onclick = (e) => { if (e.target === modal) done(false); };
+                document.addEventListener('keydown', onKey, true);
+                modal.classList.add('show');
+                cancelBtn.focus(); // the safe choice is the default
+            });
+            const p = vcDupQueue.then(run);
+            vcDupQueue = p.catch(() => {});
+            return p;
+        }
+        // Cancel: a row that was still being added is dropped; an existing row has the edit undone.
+        async function vcCancelDup(tr, id, other) {
+            if (tr.isConnected) {
+                if (!id || tr._fresh) {
+                    if (vcPanel && vcPanel.tr === tr) vcClosePanel();
+                    tr.remove();
+                    if (id) {
+                        vcRows = vcRows.filter(r => r.id !== id);
+                        vcBusy(+1);
+                        const r = await vcApi('DELETE', '/row/' + encodeURIComponent(id));
+                        vcBusy(-1);
+                        if (!r.ok) { vcStatus(r.data.error || 'Could not remove the unsaved row.', true); vcLoad(); return; }
+                    }
+                    vcRefreshNums(); vcRefreshDups(); vcCount();
+                } else {
+                    const prev = vcRows.find(r => r.id === id);
+                    if (prev) vcFillRow(tr, prev);
+                }
+            }
+            vcToast('Not added - it is already in the catalog.');
+            const otherTr = document.querySelector(`#vc-body tr[data-id="${CSS.escape(other.id)}"]`);
+            if (otherTr) vcFlashRow(otherTr);
+        }
+
         /* ---------- saving ---------- */
         function vcSaveRow(tr) {
             tr._chain = (tr._chain || Promise.resolve()).then(() => vcDoSave(tr)).catch(e => vcStatus('Save failed: ' + e.message, true));
@@ -848,6 +917,20 @@
             const id = tr.dataset.id || undefined;
             if (!id && vcIsBlank(payload)) return;
             if (id) payload.id = id;
+            // Only ask when THIS save is what makes the row a duplicate (a new row, or an edit that
+            // changed its song/artist into another row's). Later edits to a row already confirmed
+            // as "add anyway" go through without asking again.
+            const dupKey = vcDupKey(payload.song, payload.artist);
+            if (dupKey) {
+                const prev = id ? vcRows.find(r => r.id === id) : null;
+                const prevKey = prev ? vcDupKey(prev.song, prev.artist) : '';
+                const other = dupKey !== prevKey ? vcRows.find(r => r.id !== id && vcDupKey(r.song, r.artist) === dupKey) : null;
+                if (other) {
+                    const addAnyway = await vcConfirmDup(payload, other);
+                    if (!addAnyway) { await vcCancelDup(tr, id, other); return; }
+                    if (!tr.isConnected) return;
+                }
+            }
             vcClearMarks(tr);
             document.getElementById('vc-status').classList.remove('err');
             vcBusy(+1);
@@ -870,6 +953,7 @@
                 }
             }
             tr.dataset.id = row.id;
+            if (row.song && row.artist) tr._fresh = false;
             vcUpsertState(row);
             vcRefreshNums();
             vcFillRow(tr, row);
@@ -903,6 +987,7 @@
         function vcAddRow(values, errors) {
             const body = document.getElementById('vc-body');
             const tr = vcMakeRowEl(Object.assign({ enabled: true, _raw: true }, values || {}));
+            tr._fresh = true; // still being added - see vcCancelDup
             body.insertBefore(tr, body.firstChild);
             if (errors) vcMarkErrors(tr, errors);
             if (!values) tr.querySelector('[data-f="song"]').focus();
