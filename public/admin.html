@@ -65,7 +65,7 @@
         body.basic-mode #sidebar-nav-blocked,
         body.basic-mode #sidebar-nav-scheduler,
         body.basic-mode #settings-nav-kiosk,
-        body.basic-mode #settings-nav-content,
+        body.basic-mode #settings-nav-visuals,
         body.basic-mode #toggle-radio-edits,
         body.basic-mode #toggle-guest-spotify { display: none !important; }
 
@@ -1113,6 +1113,9 @@
                     <button type="button" id="settings-nav-access" class="settings-nav-item" onclick="switchSettingsCategory('access')">
                         Access &amp; Guests
                     </button>
+                    <button type="button" id="settings-nav-content" class="settings-nav-item" onclick="switchSettingsCategory('content')">
+                        Content
+                    </button>
                     <button type="button" id="settings-nav-location" class="settings-nav-item" onclick="switchSettingsCategory('location')">
                         Location
                     </button>
@@ -1122,8 +1125,8 @@
                     <button type="button" id="settings-nav-kiosk" class="settings-nav-item" onclick="switchSettingsCategory('kiosk')">
                         Kiosk
                     </button>
-                    <button type="button" id="settings-nav-content" class="settings-nav-item" onclick="switchSettingsCategory('content')">
-                        Content
+                    <button type="button" id="settings-nav-visuals" class="settings-nav-item" onclick="switchSettingsCategory('visuals')">
+                        Visuals
                     </button>
                     <button type="button" id="settings-nav-danger" class="settings-nav-item danger-nav" onclick="switchSettingsCategory('danger')">
                         Danger Zone
@@ -1181,7 +1184,7 @@
                         </div>
 
                         <div class="settings-card">
-                            <div class="settings-section-label">System Rules</div>
+                            <div class="settings-section-label">Event Details</div>
                             <div class="event-name-box" style="margin-bottom: 20px; display: flex; gap: 16px; flex-wrap: wrap;">
                                 <div class="input-group" style="flex: 1 1 200px;">
                                     <label>Event Name</label>
@@ -1192,20 +1195,12 @@
                                     <input type="text" id="input-venue-name" placeholder="e.g. The Blind Pig, Ann Arbor" maxlength="120" style="width: 100%;">
                                 </div>
                             </div>
-                            <p class="settings-card-hint" style="margin-top: -12px; margin-bottom: 20px;">
+                            <p class="settings-card-hint" style="margin-top: -12px; margin-bottom: 16px;">
                                 Event Name is the headline guests see (e.g. "Sarah's 30th Birthday"). Venue Name is usually
                                 where it's happening, shown underneath in smaller text - leave it blank to hide it.
                             </p>
-                            <div class="config-dashboard">
-                                <div class="input-group">
-                                    <label>Max Credit Bank</label>
-                                    <input type="number" id="input-max-credits" min="1">
-                                </div>
-                                <div class="input-group">
-                                    <label>Regen Timer (Secs)</label>
-                                    <input type="number" id="input-countdown" min="5">
-                                </div>
-                                <button class="save-config-btn" onclick="saveSystemRules()">Update Rules</button>
+                            <div class="control-bar">
+                                <button class="save-config-btn" onclick="saveSystemRules()">Save Event Details</button>
                             </div>
                         </div>
 
@@ -1230,9 +1225,21 @@
                             <div class="settings-section-label">Access Controls</div>
                             <div class="control-bar">
                                 <button id="toggle-requests" class="toggle-btn open-status" onclick="toggleRequests()">Requests: OPEN</button>
-                                <button id="toggle-explicit" class="toggle-btn open-status" onclick="toggleExplicitLock()">Explicit: ALLOWED</button>
-                                <button id="toggle-radio-edits" class="toggle-btn open-status" onclick="toggleRadioEditsOnly()">Radio Edits Only: OFF</button>
-                                <button id="toggle-guest-spotify" class="toggle-btn closed-status" onclick="toggleGuestSpotify()">Guest Spotify Connect: OFF</button>
+                            </div>
+                        </div>
+
+                        <div class="settings-card">
+                            <div class="settings-section-label">Guest Credits</div>
+                            <div class="config-dashboard">
+                                <div class="input-group">
+                                    <label>Max Credit Bank</label>
+                                    <input type="number" id="input-max-credits" min="1">
+                                </div>
+                                <div class="input-group">
+                                    <label>Regen Timer (Secs)</label>
+                                    <input type="number" id="input-countdown" min="5">
+                                </div>
+                                <button class="save-config-btn" onclick="saveSystemRules()">Update Rules</button>
                             </div>
                         </div>
 
@@ -1250,6 +1257,22 @@
                         </div>
 
                         <div class="settings-card full-only">
+                            <div class="settings-section-label">Blocked Guests</div>
+                            <p class="settings-card-hint" style="margin-top: 0;">Block a guest's device from the Stats tab's "Recent Requests" list. A blocked guest can't request or vote for the rest of this event.</p>
+                            <div id="blocked-guests-list" class="stat-box-body"></div>
+                        </div>
+                    </div>
+
+                    <div id="settings-category-content" class="settings-category-panel">
+                        <div class="settings-card">
+                            <div class="settings-section-label">Song Filters</div>
+                            <div class="control-bar">
+                                <button id="toggle-explicit" class="toggle-btn open-status" onclick="toggleExplicitLock()">Explicit: ALLOWED</button>
+                                <button id="toggle-radio-edits" class="toggle-btn open-status" onclick="toggleRadioEditsOnly()">Radio Edits Only: OFF</button>
+                            </div>
+                        </div>
+
+                        <div class="settings-card full-only">
                             <div class="settings-section-label">Decade Filters (Theme Nights)</div>
                             <div class="filter-panel">
                                 <p class="filter-hint">Pick any decades to restrict guests to only those. Leave everything unchecked to allow anything.</p>
@@ -1257,12 +1280,6 @@
                                 <div class="filter-chip-row" id="decade-filter-chips"></div>
                                 <button class="save-config-btn" style="margin-top: 18px;" onclick="saveFilters()">Save Filters</button>
                             </div>
-                        </div>
-
-                        <div class="settings-card full-only">
-                            <div class="settings-section-label">Blocked Guests</div>
-                            <p class="settings-card-hint" style="margin-top: 0;">Block a guest's device from the Stats tab's "Recent Requests" list. A blocked guest can't request or vote for the rest of this event.</p>
-                            <div id="blocked-guests-list" class="stat-box-body"></div>
                         </div>
                     </div>
 
@@ -1294,7 +1311,7 @@
                         <div class="settings-card full-only">
                             <div class="settings-section-label">Venue Code Display Time</div>
                             <p class="settings-card-hint" style="margin-top: 0;">
-                                Guests outside the check-in distance can tap Display Code to show the rotating 6-digit code in a small grey box in the top right of your Ambient Visuals screen. This is how long it stays up (5 to 300 seconds). The screen must be opened from the admin Visuals button.
+                                Guests outside the check-in distance can tap Display Code to show the rotating 6-digit code in the top right of your Ambient Visuals screen. This is how long it stays up (5 to 300 seconds). The screen must be opened from the admin Visuals button.
                             </p>
                             <div class="config-dashboard">
                                 <div class="input-group">
@@ -1317,6 +1334,16 @@
                                 When connected, every newly-accepted request is automatically added to your live Spotify app queue.
                                 This logs in as your own Spotify account (not guests') and requires Spotify Premium plus an active
                                 device (open Spotify and play something first). Click to connect - click again to disconnect.
+                            </p>
+                        </div>
+
+                        <div class="settings-card full-only">
+                            <div class="settings-section-label">Guest Spotify Connect</div>
+                            <div class="control-bar">
+                                <button id="toggle-guest-spotify" class="toggle-btn closed-status" onclick="toggleGuestSpotify()">Guest Spotify Connect: OFF</button>
+                            </div>
+                            <p class="settings-card-hint" style="margin-top: 16px; margin-bottom: 0;">
+                                When on, guests can connect their own Spotify account on the request page to browse and request from their playlists.
                             </p>
                         </div>
 
@@ -1382,7 +1409,7 @@
                         </div>
                     </div>
 
-                    <div id="settings-category-content" class="settings-category-panel">
+                    <div id="settings-category-visuals" class="settings-category-panel">
                         <div class="settings-card">
                             <div class="settings-section-label">Visuals Appearance</div>
                             <div class="theme-seg" id="theme-seg-visuals" role="group" aria-label="Visuals Appearance">
@@ -1731,7 +1758,7 @@
             window.open(eventUrl('/admin/scheduler'), '_blank');
         }
 
-        const SETTINGS_CATEGORIES = ['general', 'access', 'location', 'spotify', 'kiosk', 'content', 'danger'];
+        const SETTINGS_CATEGORIES = ['general', 'access', 'content', 'location', 'spotify', 'kiosk', 'visuals', 'danger'];
         function switchSettingsCategory(category) {
             SETTINGS_CATEGORIES.forEach(name => {
                 const isActive = name === category;
@@ -2758,7 +2785,7 @@ async function verifyPassword() {
                 const activeTab = TAB_NAMES.find(n => document.getElementById('tab-panel-' + n).classList.contains('active-content'));
                 if (hiddenTabs.includes(activeTab)) switchTab('queue');
                 const active = SETTINGS_CATEGORIES.find(n => document.getElementById('settings-category-' + n).classList.contains('active-category'));
-                if (active === 'kiosk' || active === 'content') switchSettingsCategory('general');
+                if (active === 'kiosk' || active === 'visuals') switchSettingsCategory('general');
             }
         }
         async function setSiteMode(mode) {
