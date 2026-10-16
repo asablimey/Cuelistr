@@ -2340,7 +2340,8 @@ function triggerMusicVideoVerification(trackId, artistNamesRaw, title, durationM
 // Music Videos, Subtitles, Video Offset). Lazily created so events saved
 // before this feature existed pick up the defaults instead of crashing on
 // undefined.
-const MUSIC_VIDEO_OFFSET_DEFAULT_MS = 600;
+// 0 = no extra venue offset: the master catalog start time is applied exactly as set (see the SYNC RULE).
+const MUSIC_VIDEO_OFFSET_DEFAULT_MS = 0;
 // How long the song title/artist popup stays up at the start and end of each
 // music video, in seconds. Set in Admin -> Settings -> Content -> Music Videos.
 const MUSIC_VIDEO_INFO_SECONDS_DEFAULT = 30;
@@ -6085,6 +6086,16 @@ app.get('/e/:slug/api/music-video', publicReadLimiter, async (req, res) => {
         if (blockedBy) {
             runtime.cache = { trackId: np.trackId, searchedTrackId: np.trackId, matched: false, videoId: null, introOffsetMs: 0, blockedBy };
         } else {
+            // SYNC RULE - DO NOT CHANGE WITHOUT THE OWNER'S EXPLICIT SAY-SO
+            // The start time a person sets in the master catalog (row.startMs) is set PRECISELY and is
+            // EXACTLY the point in the YouTube video that must line up with the start of the song's audio.
+            // It travels untouched:  master grid -> Redis row.startMs -> introOffsetMs in /api/music-video
+            // -> mvIntroOffsetMs -> mvTargetSec() in visuals.html.
+            // For a catalog video, nothing may round it, clamp it, guess it, auto-measure it, replace it,
+            // or add a default on top of it. A deploy must leave every saved start time AND the way it is
+            // applied exactly as it was - changing the sync maths (mvTargetSec, mvVideoLeadMs, latency or
+            // drift handling, the startMs -> introOffsetMs hand-off) shifts every video at once.
+            // If a change touches any of that, stop and ask first.
             runtime.cache = { trackId: np.trackId, searchedTrackId: np.trackId, matched: true, videoId: row.youtubeId, introOffsetMs: row.startMs || 0, source: 'catalog', rowId: row.id };
             if (!(runtime.catalogServed instanceof Set)) runtime.catalogServed = new Set();
             runtime.catalogServed.add(`${np.trackId}|${row.youtubeId}`);
@@ -6225,6 +6236,8 @@ app.get('/e/:slug/api/music-video', publicReadLimiter, async (req, res) => {
     const vcNow = verifiedMusicVideoCache.get(np.trackId);
     const fromCatalog = !!(runtime.cache.matched && runtime.cache.source === 'catalog');
     const offsetFromCache = !fromCatalog && !!(runtime.cache.matched && vcNow && vcNow.videoId === runtime.cache.videoId);
+    // SYNC RULE (see the catalog hit above): for a catalog video (fromCatalog) this MUST stay exactly
+    // row.startMs - never the measured/guessed cache value, never adjusted.
     const mvOffsetNow = offsetFromCache ? (vcNow.introOffsetMs || 0) : (runtime.cache.introOffsetMs || 0);
     res.json({
         displayLastPolledAt: runtime.displayLastPolledAt ? new Date(runtime.displayLastPolledAt).toISOString() : 'never (no display page has polled since server start)',
