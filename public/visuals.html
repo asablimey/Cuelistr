@@ -2630,12 +2630,54 @@
         setInterval(pollMusicVideo, 1000);
     </script>
 
-    <!-- Venue code box (small grey box, top right): appears when a guest taps "Display Code". Only active when this
-         page was opened from the admin dashboard (the link carries ?screen=KEY). -->
-    <div id="venue-code-screen" style="display:none; position:fixed; top:16px; right:16px; z-index:100000; background:rgba(58,58,58,0.95); color:#fff; border-radius:12px; padding:10px 16px 12px 16px; text-align:center; box-shadow:0 4px 16px rgba(0,0,0,0.4); font-family:-apple-system,BlinkMacSystemFont,sans-serif;">
-        <div style="font-size:0.7rem; letter-spacing:0.12em; text-transform:uppercase; color:#bdbdbd;">Venue Code</div>
-        <div id="venue-code-screen-digits" style="font-size:1.9rem; font-weight:800; letter-spacing:0.18em; padding-left:0.18em; font-variant-numeric:tabular-nums; line-height:1.2;">------</div>
-        <div id="venue-code-screen-timer" style="font-size:0.7rem; color:#bdbdbd; margin-top:2px;"></div>
+    <!-- Venue code card: appears when a guest taps "Display Code". Only active when this page was opened from the
+         admin dashboard (the link carries ?screen=KEY). Sized in vw/clamp() so it stays readable from across a room. -->
+    <style>
+        #venue-code-screen {
+            position: fixed; z-index: 100000;
+            top: clamp(16px, 2.2vw, 44px); right: clamp(16px, 2.2vw, 44px);
+            width: clamp(260px, 26vw, 560px);
+            padding: clamp(14px, 1.5vw, 30px) clamp(16px, 1.8vw, 34px) clamp(14px, 1.4vw, 28px);
+            background: color-mix(in srgb, var(--panel-bg) 92%, transparent);
+            -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+            color: var(--text);
+            border: 1px solid var(--border-strong);
+            border-radius: clamp(14px, 1.4vw, 26px);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            text-align: center;
+            opacity: 0; visibility: hidden; transform: translateY(-12px) scale(0.98);
+            transition: opacity .35s ease, transform .35s ease, visibility 0s linear .35s;
+            pointer-events: none;
+        }
+        #venue-code-screen.is-visible {
+            opacity: 1; visibility: visible; transform: none;
+            transition: opacity .35s ease, transform .35s ease, visibility 0s;
+        }
+        #venue-code-screen .vcs-label {
+            font-size: clamp(0.7rem, 0.9vw, 1.2rem); font-weight: 700;
+            letter-spacing: 0.16em; text-transform: uppercase; color: var(--text-muted);
+        }
+        #venue-code-screen .vcs-digits {
+            display: flex; justify-content: center; gap: clamp(5px, 0.6vw, 12px);
+            margin: clamp(10px, 1.1vw, 22px) 0;
+        }
+        #venue-code-screen .vcs-digit {
+            flex: 1 1 0; max-width: 1.5em; aspect-ratio: 3 / 4;
+            display: flex; align-items: center; justify-content: center;
+            font-size: clamp(1.8rem, 3.2vw, 5rem); font-weight: 800; line-height: 1;
+            font-variant-numeric: tabular-nums;
+            background: var(--card-bg); border: 1px solid var(--border-strong);
+            border-radius: 0.2em;
+        }
+        #venue-code-screen.vcs-changed .vcs-digits { animation: vcsFlash .8s ease; }
+        @keyframes vcsFlash { 0% { opacity: .2; } 100% { opacity: 1; } }
+        @media (prefers-reduced-motion: reduce) {
+            #venue-code-screen, #venue-code-screen.is-visible { transition: opacity .2s linear, visibility 0s; transform: none; }
+        </style>
+    <div id="venue-code-screen" role="status" aria-live="off">
+        <div class="vcs-label">Venue Code</div>
+        <div class="vcs-digits" id="venue-code-screen-digits"></div>
     </div>
     <script>
         (function () {
@@ -2643,22 +2685,49 @@
             if (!key) return;
             const slug = location.pathname.split('/')[2] || '';
             const box = document.getElementById('venue-code-screen');
+            const digitsEl = document.getElementById('venue-code-screen-digits');
+
+            let shownCode = '';
+            let visible = false;
+
+            function setCode(code) {
+                if (code === shownCode) return;
+                const changing = shownCode !== '';
+                shownCode = code;
+                digitsEl.textContent = '';
+                for (const ch of String(code)) {
+                    const cell = document.createElement('div');
+                    cell.className = 'vcs-digit';
+                    cell.textContent = ch;
+                    digitsEl.appendChild(cell);
+                }
+                if (changing) { // code rotated while on screen - flash so it is noticed
+                    box.classList.remove('vcs-changed'); void box.offsetWidth; box.classList.add('vcs-changed');
+                }
+            }
+
+            function hide() {
+                visible = false;
+                box.classList.remove('is-visible');
+                shownCode = '';
+            }
+
             async function pollVenueCode() {
                 try {
                     const res = await fetch('/e/' + encodeURIComponent(slug) + '/api/venue-code-display?screen=' + encodeURIComponent(key), { cache: 'no-store' });
                     if (!res.ok) return;
                     const d = await res.json();
-                    if (d.show) {
-                        document.getElementById('venue-code-screen-digits').textContent = d.code;
-                        document.getElementById('venue-code-screen-timer').textContent = d.secondsLeft + 's left';
-                        box.style.display = 'flex';
-                    } else {
-                        box.style.display = 'none';
+                    if (d.show && d.code) {
+                        setCode(d.code);
+                        visible = true;
+                        box.classList.add('is-visible');
+                    } else if (visible) {
+                        hide();
                     }
                 } catch (e) { /* keep current state */ }
             }
             pollVenueCode();
-            setInterval(pollVenueCode, 3000);
+            setInterval(pollVenueCode, 2000);
         })();
     </script>
 </body>
