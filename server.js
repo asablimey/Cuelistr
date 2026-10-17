@@ -3517,6 +3517,115 @@ catalogApi.delete('/row/:id', async (req, res) => {
     }
 });
 
+// --- Master: curated Spotify playlists (Playlists + Karaoke tabs on /master) ---
+// Server-wide, like the video catalog: the master pastes a Spotify playlist
+// link once and it shows up under "Curated Playlists" in every event's
+// scheduler (read via GET /e/:slug/api/admin/curated-playlists below). One
+// Redis hash, field = row id, value = JSON.
+//   row = { id, label, uri: 'spotify:playlist:<id>', type: 'crowddj'|'karaoke',
+//           description, createdAt, updatedAt }
+const CURATED_PLAYLISTS_KEY = 'curated-playlists:rows';
+const CURATED_PLAYLISTS_MAX = 200;
+
+async function curatedPlaylistsList() {
+    const flat = await events.redis(['HGETALL', CURATED_PLAYLISTS_KEY]);
+    const rows = [];
+    const take = (v) => { try { const r = JSON.parse(v); if (r && r.id && r.uri) rows.push(r); } catch (e) { /* skip a corrupt row */ } };
+    if (Array.isArray(flat)) { for (let i = 0; i + 1 < flat.length; i += 2) take(flat[i + 1]); }
+    else if (flat && typeof flat === 'object') { Object.values(flat).forEach(take); }
+    rows.sort((a, b) => String(a.label || '').localeCompare(String(b.label || ''), undefined, { sensitivity: 'base' }));
+    return rows;
+}
+
+// Spotify playlist IDs are always 22 base-62 characters - stricter than
+// extractSpotifyPlaylistId (which accepts any bare alphanumeric string).
+function parseCuratedPlaylistId(input) {
+    const id = extractSpotifyPlaylistId(String(input == null ? '' : input));
+    return id && /^[A-Za-z0-9]{22}$/.test(id) ? id : null;
+}
+
+// Best effort: Spotify's public oEmbed endpoint returns a playlist's title
+// with no login, so the master can paste just a link. Private or odd
+// playlists can fail; the caller then asks for a typed name instead.
+async function spotifyPlaylistTitle(id) {
+    try {
+        const url = 'https://open.spotify.com/oembed?url=' + encodeURIComponent('https://open.spotify.com/playlist/' + id);
+        const r = await fetch(url, { timeout: 5000 });
+        if (!r.ok) return '';
+        const d = await r.json();
+        return typeof d.title === 'string' ? d.title.trim().slice(0, 60) : '';
+    } catch (e) { return ''; }
+}
+
+const curatedPlaylistsApi = express.Router();
+app.use('/api/master/curated-playlists', catalogAuthLimiter, requireMaster, curatedPlaylistsApi);
+
+curatedPlaylistsApi.get('/', async (req, res) => {
+    try { res.json({ playlists: await curatedPlaylistsList() }); }
+    catch (e) { res.status(500).json({ error: 'Could not load curated playlists: ' + e.message }); }
+});
+
+// Create (no id) or update (id). Body: { id?, uri, label?, type, description? }.
+curatedPlaylistsApi.post('/', async (req, res) => {
+    try {
+        const body = req.body || {};
+        const all = await curatedPlaylistsList();
+        const existing = body.id ? all.find(r => r.id === String(body.id)) : null;
+        if (body.id && !existing) return res.status(404).json({ error: 'That playlist no longer exists.' });
+
+        const type = (body.type === 'karaoke' || body.type === 'crowddj') ? body.type : (existing ? existing.type : null);
+        if (!type) return res.status(400).json({ error: 'Pick Playlists or Karaoke.' });
+
+        let uri = existing ? existing.uri : '';
+        if (!existing || (typeof body.uri === 'string' && body.uri.trim())) {
+            const spotifyId = parseCuratedPlaylistId(body.uri);
+            if (!spotifyId) return res.status(400).json({ error: "That doesn't look like a Spotify playlist link. Paste the full link from Spotify's Share menu." });
+            if (all.some(r => r.type === type && r.id !== (existing && existing.id) && parseCuratedPlaylistId(r.uri) === spotifyId)) {
+                return res.status(400).json({ error: 'That playlist is already in this list.' });
+            }
+            uri = 'spotify:playlist:' + spotifyId;
+        }
+        if (!existing && all.length >= CURATED_PLAYLISTS_MAX) return res.status(400).json({ error: `Limit of ${CURATED_PLAYLISTS_MAX} curated playlists reached.` });
+
+        let label = typeof body.label === 'string' ? body.label.trim().slice(0, 60) : (existing ? existing.label : '');
+        if (!label) label = await spotifyPlaylistTitle(parseCuratedPlaylistId(uri));
+        if (!label) return res.status(400).json({ error: "Couldn't read the playlist's name from Spotify - type a name in." });
+
+        const description = typeof body.description === 'string' ? body.description.trim().slice(0, 120) : (existing ? (existing.description || '') : '');
+        const now = Date.now();
+        const row = {
+            id: existing ? existing.id : crypto.randomBytes(6).toString('hex'),
+            label, uri, type, description,
+            createdAt: existing ? (existing.createdAt || now) : now,
+            updatedAt: now
+        };
+        await events.redis(['HSET', CURATED_PLAYLISTS_KEY, row.id, JSON.stringify(row)]);
+        res.json({ success: true, playlist: row, created: !existing });
+    } catch (e) {
+        res.status(500).json({ error: 'Could not save: ' + e.message });
+    }
+});
+
+curatedPlaylistsApi.delete('/:id', async (req, res) => {
+    try {
+        const n = await events.redis(['HDEL', CURATED_PLAYLISTS_KEY, String(req.params.id)]);
+        res.json({ success: true, removed: Number(n) > 0 });
+    } catch (e) {
+        res.status(500).json({ error: 'Could not delete: ' + e.message });
+    }
+});
+
+// What each event's scheduler reads. Behind the normal per-event admin auth
+// (the /e/:slug/api/admin gate registered earlier).
+app.get('/e/:slug/api/admin/curated-playlists', async (req, res) => {
+    try {
+        const rows = await curatedPlaylistsList();
+        res.json({ playlists: rows.map(r => ({ id: r.id, label: r.label, uri: r.uri, type: r.type, description: r.description || '' })) });
+    } catch (e) {
+        res.status(500).json({ error: 'Could not load curated playlists.' });
+    }
+});
+
 // Is this YouTube video playable in the embedded player? (used by the grid)
 catalogApi.get('/check-video', async (req, res) => {
     const id = String(req.query.id || '');
