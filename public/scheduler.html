@@ -1808,11 +1808,11 @@
         function onNewItemTypeChange() { /* the library tab now decides the type */ }
 
         // The one place that knows where the curated catalogue comes from.
-        // Expects GET /e/:slug/api/curated-playlists -> { playlists: [...] }
+        // Expects GET /e/:slug/api/admin/curated-playlists -> { playlists: [...] }
         // (or a bare array). Any failure just means "none yet".
         async function loadCuratedPlaylists() {
             try {
-                const res = await fetch(eventUrl('/api/curated-playlists'), { headers: adminHeaders() });
+                const res = await fetch(eventUrl('/api/admin/curated-playlists'), { headers: adminHeaders() });
                 if (!res.ok) throw new Error('HTTP ' + res.status);
                 const d = await res.json();
                 const list = Array.isArray(d) ? d : (d && d.playlists);
