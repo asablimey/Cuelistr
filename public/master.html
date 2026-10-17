@@ -108,6 +108,23 @@
         .toast.show { opacity: 1; }
         .toast.error { border-color: var(--red-action); }
 
+        /* ---- Curated playlists tabs ---- */
+        .cp-add { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px; margin-bottom: 14px; background: var(--card-bg); border: 1px solid #2a2a2a; border-radius: 12px; }
+        .cp-add input, .cp-row input { background: var(--panel-bg); border: 1px solid #333; color: white; border-radius: 8px; padding: 9px 11px; font-size: 0.88rem; outline: none; min-width: 0; }
+        .cp-add input:focus, .cp-row input:focus { border-color: var(--spotify-green); }
+        .cp-add .cp-url { flex: 2 1 280px; }
+        .cp-add .cp-name { flex: 1 1 160px; }
+        .cp-add .cp-desc { flex: 2 1 220px; }
+        .cp-list { border: 1px solid #282828; border-radius: 12px; background: var(--panel-bg); overflow: hidden; }
+        .cp-row { display: flex; gap: 8px; align-items: center; padding: 10px 12px; border-bottom: 1px solid #282828; }
+        .cp-row:last-child { border-bottom: none; }
+        .cp-row .cp-label { flex: 1 1 200px; font-weight: 700; }
+        .cp-row .cp-descr { flex: 2 1 260px; }
+        .cp-row a { color: var(--spotify-green); font-size: 0.8rem; white-space: nowrap; }
+        .cp-empty { padding: 26px 16px; color: #a7a7a7; font-size: 0.9rem; text-align: center; }
+        .cp-del { color: #ff6b6b; }
+        @media (max-width: 720px) { .cp-row { flex-wrap: wrap; } }
+
         /* ---- Tabs + Videos catalog ---- */
         #dashboard.wide { max-width: 1500px; }
         .tabs { display: flex; gap: 8px; margin-bottom: 20px; }
@@ -254,6 +271,8 @@
         <div class="tabs">
             <button class="tab-btn active" id="tabbtn-events" onclick="switchTab('events')">Events</button>
             <button class="tab-btn" id="tabbtn-videos" onclick="switchTab('videos')">Videos</button>
+            <button class="tab-btn" id="tabbtn-playlists" onclick="switchTab('playlists')">Playlists</button>
+            <button class="tab-btn" id="tabbtn-karaoke" onclick="switchTab('karaoke')">Karaoke</button>
         </div>
         <div id="tab-events">
         <div class="header">
@@ -274,6 +293,9 @@
             </div>
         </div>
         </div><!-- /tab-events -->
+
+        <div id="tab-playlists" style="display:none"></div>
+        <div id="tab-karaoke" style="display:none"></div>
 
         <div id="tab-videos" style="display:none">
             <div class="header">
@@ -560,12 +582,13 @@
         let vcToastTimer = null;
 
         function switchTab(tab) {
-            document.getElementById('tab-events').style.display = tab === 'events' ? 'block' : 'none';
-            document.getElementById('tab-videos').style.display = tab === 'videos' ? 'block' : 'none';
-            document.getElementById('tabbtn-events').classList.toggle('active', tab === 'events');
-            document.getElementById('tabbtn-videos').classList.toggle('active', tab === 'videos');
+            ['events', 'videos', 'playlists', 'karaoke'].forEach(t => {
+                document.getElementById('tab-' + t).style.display = tab === t ? 'block' : 'none';
+                document.getElementById('tabbtn-' + t).classList.toggle('active', tab === t);
+            });
             document.getElementById('dashboard').classList.toggle('wide', tab === 'videos');
             if (tab === 'videos' && !vcLoaded) vcLoad();
+            if ((tab === 'playlists' || tab === 'karaoke') && !cpLoaded) cpLoad();
         }
 
         async function vcApi(method, path, body) {
@@ -1472,5 +1495,107 @@
         });
     </script>
 
+
+    <script>
+        /* ===================== Playlists + Karaoke tabs (curated Spotify playlists) ===================== */
+        // type 'crowddj' = the Playlists tab, 'karaoke' = the Karaoke tab. Both read one list
+        // from /api/master/curated-playlists and each shows only its own type.
+        const CP_TABS = {
+            crowddj: { el: 'tab-playlists', title: 'Playlists', blurb: 'Cuelistr Music playlists' },
+            karaoke: { el: 'tab-karaoke', title: 'Karaoke', blurb: 'Karaoke playlists' }
+        };
+        let cpRows = [];
+        let cpLoaded = false;
+
+        function cpEsc(v) {
+            return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+        async function cpApi(method, path, body) {
+            try {
+                const res = await fetch('/api/master/curated-playlists' + path, {
+                    method,
+                    headers: Object.assign({ 'x-admin-password': masterPassword }, body ? { 'Content-Type': 'application/json' } : {}),
+                    body: body ? JSON.stringify(body) : undefined
+                });
+                let data = {};
+                try { data = await res.json(); } catch (e) { /* non-JSON error body */ }
+                return { ok: res.ok, data };
+            } catch (e) {
+                return { ok: false, data: { error: 'Could not reach the server.' } };
+            }
+        }
+        function cpBuildShell() {
+            Object.keys(CP_TABS).forEach(type => {
+                const t = CP_TABS[type];
+                document.getElementById(t.el).innerHTML = `
+                    <div class="header">
+                        <div>
+                            <h1>${t.title}</h1>
+                            <div class="subtitle"><b>One list for ALL events.</b> Playlists added here appear under <b>Curated Playlists</b> in every event's scheduler, and venues can't delete them. <span id="cp-count-${type}"></span></div>
+                        </div>
+                        <button class="refresh-btn" onclick="cpLoad()">↻ Reload</button>
+                    </div>
+                    <div class="cp-add">
+                        <input type="text" class="cp-url" id="cp-url-${type}" placeholder="Paste a Spotify playlist link" autocomplete="off" onkeydown="if(event.key==='Enter') cpAdd('${type}')">
+                        <input type="text" class="cp-name" id="cp-name-${type}" placeholder="Name (optional - read from Spotify)" maxlength="60" onkeydown="if(event.key==='Enter') cpAdd('${type}')">
+                        <input type="text" class="cp-desc" id="cp-desc-${type}" placeholder="One-line description (optional)" maxlength="120" onkeydown="if(event.key==='Enter') cpAdd('${type}')">
+                        <button class="btn btn-admin" id="cp-addbtn-${type}" onclick="cpAdd('${type}')">+ Add playlist</button>
+                    </div>
+                    <div class="cp-list" id="cp-list-${type}"></div>`;
+            });
+        }
+        function cpRender() {
+            Object.keys(CP_TABS).forEach(type => {
+                const rows = cpRows.filter(r => r.type === type);
+                document.getElementById('cp-count-' + type).textContent = rows.length ? `${rows.length} ${rows.length === 1 ? 'playlist' : 'playlists'}.` : '';
+                const list = document.getElementById('cp-list-' + type);
+                if (!rows.length) { list.innerHTML = `<div class="cp-empty">No ${CP_TABS[type].blurb} yet. Paste a Spotify link above.</div>`; return; }
+                list.innerHTML = rows.map(r => {
+                    const sid = String(r.uri).split(':').pop();
+                    return `<div class="cp-row">
+                        <input type="text" class="cp-label" value="${cpEsc(r.label)}" maxlength="60" title="Name shown in schedulers" onchange="cpEdit('${cpEsc(r.id)}', { label: this.value })">
+                        <input type="text" class="cp-descr" value="${cpEsc(r.description || '')}" maxlength="120" placeholder="Description (optional)" onchange="cpEdit('${cpEsc(r.id)}', { description: this.value })">
+                        <a href="https://open.spotify.com/playlist/${cpEsc(sid)}" target="_blank" rel="noopener">Open in Spotify</a>
+                        <button class="btn btn-admin cp-del" onclick="cpDelete('${cpEsc(r.id)}')">Delete</button>
+                    </div>`;
+                }).join('');
+            });
+        }
+        async function cpLoad() {
+            const r = await cpApi('GET', '');
+            if (!r.ok) { showToast(r.data.error || 'Could not load playlists.', 'error'); return; }
+            cpRows = r.data.playlists || [];
+            cpLoaded = true;
+            cpRender();
+        }
+        async function cpAdd(type) {
+            const url = document.getElementById('cp-url-' + type);
+            const name = document.getElementById('cp-name-' + type);
+            const desc = document.getElementById('cp-desc-' + type);
+            const btn = document.getElementById('cp-addbtn-' + type);
+            if (!url.value.trim()) { showToast('Paste a Spotify playlist link first.', 'error'); return; }
+            btn.disabled = true; btn.textContent = 'Adding...';
+            const r = await cpApi('POST', '', { type, uri: url.value, label: name.value, description: desc.value });
+            btn.disabled = false; btn.textContent = '+ Add playlist';
+            if (!r.ok) { showToast(r.data.error || 'Could not add that playlist.', 'error'); return; }
+            url.value = ''; name.value = ''; desc.value = '';
+            showToast(`Added "${r.data.playlist.label}".`);
+            await cpLoad();
+        }
+        async function cpEdit(id, patch) {
+            const r = await cpApi('POST', '', Object.assign({ id }, patch));
+            if (!r.ok) showToast(r.data.error || 'Could not save that change.', 'error');
+            await cpLoad(); // re-render with whatever the server actually kept
+        }
+        async function cpDelete(id) {
+            const row = cpRows.find(x => x.id === id);
+            if (!row || !confirm(`Delete "${row.label}"? It disappears from every event's Curated Playlists list. Blocks that already use it keep working.`)) return;
+            const r = await cpApi('DELETE', '/' + encodeURIComponent(id));
+            if (!r.ok) { showToast(r.data.error || 'Could not delete.', 'error'); return; }
+            showToast('Deleted.');
+            await cpLoad();
+        }
+        cpBuildShell();
+    </script>
 </body>
 </html>
