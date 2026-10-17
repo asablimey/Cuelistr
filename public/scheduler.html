@@ -797,6 +797,60 @@
             .avm-currently { flex: 0 0 auto; }
         }
 
+
+        /* ===== Redesign: header chip, day tabs, stacked timeline + tabbed library ===== */
+        .status-chip { display:inline-flex; align-items:center; gap:6px; font-size:0.78rem; color:var(--text-dim);
+            background:var(--card-bg); border:1px solid var(--border-strong); border-radius:999px; padding:4px 10px;
+            max-width:260px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .status-chip strong { color:var(--text); font-weight:600; overflow:hidden; text-overflow:ellipsis; }
+        .status-chip .status-dot { margin-right:0; flex-shrink:0; }
+        .day-strip { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:10px; flex-shrink:0; }
+        .day-tabs { display:flex; gap:4px; flex:1; min-width:0; overflow-x:auto; }
+        .day-tab { position:relative; background:var(--panel-bg); border:1px solid var(--border); color:var(--text-dim);
+            border-radius:8px; padding:8px 16px; font-size:0.85rem; font-weight:700; cursor:pointer; white-space:nowrap; }
+        .day-tab:hover { border-color:var(--border-strong); color:var(--text); }
+        .day-tab.active { background:var(--text); color:var(--spotify-black); border-color:var(--text); }
+        .day-tab .tab-dot { position:absolute; top:4px; right:5px; width:6px; height:6px; border-radius:50%; background:var(--spotify-green); }
+        .day-tab .tab-today { display:block; font-size:0.55rem; font-weight:600; letter-spacing:0.4px; text-transform:uppercase; opacity:0.7; margin-top:1px; }
+        .strip-actions { display:flex; align-items:center; gap:10px; position:relative; }
+        .copy-pop { position:absolute; top:calc(100% + 6px); right:0; z-index:50; background:var(--panel-bg);
+            border:1px solid var(--border-strong); border-radius:10px; padding:12px; width:260px; display:none;
+            box-shadow:0 8px 24px rgba(0,0,0,0.4); }
+        .copy-pop.show { display:block; }
+        .copy-pop p { margin:0 0 8px; font-size:0.78rem; color:var(--text-dim); }
+        .copy-days { display:flex; flex-wrap:wrap; gap:4px; margin-bottom:10px; }
+        .copy-days .day-toggle { cursor:pointer; }
+        .block-bar { display:none; align-items:center; gap:8px; flex-wrap:wrap; padding:8px 12px; margin-bottom:10px;
+            background:var(--card-bg); border:1px solid var(--border-strong); border-radius:8px; font-size:0.8rem; flex-shrink:0; }
+        .block-bar.show { display:flex; }
+        .block-bar .bb-name { font-weight:700; color:var(--text); }
+        .block-bar .bb-days { color:var(--text-dim); }
+        .block-bar .bb-spacer { flex:1; }
+        .layout.stacked { flex-direction:column; gap:12px; }
+        .layout.stacked .timetable-panel { flex:1 1 0; min-height:0; }
+        .layout.stacked .library-panel { flex:0 0 34%; min-height:190px; }
+        .layout.stacked #day-boxes { overflow-y:auto; }
+        .layout.stacked .day-box { margin-bottom:0; }
+        .layout.stacked .day-track { height:54px; }
+        .lib-head { display:flex; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap; flex-shrink:0; }
+        .lib-tabs { display:flex; gap:4px; flex:1; min-width:0; overflow-x:auto; }
+        .lib-tab { background:none; border:none; border-bottom:3px solid transparent; color:var(--text-dim); padding:6px 12px;
+            font-size:0.82rem; font-weight:700; cursor:pointer; white-space:nowrap; }
+        .lib-tab:hover { color:var(--text); }
+        .lib-tab.active { color:var(--text); border-bottom-color:var(--lane-color, var(--spotify-green)); }
+        .lib-tab .lib-count { font-weight:500; opacity:0.6; margin-left:4px; }
+        .add-playlist-form.open { display:flex; }
+        .add-playlist-form { display:none; gap:8px; align-items:center; margin-bottom:10px; flex-wrap:wrap; flex-shrink:0; }
+        .add-playlist-form input { margin-bottom:0; flex:1 1 180px; width:auto; }
+        .layout.stacked #playlist-list { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:8px; align-content:start; }
+        .layout.stacked .playlist-chip, .layout.stacked .media-chip { margin-bottom:0; }
+        .lib-empty { grid-column:1 / -1; color:var(--text-dim); font-size:0.85rem; padding:18px 4px; }
+        .block-days { position:absolute; right:6px; top:3px; font-size:0.6rem; font-weight:700; background:rgba(0,0,0,0.35);
+            color:#fff; border-radius:4px; padding:1px 5px; pointer-events:none; }
+        @media (max-width: 720px) {
+            .layout.stacked .library-panel { flex:0 0 auto; max-height:300px; }
+        }
+
         .toast {
             position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
             background: var(--card-bg); border: 1px solid var(--border-strong); color: var(--text);
@@ -837,6 +891,7 @@
                     </span>
                     Scheduler enabled
                 </label>
+                <span class="status-chip" id="status-chip" title="Scheduler status"><span class="status-dot" style="background:#555;"></span>Loading&hellip;</span>
                 <div class="zoom-controls" title="Undo / redo">
                     <button type="button" class="zoom-btn" id="undo-btn" onclick="performUndo()" title="Undo (Ctrl+Z)" disabled>&#8630;</button>
                     <button type="button" class="zoom-btn" id="redo-btn" onclick="performRedo()" title="Redo (Ctrl+Y)" disabled>&#8631;</button>
@@ -847,46 +902,42 @@
 
         <div class="tz-warning" id="tz-warning" style="display:none;"></div>
 
-        <div class="status-bar" id="status-bar">
-            <span><span class="status-dot"></span>Loading status&hellip;</span>
-        </div>
-
-        <div class="layout">
-            <div class="panel playlists-panel">
-                <h2>Library</h2>
-                <div id="playlist-list"></div>
-                <div class="add-playlist-form">
-                    <select id="new-item-type" onchange="onNewItemTypeChange()">
-                        <option value="crowddj">Cuelistr Music</option>
-                        <option value="karaoke">Karaoke</option>
-                        <option value="ambient">Ambient Visuals</option>
-                        <option value="musicvideo">Music Videos</option>
-                    </select>
-                    <div id="new-music-fields">
-                        <input type="text" id="new-playlist-label" placeholder="Name (e.g. Lunch Vibes)" maxlength="60">
-                        <input type="text" id="new-playlist-url" placeholder="Spotify playlist link or URI">
-                        <button class="btn btn-ghost btn-small" style="width:100%;" onclick="addPlaylist()">+ Add Playlist</button>
-                    </div>
-                    <div id="new-ambient-fields" style="display:none;">
-                        <button class="btn btn-ghost btn-small" style="width:100%;" onclick="startNewAmbientBlock()">+ Add Visual</button>
-                        <button class="btn btn-ghost btn-small" style="width:100%; margin-top:8px;" onclick="importVisualsAsNewBlock()">Import from file</button>
-                    </div>
-                    <div id="new-musicvideo-fields" style="display:none;">
-                        <button class="btn btn-ghost btn-small" style="width:100%;" onclick="startNewMusicVideoBlock()">+ Add Music Video Block</button>
-                    </div>
+        <div class="day-strip">
+            <div class="day-tabs" id="day-tabs"></div>
+            <div class="strip-actions">
+                <button type="button" class="btn btn-ghost btn-small" onclick="toggleCopyPop(event)">Copy day to&hellip;</button>
+                <div class="copy-pop" id="copy-pop" onclick="event.stopPropagation()">
+                    <p id="copy-pop-text">Copy this day's blocks onto:</p>
+                    <div class="copy-days" id="copy-days"></div>
+                    <button type="button" class="btn btn-primary btn-small" style="width:100%;" onclick="applyCopyDay()">Copy (replaces those days)</button>
+                </div>
+                <div class="zoom-controls">
+                    <button type="button" class="zoom-btn" onclick="zoomOut()" title="Zoom out" id="zoom-out-btn">&minus;</button>
+                    <span class="zoom-readout" id="zoom-readout">100%</span>
+                    <button type="button" class="zoom-btn" onclick="zoomIn()" title="Zoom in" id="zoom-in-btn">&plus;</button>
                 </div>
             </div>
+        </div>
 
+        <div class="block-bar" id="block-bar"></div>
+
+        <div class="layout stacked">
             <div class="panel timetable-panel">
-                <div class="panel-head-row">
-                    <h2>Timetable</h2>
-                    <div class="zoom-controls">
-                        <button type="button" class="zoom-btn" onclick="zoomOut()" title="Zoom out" id="zoom-out-btn">&minus;</button>
-                        <span class="zoom-readout" id="zoom-readout">100%</span>
-                        <button type="button" class="zoom-btn" onclick="zoomIn()" title="Zoom in" id="zoom-in-btn">&plus;</button>
-                    </div>
-                </div>
                 <div id="day-boxes"></div>
+            </div>
+
+            <div class="panel library-panel">
+                <div class="lib-head">
+                    <div class="lib-tabs" id="lib-tabs"></div>
+                    <button type="button" class="btn btn-ghost btn-small" id="lib-add-btn" onclick="onLibraryAdd()">+ Add</button>
+                </div>
+                <div class="add-playlist-form" id="add-playlist-form">
+                    <input type="hidden" id="new-item-type" value="crowddj">
+                    <input type="text" id="new-playlist-label" placeholder="Name (e.g. Lunch Vibes)" maxlength="60">
+                    <input type="text" id="new-playlist-url" placeholder="Spotify playlist link or URI">
+                    <button class="btn btn-primary btn-small" onclick="addPlaylist()">Add Playlist</button>
+                </div>
+                <div id="playlist-list"></div>
             </div>
         </div>
     </div>
@@ -1241,6 +1292,11 @@
         let rules = [];
         let ambientMedia = []; // { id, url, filename, type: 'photo'|'video', createdAt } - this event's Ambient Visuals library
         let schedulerEnabled = false;
+        // ---- Redesign state: which day the timeline shows, which lane tab the library shows ----
+        let selectedDay = null;      // 0=Sun..6=Sat; null until first render (then today in the event's timezone)
+        let libraryTab = 'crowddj';  // 'crowddj' | 'karaoke' | 'ambient' | 'musicvideo'
+        const TAB_ORDER = [1, 2, 3, 4, 5, 6, 0]; // Mon..Sun
+        const LANE_ORDER = ['crowddj', 'karaoke', 'ambient', 'musicvideo'];
 
         // Direct browser -> Cloudinary upload config. Update these two if
         // the Cloudinary account backing Ambient Visuals ever changes -
@@ -1452,6 +1508,9 @@
             input.focus();
         }
         document.getElementById('password-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') verifyLogin(); });
+        document.getElementById('scheduler-enabled-toggle').addEventListener('change', (e) => {
+            if (!e.target.checked) document.getElementById('status-chip').innerHTML = '<span class="status-dot" style="background:#555;"></span>Scheduler off (save to apply)';
+        });
 
         // Reloading (or opening this page from admin) restores a recent session without asking for the password again.
         (function restoreSchedulerSession() {
@@ -1478,18 +1537,16 @@
                 const res = await fetch(eventUrl('/api/admin/scheduler'), { headers: adminHeaders() });
                 if (!res.ok) return;
                 const data = await res.json();
-                const bar = document.getElementById('status-bar');
+                const chip = document.getElementById('status-chip');
                 if (!data.enabled) {
-                    bar.innerHTML = `<span><span class="status-dot" style="background:#555;"></span>Scheduler is turned off.</span>`;
+                    chip.innerHTML = `<span class="status-dot" style="background:#555;"></span>Scheduler off`;
                     return;
                 }
                 const activeRule = (data.rules || []).find(r => r.id === data.activeRuleId);
                 const activePlaylist = activeRule ? (data.playlists || []).find(p => p.id === activeRule.playlistId) : null;
-                let html = `<span><span class="status-dot"></span>Active block: <strong>${activePlaylist ? escapeHtml(activePlaylist.label) : 'None (default playback)'}</strong></span>`;
-                if (data.pendingSwitchLabel) {
-                    html += `<span>Waiting for a clean handoff to <strong>${escapeHtml(data.pendingSwitchLabel)}</strong>&hellip;</span>`;
-                }
-                bar.innerHTML = html;
+                let html = `<span class="status-dot"></span>Now: <strong>${activePlaylist ? escapeHtml(activePlaylist.label) : 'default playback'}</strong>`;
+                if (data.pendingSwitchLabel) html += ` &rarr; <strong>${escapeHtml(data.pendingSwitchLabel)}</strong>`;
+                chip.innerHTML = html;
             } catch (e) { /* silent - status bar is a nice-to-have */ }
         }
 
@@ -1695,6 +1752,7 @@
             rules.push(rule);
             isNewAmbientRule = true;
             openAmbientBlockModal(rule);
+            preselectDay('ambient-modal-days');
         }
 
         // Parallel to startNewAmbientBlock above, but a Music Videos block
@@ -1709,38 +1767,77 @@
             rules.push(rule);
             isNewMusicVideoRule = true;
             openMusicVideoModal(rule);
+            preselectDay('mv-modal-days');
+        }
+        function preselectDay(daysId) {
+            if (selectedDay === null) return;
+            const btn = document.querySelector(`#${daysId} .day-toggle[data-day="${selectedDay}"]`);
+            if (btn) btn.classList.add('active');
         }
 
-        function onNewItemTypeChange() {
-            const type = document.getElementById('new-item-type').value;
-            document.getElementById('new-music-fields').style.display = (type === 'crowddj' || type === 'karaoke') ? '' : 'none';
-            document.getElementById('new-ambient-fields').style.display = type === 'ambient' ? '' : 'none';
-            document.getElementById('new-musicvideo-fields').style.display = type === 'musicvideo' ? '' : 'none';
+        function onNewItemTypeChange() { /* the library tab now decides the type */ }
+
+        function renderLibraryTabs() {
+            const counts = {
+                crowddj: playlists.filter(p => p.type !== 'karaoke').length,
+                karaoke: playlists.filter(p => p.type === 'karaoke').length,
+                ambient: ambientMedia.length,
+                musicvideo: rules.filter(r => r.laneType === 'musicvideo').length
+            };
+            document.getElementById('lib-tabs').innerHTML = LANE_ORDER.map(t => `
+                <button type="button" class="lib-tab${t === libraryTab ? ' active' : ''}" style="--lane-color:${LANE_TYPES[t].color}" onclick="setLibraryTab('${t}')">${escapeHtml(LANE_TYPES[t].label)}<span class="lib-count">${counts[t]}</span></button>
+            `).join('');
+            const addBtn = document.getElementById('lib-add-btn');
+            addBtn.textContent = libraryTab === 'ambient' ? '+ Add Visual' : libraryTab === 'musicvideo' ? '+ Add Block' : '+ Add Playlist';
+        }
+        function setLibraryTab(t) {
+            libraryTab = t;
+            document.getElementById('add-playlist-form').classList.remove('open');
+            renderPlaylists();
+        }
+        function onLibraryAdd() {
+            if (libraryTab === 'ambient') {
+                // Same two entry points the old form had: a fresh block, or import from file.
+                const choice = confirm('OK = create a new visual block.\nCancel = import from a file instead.');
+                return choice ? startNewAmbientBlock() : importVisualsAsNewBlock();
+            }
+            if (libraryTab === 'musicvideo') return startNewMusicVideoBlock();
+            document.getElementById('new-item-type').value = libraryTab;
+            const form = document.getElementById('add-playlist-form');
+            form.classList.toggle('open');
+            if (form.classList.contains('open')) document.getElementById('new-playlist-label').focus();
         }
 
         function renderPlaylists() {
+            renderLibraryTabs();
             const list = document.getElementById('playlist-list');
             const rows = [];
-            playlists.forEach(p => rows.push(`
-                <div class="playlist-chip" draggable="true" data-playlist-id="${escapeHtml(p.id)}"
-                     ondragstart="onChipDragStart(event, '${escapeHtml(p.id)}')">
-                    <span class="chip-swatch" style="background:${playlistColor(p.id)}"></span>
-                    <span class="chip-label">${escapeHtml(p.label)}</span>
-                    <span class="chip-type">${p.type === 'karaoke' ? 'Karaoke' : 'Cuelistr'}</span>
-                    <button class="chip-remove" onclick="removePlaylist('${escapeHtml(p.id)}')" title="Remove">&times;</button>
-                </div>
-            `));
-            ambientMedia.forEach(m => rows.push(`
-                <div class="media-chip" draggable="true" data-media-id="${escapeHtml(m.id)}"
-                     ondragstart="onMediaChipDragStart(event, '${escapeHtml(m.id)}')">
-                    ${m.type === 'video'
-                        ? `<span class="media-thumb media-type-icon"><span class="thumb-tag">VID</span></span>`
-                        : `<img class="media-thumb" src="${escapeHtml(m.url)}" alt="">`}
-                    <span class="chip-label">${escapeHtml(m.filename)}</span>
-                    <span class="chip-type">${m.type === 'video' ? 'Video' : 'Photo'}</span>
-                    <button class="chip-remove" onclick="removeAmbientMedia('${escapeHtml(m.id)}')" title="Remove">&times;</button>
-                </div>
-            `));
+            if (libraryTab === 'crowddj' || libraryTab === 'karaoke') {
+                playlists.filter(p => (p.type === 'karaoke' ? 'karaoke' : 'crowddj') === libraryTab).forEach(p => rows.push(`
+                    <div class="playlist-chip" draggable="true" data-playlist-id="${escapeHtml(p.id)}"
+                         ondragstart="onChipDragStart(event, '${escapeHtml(p.id)}')">
+                        <span class="chip-swatch" style="background:${playlistColor(p.id)}"></span>
+                        <span class="chip-label">${escapeHtml(p.label)}</span>
+                        <button class="chip-remove" onclick="removePlaylist('${escapeHtml(p.id)}')" title="Remove">&times;</button>
+                    </div>
+                `));
+                if (!rows.length) rows.push(`<div class="lib-empty">No ${escapeHtml(LANE_TYPES[libraryTab].label)} playlists yet. Use <strong>+ Add Playlist</strong> above, then drag it onto the timeline.</div>`);
+            } else if (libraryTab === 'ambient') {
+                ambientMedia.forEach(m => rows.push(`
+                    <div class="media-chip" draggable="true" data-media-id="${escapeHtml(m.id)}"
+                         ondragstart="onMediaChipDragStart(event, '${escapeHtml(m.id)}')">
+                        ${m.type === 'video'
+                            ? `<span class="media-thumb media-type-icon"><span class="thumb-tag">VID</span></span>`
+                            : `<img class="media-thumb" src="${escapeHtml(m.url)}" alt="">`}
+                        <span class="chip-label">${escapeHtml(m.filename)}</span>
+                        <span class="chip-type">${m.type === 'video' ? 'Video' : 'Photo'}</span>
+                        <button class="chip-remove" onclick="removeAmbientMedia('${escapeHtml(m.id)}')" title="Remove">&times;</button>
+                    </div>
+                `));
+                if (!rows.length) rows.push(`<div class="lib-empty">No visuals yet. Use <strong>+ Add Visual</strong> to create a block or import one, then drag files onto the timeline.</div>`);
+            } else {
+                rows.push(`<div class="lib-empty">Music Video blocks play a video for whatever song is on. They aren't dragged in: use <strong>+ Add Block</strong>, pick the days and times, and it lands on the timeline.</div>`);
+            }
             list.innerHTML = rows.join('');
         }
 
@@ -1756,6 +1853,7 @@
             if (!id) return showToast('Could not read a playlist link/URI from that.', 'error');
             playlists.push({ id: genId(), label, uri: url, type });
             labelInput.value = ''; urlInput.value = '';
+            document.getElementById('add-playlist-form').classList.remove('open');
             renderPlaylists();
         }
 
@@ -1943,16 +2041,17 @@
             // rendered in changes.
             const todayIdx = currentDayIndexInEventTz();
             needleRenderedDayIdx = todayIdx;
-            const dayOrder = DAY_NAMES.map((_, i) => (todayIdx + i) % 7);
+            if (selectedDay === null) selectedDay = todayIdx;
+            const dayOrder = [selectedDay];
 
             container.innerHTML = dayOrder.map(dayIdx => {
                 const laneEmptyHint = laneType => rules.some(r => r.days.includes(dayIdx) && ruleLaneType(r) === laneType)
                     ? ''
                     : laneType === 'ambient'
-                        ? `<div class="empty-hint">Nothing scheduled - drag a file in from the left.</div>`
+                        ? `<div class="empty-hint">Empty - drag a file in from below.</div>`
                         : laneType === 'musicvideo'
-                            ? `<div class="empty-hint">Nothing scheduled - use + Add Music Video Block on the left.</div>`
-                            : `<div class="empty-hint">Nothing scheduled - drag a ${LANE_TYPES[laneType].label} playlist in from the left.</div>`;
+                            ? `<div class="empty-hint">Empty - use + Add Block below.</div>`
+                            : `<div class="empty-hint">Empty - drag a playlist in from below.</div>`;
 
                 const liveLanesHtml = ['crowddj', 'karaoke', 'ambient', 'musicvideo'].map(laneType => `
                     <div class="lane-row">
@@ -1973,7 +2072,7 @@
 
                 return `
                     <div class="day-box" data-day="${dayIdx}">
-                        <div class="day-box-header">${escapeHtml(FULL_DAY_NAMES[dayIdx])}</div>
+                        <div class="day-box-header">${escapeHtml(FULL_DAY_NAMES[dayIdx])}${dayIdx === todayIdx ? ' <span style="font-weight:500;color:var(--text-dim);">&middot; today</span>' : ''}</div>
                         <div class="timetable-scroll">
                             <div class="timetable">
                                 <div class="hour-ruler">${buildRulerHtml()}</div>
@@ -1991,13 +2090,113 @@
             // block only ever goes into the track matching its playlist's
             // type, so a Cuelistr rule can never land in the Karaoke lane
             // even if the underlying data got edited some other way.
-            DAY_NAMES.forEach((_, dayIdx) => {
+            [selectedDay].forEach(dayIdx => {
                 rules.filter(r => r.days.includes(dayIdx)).forEach(rule => {
                     const laneType = ruleLaneType(rule);
                     const track = container.querySelector(`.day-track[data-day="${dayIdx}"][data-lane="${laneType}"]`);
                     if (track) track.appendChild(buildBlockEl(rule, conflictingIds.has(rule.id)));
                 });
             });
+            renderDayTabs();
+            renderBlockBar();
+        }
+
+        // ---------- Day tabs, shared-block helpers, copy day ----------
+        function daysLabel(days) {
+            const sorted = TAB_ORDER.filter(d => days.includes(d)); // Mon-first order
+            if (sorted.length === 7) return 'Every day';
+            if (sorted.length === 1) return DAY_NAMES[sorted[0]];
+            const idxs = sorted.map(d => TAB_ORDER.indexOf(d));
+            const contiguous = idxs.every((v, i) => i === 0 || v === idxs[i - 1] + 1);
+            return contiguous ? `${DAY_NAMES[sorted[0]]}\u2013${DAY_NAMES[sorted[sorted.length - 1]]}` : sorted.map(d => DAY_NAMES[d]).join(', ');
+        }
+        function renderDayTabs() {
+            const todayIdx = currentDayIndexInEventTz();
+            document.getElementById('day-tabs').innerHTML = TAB_ORDER.map(d => {
+                const has = rules.some(r => r.days.includes(d));
+                return `<button type="button" class="day-tab${d === selectedDay ? ' active' : ''}" onclick="selectDay(${d})">${DAY_NAMES[d]}${d === todayIdx ? '<span class="tab-today">Today</span>' : ''}${has ? '<span class="tab-dot"></span>' : ''}</button>`;
+            }).join('');
+        }
+        function selectDay(d) {
+            selectedDay = d;
+            selectedRuleId = null;
+            document.getElementById('copy-pop').classList.remove('show');
+            renderDayBoxes();
+            scrollTimetablesToNow();
+        }
+        function renderBlockBar() {
+            const bar = document.getElementById('block-bar');
+            const rule = rules.find(r => r.id === selectedRuleId && r.days.includes(selectedDay));
+            if (!rule) { bar.className = 'block-bar'; bar.innerHTML = ''; return; }
+            const shared = rule.days.length > 1;
+            bar.className = 'block-bar show';
+            bar.innerHTML = `
+                <span class="bb-name">${escapeHtml(blockTitleFor(rule))}</span>
+                <span class="bb-days">${rule.start}&ndash;${rule.end} &middot; ${escapeHtml(daysLabel(rule.days))}</span>
+                <span class="bb-spacer"></span>
+                ${shared ? `<span class="bb-days">Edits apply to all ${rule.days.length} days.</span>
+                    <button type="button" class="btn btn-ghost btn-small" onclick="splitSelectedToThisDay()">Only this day</button>
+                    <button type="button" class="btn btn-ghost btn-small" onclick="removeSelectedFromThisDay()">Remove from ${escapeHtml(DAY_NAMES[selectedDay])}</button>` : ''}
+                <button type="button" class="btn btn-ghost btn-small" onclick="openModal('${rule.id}')">Edit</button>
+                <button type="button" class="btn btn-ghost btn-small" style="color:var(--red-action);" onclick="deleteSelectedBlock()">${shared ? 'Delete all' : 'Delete'}</button>`;
+        }
+        // Splits the selected shared block: this day gets its own copy, the
+        // other days keep the original. After this, edits touch only this day.
+        function splitSelectedToThisDay() {
+            const rule = rules.find(r => r.id === selectedRuleId);
+            if (!rule || rule.days.length < 2) return;
+            pushUndo();
+            const clone = JSON.parse(JSON.stringify(rule));
+            clone.id = genId();
+            clone.days = [selectedDay];
+            rule.days = rule.days.filter(d => d !== selectedDay);
+            rules.push(clone);
+            selectedRuleId = clone.id;
+            renderDayBoxes();
+            showToast(`Now only on ${FULL_DAY_NAMES[selectedDay]}.`);
+        }
+        function removeSelectedFromThisDay() {
+            const rule = rules.find(r => r.id === selectedRuleId);
+            if (!rule || rule.days.length < 2) return;
+            pushUndo();
+            rule.days = rule.days.filter(d => d !== selectedDay);
+            selectedRuleId = null;
+            renderDayBoxes();
+        }
+        function deleteSelectedBlock() {
+            const rule = rules.find(r => r.id === selectedRuleId);
+            if (!rule) return;
+            pushUndo();
+            rules = rules.filter(r => r.id !== selectedRuleId);
+            selectedRuleId = null;
+            renderDayBoxes();
+        }
+        function toggleCopyPop(e) {
+            e.stopPropagation();
+            const pop = document.getElementById('copy-pop');
+            if (pop.classList.contains('show')) { pop.classList.remove('show'); return; }
+            document.getElementById('copy-pop-text').textContent = `Copy ${FULL_DAY_NAMES[selectedDay]}'s blocks onto:`;
+            document.getElementById('copy-days').innerHTML = TAB_ORDER.filter(d => d !== selectedDay).map(d =>
+                `<button type="button" class="day-toggle" data-day="${d}" onclick="this.classList.toggle('active')">${DAY_NAMES[d]}</button>`).join('');
+            pop.classList.add('show');
+        }
+        document.addEventListener('click', () => { const p = document.getElementById('copy-pop'); if (p) p.classList.remove('show'); });
+        // Copying shares the source day's blocks with each target day (they
+        // gain the target in rule.days), after clearing what was there.
+        function applyCopyDay() {
+            const targets = [...document.querySelectorAll('#copy-days .day-toggle.active')].map(b => parseInt(b.dataset.day, 10));
+            if (!targets.length) return showToast('Pick at least one day to copy to.', 'error');
+            const source = rules.filter(r => r.days.includes(selectedDay));
+            if (!source.length) return showToast(`${FULL_DAY_NAMES[selectedDay]} has no blocks to copy.`, 'error');
+            pushUndo();
+            targets.forEach(t => {
+                rules.forEach(r => { if (!r.days.includes(selectedDay)) r.days = r.days.filter(d => d !== t); });
+                source.forEach(r => { if (!r.days.includes(t)) r.days.push(t); });
+            });
+            rules = rules.filter(r => r.days.length > 0);
+            document.getElementById('copy-pop').classList.remove('show');
+            renderDayBoxes();
+            showToast(`Copied to ${targets.map(d => DAY_NAMES[d]).join(', ')}.`);
         }
 
         function itemLabel(item) {
@@ -2041,6 +2240,7 @@
             el.innerHTML = `
                 <div class="block-title">${escapeHtml(blockTitleFor(rule))}</div>
                 <div class="block-time">${rule.start}&ndash;${rule.end}</div>
+                ${rule.days.length > 1 ? `<div class="block-days" title="Shared: edits change every day">${escapeHtml(daysLabel(rule.days))}</div>` : ''}
                 <div class="resize-handle resize-handle-left" data-rule-id="${rule.id}"></div>
                 <div class="resize-handle resize-handle-right" data-rule-id="${rule.id}"></div>
             `;
@@ -2072,12 +2272,12 @@
             // currently playing, not from a fixed file or playlist. Blocks
             // are only ever created via + Add Music Video Block.
             if (laneType === 'musicvideo') {
-                return showToast('Music Video blocks are added with the + Add Music Video Block button on the left, not by dragging.', 'error');
+                return showToast('Music Video blocks are added with + Add Block in the library below, not by dragging.', 'error');
             }
 
             if (laneType === 'ambient') {
                 if (!isMediaPayload) {
-                    return showToast('Drag a file from the Library onto this lane.', 'error');
+                    return showToast('Drag a file from the Ambient Visuals library tab onto this lane.', 'error');
                 }
             } else if (isMediaPayload) {
                 return showToast('Drop that onto the Ambient Visuals lane instead.', 'error');
