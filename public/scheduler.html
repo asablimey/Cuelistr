@@ -846,6 +846,11 @@
         .layout.stacked #playlist-list { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:8px; align-content:start; }
         .layout.stacked .playlist-chip, .layout.stacked .media-chip { margin-bottom:0; }
         .lib-empty { grid-column:1 / -1; color:var(--text-dim); font-size:0.85rem; padding:18px 4px; }
+        .chip-text { flex:1; min-width:0; display:flex; flex-direction:column; gap:1px; }
+        .chip-desc { font-size:0.7rem; color:var(--text-dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .playlist-chip.curated { border-color:var(--lane-color, var(--border-strong)); }
+        .curated-badge { color:var(--text-dim); }
+        .btn.cur-on { background:var(--text); color:var(--spotify-black); }
         .block-days { position:absolute; right:6px; top:3px; font-size:0.6rem; font-weight:700; background:rgba(0,0,0,0.35);
             color:#fff; border-radius:4px; padding:1px 5px; pointer-events:none; }
         @media (max-width: 720px) {
@@ -930,6 +935,7 @@
             <div class="panel library-panel">
                 <div class="lib-head">
                     <div class="lib-tabs" id="lib-tabs"></div>
+                    <button type="button" class="btn btn-ghost btn-small" id="lib-curated-btn" onclick="toggleCurated()">Curated Playlists</button>
                     <button type="button" class="btn btn-ghost btn-small" id="lib-add-btn" onclick="onLibraryAdd()">+ Add</button>
                 </div>
                 <div class="add-playlist-form" id="add-playlist-form">
@@ -1295,6 +1301,15 @@
         let schedulerEnabled = false;
         // ---- Redesign state: which day the timeline shows, which lane tab the library shows ----
         let selectedDay = null;      // 0=Sun..6=Sat; null until first render (then today in the event's timezone)
+        let curatedOpen = false;     // library shows the curated catalogue instead of "my playlists"
+        let curatedPlaylists = [];   // [{ id, label, uri, type: 'crowddj'|'karaoke', description? }] - premade, read-only here
+        let curatedLoaded = false;
+        // Curated playlists are saved into the event's own playlists list (the
+        // server only accepts rule.playlistId values that exist there), under
+        // this reserved id prefix. That prefix is how the scheduler keeps them
+        // out of "My playlists" and refuses to delete them.
+        const CURATED_PREFIX = 'cur_';
+        const isCuratedId = id => typeof id === 'string' && id.startsWith(CURATED_PREFIX);
         let libraryTab = 'crowddj';  // 'crowddj' | 'karaoke' | 'ambient' | 'musicvideo'
         const TAB_ORDER = [1, 2, 3, 4, 5, 6, 0]; // Mon..Sun
         const LANE_ORDER = ['crowddj', 'karaoke', 'ambient', 'musicvideo'];
@@ -1507,6 +1522,7 @@
                     document.getElementById('lock-screen').style.display = 'none';
                     document.getElementById('dashboard').classList.add('show');
                     renderAll();
+                    loadCuratedPlaylists();
                     refreshStatus();
                     if (!statusPollStarted) { statusPollStarted = true; setInterval(refreshStatus, 10000); }
                     document.getElementById('lock-screen').style.visibility = 'visible';
@@ -1791,10 +1807,59 @@
 
         function onNewItemTypeChange() { /* the library tab now decides the type */ }
 
+        // The one place that knows where the curated catalogue comes from.
+        // Expects GET /e/:slug/api/curated-playlists -> { playlists: [...] }
+        // (or a bare array). Any failure just means "none yet".
+        async function loadCuratedPlaylists() {
+            try {
+                const res = await fetch(eventUrl('/api/curated-playlists'), { headers: adminHeaders() });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const d = await res.json();
+                const list = Array.isArray(d) ? d : (d && d.playlists);
+                curatedPlaylists = (Array.isArray(list) ? list : [])
+                    .filter(c => c && typeof c.id === 'string' && c.id && typeof c.label === 'string' && typeof c.uri === 'string')
+                    .map(c => ({ id: c.id, label: c.label, uri: c.uri, type: c.type === 'karaoke' ? 'karaoke' : 'crowddj',
+                                 description: typeof c.description === 'string' ? c.description : '' }));
+                curatedLoaded = true;
+                syncCuratedIntoPlaylists();
+            } catch (e) { curatedPlaylists = []; }
+            renderPlaylists();
+        }
+        // Keeps this event's copies in step with the catalogue: refreshes
+        // label/uri on ones already used, and drops copies the catalogue no
+        // longer has unless a block still uses them.
+        function syncCuratedIntoPlaylists() {
+            if (!curatedLoaded) return;
+            playlists.forEach(p => {
+                if (!isCuratedId(p.id)) return;
+                const c = curatedPlaylists.find(x => CURATED_PREFIX + x.id === p.id);
+                if (c) { p.label = c.label; p.uri = c.uri; p.type = c.type; }
+            });
+            playlists = playlists.filter(p => !isCuratedId(p.id)
+                || curatedPlaylists.some(x => CURATED_PREFIX + x.id === p.id)
+                || rules.some(r => r.playlistId === p.id));
+        }
+        function ensureCuratedInPlaylists(curatedId) {
+            const c = curatedPlaylists.find(x => x.id === curatedId);
+            if (!c) return false;
+            const id = CURATED_PREFIX + c.id;
+            if (!playlists.some(p => p.id === id)) playlists.push({ id, label: c.label, uri: c.uri, type: c.type });
+            return true;
+        }
+        function onCuratedDragStart(e, curatedId) {
+            if (!ensureCuratedInPlaylists(curatedId)) { e.preventDefault(); return; }
+            e.dataTransfer.setData('text/plain', 'playlist:' + CURATED_PREFIX + curatedId);
+        }
+        function toggleCurated() {
+            curatedOpen = !curatedOpen;
+            document.getElementById('add-playlist-form').classList.remove('open');
+            renderPlaylists();
+        }
+
         function renderLibraryTabs() {
             const counts = {
-                crowddj: playlists.filter(p => p.type !== 'karaoke').length,
-                karaoke: playlists.filter(p => p.type === 'karaoke').length,
+                crowddj: playlists.filter(p => p.type !== 'karaoke' && !isCuratedId(p.id)).length,
+                karaoke: playlists.filter(p => p.type === 'karaoke' && !isCuratedId(p.id)).length,
                 ambient: ambientMedia.length,
                 musicvideo: rules.filter(r => r.laneType === 'musicvideo').length
             };
@@ -1802,6 +1867,11 @@
                 <button type="button" class="lib-tab${t === libraryTab ? ' active' : ''}" style="--lane-color:${LANE_TYPES[t].color}" onclick="setLibraryTab('${t}')">${escapeHtml(LANE_TYPES[t].label)}<span class="lib-count">${counts[t]}</span></button>
             `).join('');
             const addBtn = document.getElementById('lib-add-btn');
+            const isMusicTab = libraryTab === 'crowddj' || libraryTab === 'karaoke';
+            const curBtn = document.getElementById('lib-curated-btn');
+            curBtn.style.display = isMusicTab ? '' : 'none';
+            curBtn.classList.toggle('cur-on', isMusicTab && curatedOpen);
+            curBtn.innerHTML = curatedOpen ? '&larr; My Playlists' : 'Curated Playlists';
             addBtn.textContent = libraryTab === 'ambient' ? '+ Add Visual' : libraryTab === 'musicvideo' ? '+ Add Block' : '+ Add Playlist';
         }
         function setLibraryTab(t) {
@@ -1816,6 +1886,7 @@
                 return choice ? startNewAmbientBlock() : importVisualsAsNewBlock();
             }
             if (libraryTab === 'musicvideo') return startNewMusicVideoBlock();
+            if (curatedOpen) { curatedOpen = false; renderPlaylists(); }
             document.getElementById('new-item-type').value = libraryTab;
             const form = document.getElementById('add-playlist-form');
             form.classList.toggle('open');
@@ -1826,8 +1897,18 @@
             renderLibraryTabs();
             const list = document.getElementById('playlist-list');
             const rows = [];
-            if (libraryTab === 'crowddj' || libraryTab === 'karaoke') {
-                playlists.filter(p => (p.type === 'karaoke' ? 'karaoke' : 'crowddj') === libraryTab).forEach(p => rows.push(`
+            if ((libraryTab === 'crowddj' || libraryTab === 'karaoke') && curatedOpen) {
+                curatedPlaylists.filter(c => c.type === libraryTab).forEach(c => rows.push(`
+                    <div class="playlist-chip curated" style="--lane-color:${LANE_TYPES[libraryTab].color}" draggable="true" data-curated-id="${escapeHtml(c.id)}"
+                         ondragstart="onCuratedDragStart(event, '${escapeHtml(c.id)}')" title="Drag onto the timeline. Curated playlists can't be deleted.">
+                        <span class="chip-swatch" style="background:${LANE_TYPES[libraryTab].color}"></span>
+                        <span class="chip-text"><span class="chip-label">${escapeHtml(c.label)}</span>${c.description ? `<span class="chip-desc">${escapeHtml(c.description)}</span>` : ''}</span>
+                        <span class="chip-type curated-badge">&#128274; Curated</span>
+                    </div>
+                `));
+                if (!rows.length) rows.push(`<div class="lib-empty">No curated ${escapeHtml(LANE_TYPES[libraryTab].label)} playlists available yet.</div>`);
+            } else if (libraryTab === 'crowddj' || libraryTab === 'karaoke') {
+                playlists.filter(p => !isCuratedId(p.id) && (p.type === 'karaoke' ? 'karaoke' : 'crowddj') === libraryTab).forEach(p => rows.push(`
                     <div class="playlist-chip" draggable="true" data-playlist-id="${escapeHtml(p.id)}"
                          ondragstart="onChipDragStart(event, '${escapeHtml(p.id)}')">
                         <span class="chip-swatch" style="background:${playlistColor(p.id)}"></span>
@@ -1835,7 +1916,7 @@
                         <button class="chip-remove" onclick="removePlaylist('${escapeHtml(p.id)}')" title="Remove">&times;</button>
                     </div>
                 `));
-                if (!rows.length) rows.push(`<div class="lib-empty">No ${escapeHtml(LANE_TYPES[libraryTab].label)} playlists yet. Use <strong>+ Add Playlist</strong> above, then drag it onto the timeline.</div>`);
+                if (!rows.length) rows.push(`<div class="lib-empty">No ${escapeHtml(LANE_TYPES[libraryTab].label)} playlists yet. Use <strong>+ Add</strong>, or browse <strong>Curated Playlists</strong>, then drag one onto the timeline.</div>`);
             } else if (libraryTab === 'ambient') {
                 ambientMedia.forEach(m => rows.push(`
                     <div class="media-chip" draggable="true" data-media-id="${escapeHtml(m.id)}"
@@ -1872,6 +1953,7 @@
         }
 
         function removePlaylist(id) {
+            if (isCuratedId(id)) return showToast("Curated playlists can't be deleted.", 'error');
             if (rules.some(r => r.playlistId === id)) {
                 return showToast('Delete the blocks using this playlist first.', 'error');
             }
