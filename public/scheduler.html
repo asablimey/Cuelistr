@@ -827,9 +827,10 @@
         .block-bar .bb-days { color:var(--text-dim); }
         .block-bar .bb-spacer { flex:1; }
         .layout.stacked { flex-direction:column; gap:12px; }
-        .layout.stacked .timetable-panel { flex:1 1 0; min-height:0; }
-        .layout.stacked .library-panel { flex:0 0 34%; min-height:190px; }
-        .layout.stacked #day-boxes { overflow-y:auto; }
+        .layout.stacked .timetable-panel { flex:0 1 auto; height:auto; min-height:0; }
+        .layout.stacked .library-panel { flex:1 1 0; height:auto; min-height:190px; }
+        .layout.stacked #day-boxes { flex:0 1 auto; overflow-y:auto; }
+        .layout.stacked .timetable { min-width:0; }
         .layout.stacked .day-box { margin-bottom:0; }
         .layout.stacked .day-track { height:54px; }
         .lib-head { display:flex; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap; flex-shrink:0; }
@@ -848,7 +849,7 @@
         .block-days { position:absolute; right:6px; top:3px; font-size:0.6rem; font-weight:700; background:rgba(0,0,0,0.35);
             color:#fff; border-radius:4px; padding:1px 5px; pointer-events:none; }
         @media (max-width: 720px) {
-            .layout.stacked .library-panel { flex:0 0 auto; max-height:300px; }
+            .layout.stacked .library-panel { flex:1 1 auto; min-height:220px; }
         }
 
         .toast {
@@ -1446,6 +1447,19 @@
         const HOUR_PX_STEP = 8;
         const HOUR_PX_DEFAULT = 40;
         let hourPx = HOUR_PX_DEFAULT;
+        // 100% now means "the 24 hours exactly fill the timeline's width".
+        // zoomLevel only ever multiplies that (never below fit, so there is
+        // no empty gap on the right), and hourPx is recomputed from the
+        // container's real width on every render and on window resize.
+        let zoomLevel = 1;
+        const ZOOM_MAX = 3, ZOOM_STEP = 0.25;
+        function fitHourPx() {
+            const box = document.getElementById('day-boxes');
+            const w = box ? box.clientWidth : 0;
+            if (w < 300) return HOUR_PX_DEFAULT; // not laid out yet
+            // minus the day card's padding+border (30px) and the lane labels
+            return Math.max(HOUR_PX_MIN, (w - 30 - LANE_LABEL_WIDTH - 2) / 24);
+        }
 
         document.getElementById('back-to-admin').href = eventUrl('/admin');
 
@@ -1951,13 +1965,13 @@
             return html;
         }
 
-        function zoomIn() { setZoom(hourPx + HOUR_PX_STEP); }
-        function zoomOut() { setZoom(hourPx - HOUR_PX_STEP); }
-        function setZoom(px) {
-            hourPx = Math.max(HOUR_PX_MIN, Math.min(HOUR_PX_MAX, px));
-            document.getElementById('zoom-readout').textContent = Math.round((hourPx / HOUR_PX_DEFAULT) * 100) + '%';
-            document.getElementById('zoom-out-btn').disabled = hourPx <= HOUR_PX_MIN;
-            document.getElementById('zoom-in-btn').disabled = hourPx >= HOUR_PX_MAX;
+        function zoomIn() { setZoom(zoomLevel + ZOOM_STEP); }
+        function zoomOut() { setZoom(zoomLevel - ZOOM_STEP); }
+        function setZoom(level) {
+            zoomLevel = Math.max(1, Math.min(ZOOM_MAX, level));
+            document.getElementById('zoom-readout').textContent = Math.round(zoomLevel * 100) + '%';
+            document.getElementById('zoom-out-btn').disabled = zoomLevel <= 1;
+            document.getElementById('zoom-in-btn').disabled = zoomLevel >= ZOOM_MAX;
             renderDayBoxes();
             scrollTimetablesToNow();
         }
@@ -2005,6 +2019,8 @@
             document.querySelectorAll('.now-needle').forEach(n => { n.style.left = left; });
         }
         setInterval(updateNowNeedle, 15000);
+        let resizeTimer = null;
+        window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { if (document.querySelector('.day-box')) renderDayBoxes(); }, 120); });
 
         // What day (0=Sun..6=Sat) it currently is in the event's own
         // timezone - the same zone every rule's day/time field is read in
@@ -2033,6 +2049,7 @@
         // update path.
         function renderDayBoxes() {
             const container = document.getElementById('day-boxes');
+            hourPx = fitHourPx() * zoomLevel;
             const conflictingIds = findConflictingRuleIds();
             const trackWidth = hourPx * 24;
             // Today first, then tomorrow, ... , yesterday last - the
