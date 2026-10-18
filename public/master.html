@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/layout.css">
     <link rel="icon" type="image/svg+xml" href="/assets/cuelistr-icon.svg">
     <link rel="icon" type="image/png" href="/assets/favicon.png">
     <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
@@ -22,7 +23,7 @@
             color: white;
             font-family: -apple-system, BlinkMacSystemFont, sans-serif;
             margin: 0;
-            padding: 25px;
+            padding: var(--page-pad, 25px);
             box-sizing: border-box;
             overflow-wrap: break-word;
             word-break: break-word;
@@ -56,9 +57,14 @@
         .lock-btn:hover { filter: brightness(1.1); }
         .lock-error { color: var(--red-action); font-size: 0.85rem; margin-top: 12px; display: none; }
 
-        #dashboard { display: none; max-width: 720px; margin: 0 auto; }
+        /* One width for every tab (Events, Videos, Playlists, Karaoke) - the
+           page used to jump between 720px and 1500px when switching tabs. */
+        #dashboard { display: none; max-width: var(--page-max, 1400px); margin: 0 auto; }
+        #events-list { display: grid; gap: var(--page-gap, 14px); grid-template-columns: repeat(auto-fill, minmax(min(100%, 460px), 1fr)); align-items: start; }
+        #events-list .event-card { margin-bottom: 0; }
+        #events-list .empty-state { grid-column: 1 / -1; }
         .header { display: flex; justify-content: space-between; align-items: center; gap: 15px; flex-wrap: wrap; border-bottom: 1px solid #282828; padding-bottom: 20px; margin-bottom: 20px; }
-        h1 { margin: 0; font-size: 1.8rem; font-weight: 800; letter-spacing: -0.5px; }
+        h1 { margin: 0; font-size: var(--h1-size, 1.8rem); font-weight: 800; letter-spacing: -0.5px; }
         .subtitle { color: #a7a7a7; font-size: 0.85rem; margin-top: 4px; }
         .refresh-btn {
             background: var(--card-bg); border: 1px solid #333; color: white;
@@ -82,7 +88,7 @@
         .badge.open { background: rgba(29,185,84,0.18); color: var(--spotify-green); }
         .badge.closed { background: rgba(255,255,255,0.08); color: #a7a7a7; }
 
-        .card-actions { display: flex; gap: 8px; flex-shrink: 0; }
+        .card-actions { display: flex; gap: 8px; flex-wrap: wrap; }
         .btn { border: none; border-radius: 8px; padding: 10px 16px; font-size: 0.85rem; font-weight: 700; cursor: pointer; white-space: nowrap; }
         .btn-admin { background: var(--card-bg); border: 1px solid #333; color: white; }
         .btn-admin:hover { border-color: #555; }
@@ -96,8 +102,8 @@
             padding: 20px; margin-top: 24px;
         }
         .account-recovery-panel h2 { margin: 0 0 8px 0; font-size: 1.05rem; }
-        .account-recovery-row { display: flex; gap: 10px; }
-        .account-recovery-row input { flex: 1; }
+        .account-recovery-row { display: flex; gap: 10px; flex-wrap: wrap; }
+        .account-recovery-row input { flex: 1 1 220px; }
         .account-recovery-row button { flex-shrink: 0; }
         .toast {
             position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
@@ -126,9 +132,10 @@
         @media (max-width: 720px) { .cp-row { flex-wrap: wrap; } }
 
         /* ---- Tabs + Videos catalog ---- */
-        #dashboard.wide { max-width: 1500px; }
         .tabs { display: flex; gap: 8px; margin-bottom: 20px; }
-        .tab-btn { background: var(--card-bg); border: 1px solid #333; color: #a7a7a7; padding: 9px 18px; border-radius: 50px; font-weight: 700; font-size: 0.9rem; cursor: pointer; }
+        .tabs { display: flex; gap: 8px; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; scrollbar-width: none; }
+        .tabs::-webkit-scrollbar { display: none; }
+        .tab-btn { flex-shrink: 0; white-space: nowrap; word-break: normal; background: var(--card-bg); border: 1px solid #333; color: #a7a7a7; padding: 9px 18px; border-radius: 50px; font-weight: 700; font-size: 0.9rem; cursor: pointer; }
         .tab-btn.active { background: white; color: black; border-color: white; }
         .vc-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
         .vc-toolbar input[type=text], .vc-toolbar select { background: var(--card-bg); border: 1px solid #333; color: white; border-radius: 8px; padding: 9px 12px; font-size: 0.88rem; outline: none; }
