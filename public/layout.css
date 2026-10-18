@@ -1,0 +1,45 @@
+/* layout.css - the one shared page frame for the admin-side pages:
+ * admin, master, scheduler, new-event, reset-password.
+ * (index, kiosk and visuals are built for vertical / signage screens and
+ * deliberately don't load this.)
+ *
+ * Rules every page follows:
+ *   - ONE content width (--page-max), centred, the same on every tab/section
+ *     of a page. Tabs never change the page width.
+ *   - ONE gutter (--page-pad) that grows gently with the screen.
+ *   - Content adapts by wrapping / reflowing into grids, not by the whole page
+ *     snapping between "skinny" and "fullscreen".
+ *   - Wide data (tables, timelines) scrolls inside its own box.
+ * Pages use these with fallbacks, e.g. var(--page-max, 1400px), so nothing
+ * breaks if this file ever fails to load. */
+:root {
+    --page-max: 1400px;
+    --page-pad: clamp(12px, 2.5vw, 24px);
+    --page-gap: clamp(10px, 1.6vw, 16px);
+    --card-pad: clamp(14px, 2vw, 20px);
+    --h1-size: clamp(1.45rem, 1rem + 1.6vw, 1.8rem);
+    --form-max: 480px;
+}
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+*, *::before, *::after { box-sizing: border-box; }
+
+/* Helper for any page that wants the standard frame on an element. */
+.page-frame { width: 100%; max-width: var(--page-max); margin-left: auto; margin-right: auto; }
+/* Responsive card grid: 1 column on phones, more as room allows. */
+.auto-grid { display: grid; gap: var(--page-gap); grid-template-columns: repeat(auto-fill, minmax(min(100%, 440px), 1fr)); }
+/* Anything wide (tables, timelines) scrolls inside itself, never the page. */
+.scroll-x { overflow-x: auto; max-width: 100%; -webkit-overflow-scrolling: touch; }
+
+/* Text fields default to a content-based minimum width, which pushes rows of
+ * inputs wider than their card. Letting them shrink fixes clipped fields. */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+select, textarea { min-width: 0; max-width: 100%; }
+
+/* Touch screens: comfortable tap targets. */
+@media (pointer: coarse) {
+    .btn, .tab-btn, .settings-nav-item { min-height: 40px; }
+}
+/* Short landscape phones: let fixed full-screen overlays scroll. */
+@media (max-height: 520px) {
+    #admin-lock-screen, #lock-screen { justify-content: flex-start; }
+}
