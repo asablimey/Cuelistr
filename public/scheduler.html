@@ -5,6 +5,7 @@
     <script>(function(){var s=location.pathname.split("/")[2]||"";CrowdTheme.use("crowddj_theme_admin_"+s);CrowdTheme.follow("admin",s);})();</script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/layout.css">
     <link rel="icon" type="image/svg+xml" href="/assets/cuelistr-icon.svg">
     <link rel="icon" type="image/png" href="/assets/favicon.png">
     <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
@@ -76,7 +77,7 @@
             color: var(--text);
             font-family: -apple-system, BlinkMacSystemFont, sans-serif;
             margin: 0;
-            padding: 20px;
+            padding: var(--page-pad, 20px);
             overflow-x: hidden;
             overscroll-behavior-x: none;
         }
@@ -120,14 +121,14 @@
            screen, which is what was forcing the header/timetable wider
            than the viewport). max-width + the auto margin still center it
            on screens wider than 1400px. */
-        #dashboard { display: none; width: 100%; max-width: 1400px; margin: 0 auto; }
+        #dashboard { display: none; width: 100%; max-width: var(--page-max, 1400px); margin: 0 auto; }
         #dashboard.show { display: block; }
 
         .header {
             display: flex; justify-content: space-between; align-items: center; gap: 15px; flex-wrap: wrap;
             border-bottom: 1px solid var(--border); padding-bottom: 18px; margin-bottom: 18px; flex-shrink: 0;
         }
-        .header h1 { margin: 0; font-size: 1.6rem; font-weight: 800; letter-spacing: -0.5px; }
+        .header h1 { margin: 0; font-size: var(--h1-size, 1.6rem); font-weight: 800; letter-spacing: -0.5px; }
         .header .subtitle { color: var(--text-dim); font-size: 0.85rem; margin-top: 4px; }
         .header-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
         .tz-row { display: flex; align-items: center; gap: 8px; font-size: 0.82rem; color: var(--text-dim); }
@@ -830,7 +831,9 @@
         .layout.stacked .timetable-panel { flex:0 1 auto; height:auto; min-height:0; }
         .layout.stacked .library-panel { flex:1 1 0; height:auto; min-height:190px; }
         .layout.stacked #day-boxes { flex:0 1 auto; overflow-y:auto; }
-        .layout.stacked .timetable { min-width:0; }
+        /* The timetable box is as wide as its content (never narrower than the
+           scroll area) so the sticky lane labels stay pinned while scrolling. */
+        .layout.stacked .timetable { width:max-content; min-width:100%; }
         .layout.stacked .day-box { margin-bottom:0; }
         .layout.stacked .day-track { height:54px; }
         .lib-head { display:flex; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap; flex-shrink:0; }
@@ -853,8 +856,25 @@
         .btn.cur-on { background:var(--text); color:var(--spotify-black); }
         .block-days { position:absolute; right:6px; top:3px; font-size:0.6rem; font-weight:700; background:rgba(0,0,0,0.35);
             color:#fff; border-radius:4px; padding:1px 5px; pointer-events:none; }
+        .schedule-block, .resize-handle { touch-action: none; }
+        .playlist-chip, .media-chip { cursor: pointer; }
+        /* Tablet and below: header tidies up, day tabs share one row, library tabs scroll. */
+        @media (max-width: 900px) {
+            .header { gap: 10px; padding-bottom: 12px; margin-bottom: 12px; }
+            .header-actions { gap: 8px 10px; width: 100%; }
+            .header-actions .btn-primary { margin-left: auto; }
+            .day-tabs { flex: 1 1 100%; }
+            .day-tab { flex: 1 1 0; padding: 8px 2px; text-align: center; min-width: 0; }
+            .strip-actions { width: 100%; justify-content: space-between; }
+            .lib-tabs { flex: 1 1 100%; order: 1; }
+            .lib-head > .btn { order: 2; }
+        }
         @media (max-width: 720px) {
-            .layout.stacked .library-panel { flex:1 1 auto; min-height:220px; }
+            .layout.stacked { overflow-y: auto; }
+            .layout.stacked .timetable-panel { flex: 0 0 auto; }
+            .layout.stacked .library-panel { flex: 0 0 auto; min-height: 220px; max-height: none; }
+            .panel { padding: 12px; }
+            .block-bar { font-size: 0.78rem; }
         }
 
         .toast {
@@ -1900,7 +1920,7 @@
             if ((libraryTab === 'crowddj' || libraryTab === 'karaoke') && curatedOpen) {
                 curatedPlaylists.filter(c => c.type === libraryTab).forEach(c => rows.push(`
                     <div class="playlist-chip curated" style="--lane-color:${LANE_TYPES[libraryTab].color}" draggable="true" data-curated-id="${escapeHtml(c.id)}"
-                         ondragstart="onCuratedDragStart(event, '${escapeHtml(c.id)}')" title="Drag onto the timeline. Curated playlists can't be deleted.">
+                         ondragstart="onCuratedDragStart(event, '${escapeHtml(c.id)}')" onclick="addFromLibrary('curated', '${escapeHtml(c.id)}')" title="Tap to add to the day shown, or drag onto the timeline. Curated playlists can't be deleted.">
                         <span class="chip-swatch" style="background:${LANE_TYPES[libraryTab].color}"></span>
                         <span class="chip-text"><span class="chip-label">${escapeHtml(c.label)}</span>${c.description ? `<span class="chip-desc">${escapeHtml(c.description)}</span>` : ''}</span>
                         <span class="chip-type curated-badge">&#128274; Curated</span>
@@ -1910,23 +1930,23 @@
             } else if (libraryTab === 'crowddj' || libraryTab === 'karaoke') {
                 playlists.filter(p => !isCuratedId(p.id) && (p.type === 'karaoke' ? 'karaoke' : 'crowddj') === libraryTab).forEach(p => rows.push(`
                     <div class="playlist-chip" draggable="true" data-playlist-id="${escapeHtml(p.id)}"
-                         ondragstart="onChipDragStart(event, '${escapeHtml(p.id)}')">
+                         ondragstart="onChipDragStart(event, '${escapeHtml(p.id)}')" onclick="addFromLibrary('playlist', '${escapeHtml(p.id)}')" title="Tap to add to the day shown, or drag onto the timeline">
                         <span class="chip-swatch" style="background:${playlistColor(p.id)}"></span>
                         <span class="chip-label">${escapeHtml(p.label)}</span>
-                        <button class="chip-remove" onclick="removePlaylist('${escapeHtml(p.id)}')" title="Remove">&times;</button>
+                        <button class="chip-remove" onclick="event.stopPropagation(); removePlaylist('${escapeHtml(p.id)}')" title="Remove">&times;</button>
                     </div>
                 `));
                 if (!rows.length) rows.push(`<div class="lib-empty">No ${escapeHtml(LANE_TYPES[libraryTab].label)} playlists yet. Use <strong>+ Add</strong>, or browse <strong>Curated Playlists</strong>, then drag one onto the timeline.</div>`);
             } else if (libraryTab === 'ambient') {
                 ambientMedia.forEach(m => rows.push(`
                     <div class="media-chip" draggable="true" data-media-id="${escapeHtml(m.id)}"
-                         ondragstart="onMediaChipDragStart(event, '${escapeHtml(m.id)}')">
+                         ondragstart="onMediaChipDragStart(event, '${escapeHtml(m.id)}')" onclick="addFromLibrary('media', '${escapeHtml(m.id)}')" title="Tap to add to the day shown, or drag onto the timeline">
                         ${m.type === 'video'
                             ? `<span class="media-thumb media-type-icon"><span class="thumb-tag">VID</span></span>`
                             : `<img class="media-thumb" src="${escapeHtml(m.url)}" alt="">`}
                         <span class="chip-label">${escapeHtml(m.filename)}</span>
                         <span class="chip-type">${m.type === 'video' ? 'Video' : 'Photo'}</span>
-                        <button class="chip-remove" onclick="removeAmbientMedia('${escapeHtml(m.id)}')" title="Remove">&times;</button>
+                        <button class="chip-remove" onclick="event.stopPropagation(); removeAmbientMedia('${escapeHtml(m.id)}')" title="Remove">&times;</button>
                     </div>
                 `));
                 if (!rows.length) rows.push(`<div class="lib-empty">No visuals yet. Use <strong>+ Add Visual</strong> to create a block or import one, then drag files onto the timeline.</div>`);
@@ -1967,6 +1987,32 @@
         // a second dataTransfer key (Safari/Firefox drag-and-drop support
         // for multiple custom MIME types is inconsistent, so this sticks
         // to the one 'text/plain' slot every browser handles the same way).
+        // Tap/click flow (the only way to add on phones/tablets, where
+        // drag-and-drop from a list usually doesn't work): drops a 1-hour block
+        // into the first free gap on the day being viewed and opens its editor.
+        function addFromLibrary(kind, id) {
+            if (kind === 'curated') {
+                if (!ensureCuratedInPlaylists(id)) return;
+                id = CURATED_PREFIX + id; kind = 'playlist';
+            }
+            const isMedia = kind === 'media';
+            const laneType = isMedia ? 'ambient' : playlistType(id);
+            if (isMedia && !ambientMedia.some(m => m.id === id)) return;
+            if (!isMedia && !playlists.some(p => p.id === id)) return;
+            const laneGroup = ruleLaneGroup({ laneType });
+            const nowMin = Math.round(nowMinutesInEventTz() / 15) * 15;
+            const start = findFreeStart([selectedDay], 60, laneGroup, Math.min(nowMin, TRACK_MINUTES - 60));
+            if (!hasRoom(selectedDay, start, 60, null, laneGroup)) return showToast(`${FULL_DAY_NAMES[selectedDay]} is full in that lane - free up some time first.`, 'error');
+            const base = { id: genId(), days: [selectedDay], start: minutesToHHMM(start), end: minutesToHHMM(start + 60) };
+            const rule = isMedia
+                ? { ...base, laneType: 'ambient', items: [{ id: genId(), type: (ambientMedia.find(m => m.id === id) || {}).type === 'video' ? 'video' : 'photo', mediaId: id, durationSec: 8 }] }
+                : { ...base, playlistId: id, volume: null, requestsAllowed: null };
+            pushUndo();
+            rules.push(rule);
+            selectedRuleId = rule.id;
+            renderDayBoxes();
+            openModal(rule.id);
+        }
         function onChipDragStart(e, playlistId) {
             e.dataTransfer.setData('text/plain', 'playlist:' + playlistId);
         }
@@ -2147,10 +2193,10 @@
                 const laneEmptyHint = laneType => rules.some(r => r.days.includes(dayIdx) && ruleLaneType(r) === laneType)
                     ? ''
                     : laneType === 'ambient'
-                        ? `<div class="empty-hint">Empty - drag a file in from below.</div>`
+                        ? `<div class="empty-hint">Empty - tap or drag a file in from below.</div>`
                         : laneType === 'musicvideo'
                             ? `<div class="empty-hint">Empty - use + Add Block below.</div>`
-                            : `<div class="empty-hint">Empty - drag a playlist in from below.</div>`;
+                            : `<div class="empty-hint">Empty - tap or drag one in from below.</div>`;
 
                 const liveLanesHtml = ['crowddj', 'karaoke', 'ambient', 'musicvideo'].map(laneType => `
                     <div class="lane-row">
@@ -2449,9 +2495,13 @@
 
         // ---------- Move / resize existing blocks ----------
         function attachBlockDrag(el, ruleId) {
-            el.addEventListener('mousedown', (e) => {
+            el.addEventListener('pointerdown', (e) => {
                 if (e.target.classList.contains('resize-handle')) return;
+                if (e.pointerType === 'mouse' && e.button !== 0) return;
                 e.preventDefault();
+                // Touch pointers are implicitly captured by the pressed block, which
+                // is rebuilt on every move - let the document receive the moves instead.
+                try { el.releasePointerCapture(e.pointerId); } catch (err) { /* not captured */ }
                 const rule = rules.find(r => r.id === ruleId);
                 if (!rule) return;
                 const track = el.parentElement;
@@ -2523,8 +2573,9 @@
                     renderDayBoxes();
                 }
                 function onUp() {
-                    document.removeEventListener('mousemove', onMove);
-                    document.removeEventListener('mouseup', onUp);
+                    document.removeEventListener('pointermove', onMove);
+                    document.removeEventListener('pointerup', onUp);
+                    document.removeEventListener('pointercancel', onUp);
                     if (moved) return;
 
                     // Manual double-click detection instead of a native
@@ -2545,15 +2596,18 @@
                     selectedRuleId = ruleId;
                     renderDayBoxes();
                 }
-                document.addEventListener('mousemove', onMove);
-                document.addEventListener('mouseup', onUp);
+                document.addEventListener('pointermove', onMove);
+                document.addEventListener('pointerup', onUp);
+                document.addEventListener('pointercancel', onUp);
             });
         }
 
         function attachResizeDrag(handle, ruleId, side) {
-            handle.addEventListener('mousedown', (e) => {
+            handle.addEventListener('pointerdown', (e) => {
+                if (e.pointerType === 'mouse' && e.button !== 0) return;
                 e.preventDefault();
                 e.stopPropagation();
+                try { handle.releasePointerCapture(e.pointerId); } catch (err) { /* not captured */ }
                 const rule = rules.find(r => r.id === ruleId);
                 if (!rule) return;
                 const track = handle.closest('.day-track');
@@ -2584,8 +2638,9 @@
                     renderDayBoxes();
                 }
                 function onUp() {
-                    document.removeEventListener('mousemove', onMove);
-                    document.removeEventListener('mouseup', onUp);
+                    document.removeEventListener('pointermove', onMove);
+                    document.removeEventListener('pointerup', onUp);
+                    document.removeEventListener('pointercancel', onUp);
                     if (moved) return;
 
                     // A click (not a drag) on the handle itself still
@@ -2603,8 +2658,9 @@
                     selectedRuleId = ruleId;
                     renderDayBoxes();
                 }
-                document.addEventListener('mousemove', onMove);
-                document.addEventListener('mouseup', onUp);
+                document.addEventListener('pointermove', onMove);
+                document.addEventListener('pointerup', onUp);
+                document.addEventListener('pointercancel', onUp);
             });
         }
 
