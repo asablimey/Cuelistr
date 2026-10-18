@@ -5,6 +5,7 @@
     <script>CrowdTheme.use("crowddj_theme_admin_" + (location.pathname.split("/")[2] || ""));</script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/layout.css">
     <link rel="icon" type="image/svg+xml" href="/assets/cuelistr-icon.svg">
     <link rel="icon" type="image/png" href="/assets/favicon.png">
     <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
@@ -75,7 +76,7 @@
             background-color: var(--spotify-black); 
             color: var(--text); 
             font-family: -apple-system, BlinkMacSystemFont, sans-serif; 
-            padding: 20px; 
+            padding: var(--page-pad, 20px); 
             margin: 0; 
             box-sizing: border-box;
             overflow-x: hidden;
@@ -86,6 +87,11 @@
             word-break: break-word;
         }
         * { box-sizing: border-box; }
+
+        /* Shared page frame (see layout.css): header + every tab panel sit in
+           the same centred column, so no tab is ever skinnier or wider than
+           another. */
+        body > .header, body > .tab-content { max-width: var(--page-max, 1400px); margin-left: auto; margin-right: auto; }
 
         #admin-lock-screen {
             position: fixed;
@@ -163,7 +169,7 @@
             gap: 15px;
         }
 
-        h1 { margin: 0; font-size: 2.2rem; font-weight: 800; letter-spacing: -0.5px; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        h1 { margin: 0; font-size: var(--h1-size, 1.8rem); font-weight: 800; letter-spacing: -0.5px; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
         .config-dashboard {
             display: flex;
@@ -191,7 +197,7 @@
             box-sizing: border-box;
         }
 
-        .join-row { display: flex; gap: 10px; }
+        .join-row { display: flex; gap: 10px; flex-wrap: wrap; }
         .join-row input[type="text"] {
             background-color: var(--card-bg);
             border: 1px solid var(--border-strong);
@@ -199,7 +205,7 @@
             color: var(--text);
             border-radius: 6px;
             font-size: 0.95rem;
-            flex: 1;
+            flex: 1 1 200px;
             min-width: 0;
             box-sizing: border-box;
         }
@@ -849,9 +855,7 @@
         .outcome-badge.played { background: rgba(29,185,84,0.15); color: var(--spotify-green); }
         .outcome-badge.dropped { background: rgba(233,20,41,0.15); color: var(--red-action); }
 
-        @media (max-width: 600px) {
-            body { padding: 15px; }
-            h1 { font-size: 1.8rem; }
+        @media (max-width: 720px) {
             .song-row { flex-direction: column; align-items: flex-start; }
             .actions { width: 100%; justify-content: flex-start; margin-top: 10px; }
             .settings-layout { flex-direction: column; }
@@ -865,7 +869,7 @@
                 margin-bottom: 16px;
                 border-bottom: 1px solid var(--border);
             }
-            .settings-nav-item { flex-shrink: 0; white-space: nowrap; }
+            .settings-nav-item { flex-shrink: 0; white-space: nowrap; width: auto; }
         }
 
         /* Toast notifications - replace blocking alert() popups */
