@@ -351,7 +351,7 @@
                 </div>
                 <div class="vc-group">
                     <button class="btn btn-admin" onclick="vcAddRow()">+ Add row</button>
-                    <select id="vc-np-event" title="Only used by the Now playing button: which event to read the current song from. The catalog itself is shared by every event."></select>
+                    <select id="vc-np-event" title="Which event the Now playing and Add to queue (➕) buttons use. The catalog itself is shared by every event."></select>
                     <button class="btn btn-admin" onclick="vcFromNowPlaying()">♪ Add now playing</button>
                 </div>
                 <div class="vc-group">
@@ -765,8 +765,24 @@
                     <button class="act-btn" data-act="preview" title="Preview, and mark the start time">▶</button>
                     <button class="act-btn" data-act="spotify" title="Search Spotify to fill this row">🔍</button>
                     <button class="act-btn" data-act="suggest" title="Suggest YouTube videos (one search, 100 quota units)">✨</button>
+                    <button class="act-btn" data-act="queue" title="Add to queue - plays like a request (event: the dropdown next to Add now playing)">➕</button>
                     <button class="act-btn" data-act="delete" title="Delete row">🗑</button></td>
             </tr>`;
+        }
+        // Add to Queue: drops this row's song into the live queue of the event picked
+        // in the toolbar dropdown, exactly like a request (no credits, filters or cap).
+        async function vcAddToQueue(tr, btn) {
+            const val = f => { const el = tr.querySelector(`[data-f="${f}"]`); return el ? el.value.trim() : ''; };
+            if (!val('song')) { showToast('This row has no title yet.', 'error'); return; }
+            btn.disabled = true;
+            const r = await vcApi('POST', '/add-to-queue', {
+                slug: document.getElementById('vc-np-event').value || 'any',
+                song: val('song'), artist: val('artist'), spotifyId: val('spotifyId'), isrc: val('isrc')
+            });
+            btn.disabled = false;
+            if (!r.ok) { showToast(r.data.error || 'Could not add to the queue.', 'error'); return; }
+            const d = r.data;
+            showToast(`Added "${d.track.title}" by ${d.track.artist} to ${d.eventName}'s queue` + (d.matchedBy === 'spotify id' ? '.' : ` (matched by ${d.matchedBy}).`));
         }
         function vcMakeRowEl(r) {
             const t = document.createElement('tbody');
@@ -1461,6 +1477,7 @@
                 if (btn.dataset.act === 'preview') return vcOpenPreview(tr);
                 if (btn.dataset.act === 'spotify') return vcOpenSpotifySearch(tr);
                 if (btn.dataset.act === 'suggest') return vcOpenSuggest(tr);
+                if (btn.dataset.act === 'queue') return vcAddToQueue(tr, btn);
 
                 if (btn.dataset.spUse !== undefined) {
                     const t = panelRow._tracks[Number(btn.dataset.spUse)];
@@ -1629,7 +1646,7 @@
             const N = ths.length - 1;                       // resizable columns (all but actions)
             const BASE = [56, 210, 210, 190, 180, 96, 130, 170, 120, 210, 130]; // # Title Artist Spotify YouTube Start ON/OFF Suggestive ISRC Notes Type
             const MIN  = [46, 80, 80, 80, 80, 64, 100, 120, 70, 80, 80];
-            const ACT_MIN = 160;
+            const ACT_MIN = 200;
             const baseSum = BASE.reduce((a, b) => a + b, 0);
             let widths = null;                               // null = auto-fit
 
