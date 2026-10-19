@@ -57,9 +57,9 @@
         .lock-btn:hover { filter: brightness(1.1); }
         .lock-error { color: var(--red-action); font-size: 0.85rem; margin-top: 12px; display: none; }
 
-        /* One width for every tab (Events, Videos, Playlists, Karaoke) - the
-           page used to jump between 720px and 1500px when switching tabs. */
-        #dashboard { display: none; max-width: var(--page-max, 1400px); margin: 0 auto; }
+        /* Master is one full-width frame (screen width minus the page gutter) on
+           every tab, so the header, tabs and the video table all line up. */
+        #dashboard { display: none; max-width: none; margin: 0 auto; }
         #events-list { display: grid; gap: var(--page-gap, 14px); grid-template-columns: repeat(auto-fill, minmax(min(100%, 460px), 1fr)); align-items: start; }
         #events-list .event-card { margin-bottom: 0; }
         #events-list .empty-state { grid-column: 1 / -1; }
@@ -261,15 +261,12 @@
         .pv-ctl details.pv-hint summary { cursor: pointer; width: fit-content; }
         .pv-ctl details.pv-hint p { margin: 6px 0 0; }
     
-        /* Video catalog: the toolbar and table span the full screen width (minus
-           the normal page gutter) so the table has room, while the title and tabs
-           above stay aligned with the other tabs. */
-        #tab-videos .vc-bar, #tab-videos .vc-wrap {
-            width: calc(100vw - 2 * var(--page-pad, 25px));
-            max-width: none;
-            margin-left: calc(50% - 50vw + var(--page-pad, 25px));
-        }
-        body { overflow-x: hidden; }
+        /* Column resize handles on the video table header */
+        table.vc th { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        table.vc th .col-resize { position: absolute; top: 0; right: 0; width: 9px; height: 100%; cursor: col-resize; z-index: 5; touch-action: none; }
+        table.vc th .col-resize::after { content: ''; position: absolute; right: 3px; top: 22%; height: 56%; width: 3px; border-radius: 2px; background: transparent; }
+        table.vc th:hover .col-resize::after, table.vc th .col-resize.active::after { background: #1a73e8; }
+        body.col-resizing, body.col-resizing * { cursor: col-resize !important; user-select: none !important; }
 </style>
 </head>
 <body>
@@ -790,8 +787,10 @@
             body.innerHTML = shown.map(vcRowHtml).join('');
             unsaved.reverse().forEach(tr => body.insertBefore(tr, body.firstChild));
             document.querySelectorAll('table.vc th[data-k]').forEach(th => {
+                const handle = th.querySelector('.col-resize');
                 const base = th.textContent.replace(/ [▲▼]$/, '');
                 th.textContent = th.dataset.k === vcSortKey ? base + (vcSortDir === 1 ? ' ▲' : ' ▼') : base;
+                if (handle) th.appendChild(handle);
             });
             const sortSel = document.getElementById('vc-sort');
             if ([...sortSel.options].some(o => o.value === vcSortKey)) sortSel.value = vcSortKey;
@@ -1613,6 +1612,80 @@
             await cpLoad();
         }
         cpBuildShell();
+    </script>
+
+    <script>
+        /* ===================== Video table: drag header edges to resize columns ===================== */
+        // 11 data columns get explicit pixel widths; the last (actions) column takes
+        // whatever is left, so a dragged edge follows the mouse 1:1. Until you drag one,
+        // the columns are scaled to fill the table exactly. Dragged widths are remembered
+        // on this browser; double-click any edge to go back to fitting the screen.
+        (function () {
+            const KEY = 'vcColWidths.v1';
+            const table = document.querySelector('table.vc');
+            if (!table) return;
+            const wrap = table.closest('.vc-wrap');
+            const ths = Array.from(table.querySelectorAll('thead tr.heads th'));
+            const N = ths.length - 1;                       // resizable columns (all but actions)
+            const BASE = [56, 210, 210, 190, 180, 96, 130, 170, 120, 210, 130]; // # Title Artist Spotify YouTube Start ON/OFF Suggestive ISRC Notes Type
+            const MIN  = [46, 80, 80, 80, 80, 64, 100, 120, 70, 80, 80];
+            const ACT_MIN = 160;
+            const baseSum = BASE.reduce((a, b) => a + b, 0);
+            let widths = null;                               // null = auto-fit
+
+            try {
+                const saved = JSON.parse(localStorage.getItem(KEY) || 'null');
+                if (Array.isArray(saved) && saved.length === N && saved.every(n => Number.isFinite(n) && n >= 30 && n < 3000)) widths = saved;
+            } catch (e) { /* storage unavailable */ }
+
+            const colgroup = document.createElement('colgroup');
+            const cols = ths.map(() => colgroup.appendChild(document.createElement('col')));
+            table.insertBefore(colgroup, table.firstChild);
+            table.style.tableLayout = 'fixed';
+
+            function fit() {
+                const room = Math.max(0, (wrap ? wrap.clientWidth : 1400) - ACT_MIN - 2);
+                const k = room / baseSum;                       // scale up OR down so the table fits the screen
+                return BASE.map((w, i) => Math.max(MIN[i], Math.round(w * k)));
+            }
+            function apply() {
+                if (!widths && wrap && wrap.clientWidth < 300) return;   // hidden tab: nothing to measure yet
+                const w = widths || fit();
+                cols.forEach((c, i) => { c.style.width = i < N ? w[i] + 'px' : ''; });
+                table.style.minWidth = (w.reduce((a, b) => a + b, 0) + ACT_MIN) + 'px';
+            }
+            function reset() { widths = null; try { localStorage.removeItem(KEY); } catch (e) {} apply(); }
+
+            ths.slice(0, N).forEach((th, i) => {
+                const h = document.createElement('span');
+                h.className = 'col-resize';
+                h.title = 'Drag to resize. Double-click to reset all columns.';
+                h.addEventListener('click', e => e.stopPropagation());   // never trigger a sort
+                h.addEventListener('dblclick', e => { e.stopPropagation(); reset(); });
+                h.addEventListener('pointerdown', e => {
+                    if (e.pointerType === 'mouse' && e.button !== 0) return;
+                    e.preventDefault(); e.stopPropagation();
+                    widths = (widths || fit()).slice();                   // freeze current widths
+                    const startX = e.clientX, startW = widths[i];
+                    h.setPointerCapture(e.pointerId);
+                    h.classList.add('active'); document.body.classList.add('col-resizing');
+                    const move = ev => { widths[i] = Math.max(MIN[i], Math.round(startW + ev.clientX - startX)); apply(); };
+                    const up = () => {
+                        h.removeEventListener('pointermove', move); h.removeEventListener('pointerup', up); h.removeEventListener('pointercancel', up);
+                        h.classList.remove('active'); document.body.classList.remove('col-resizing');
+                        try { localStorage.setItem(KEY, JSON.stringify(widths)); } catch (err) {}
+                    };
+                    h.addEventListener('pointermove', move); h.addEventListener('pointerup', up); h.addEventListener('pointercancel', up);
+                });
+                th.appendChild(h);
+            });
+
+            // Re-fit whenever the table's box changes size: window resize, or the
+            // Videos tab being shown for the first time (it starts hidden).
+            if (wrap && window.ResizeObserver) new ResizeObserver(() => { if (!widths) apply(); }).observe(wrap);
+            else window.addEventListener('resize', () => { if (!widths) apply(); });
+            apply();
+        })();
     </script>
 </body>
 </html>
