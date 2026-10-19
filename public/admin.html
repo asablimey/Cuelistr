@@ -65,8 +65,8 @@
         body.basic-mode #sidebar-nav-stats,
         body.basic-mode #sidebar-nav-blocked,
         body.basic-mode #sidebar-nav-scheduler,
-        body.basic-mode #settings-nav-kiosk,
-        body.basic-mode #settings-nav-visuals,
+        body.basic-mode #settings-nav-screens,
+        body.basic-mode #settings-category-screens,
         body.basic-mode #toggle-radio-edits,
         body.basic-mode #toggle-guest-spotify { display: none !important; }
 
@@ -260,24 +260,37 @@
         }
         .settings-card.danger-zone { border-color: rgba(233, 20, 41, 0.35); }
 
-        /* Settings tab: sidebar categories instead of one long flat list of
-           cards - was 10 cards in a single scroll before this, no grouping
-           at all. Sidebar swaps which category's cards are shown rather
-           than showing all of them at once. */
+/* Settings tab: sticky left menu + search, and a two-column flow of
+           cards on the right. Cards sit straight on the page background (no
+           outer panel), each shrinks to fit its content, and the wide ones
+           (.span-all) take a full row. */
         .settings-layout {
             display: flex;
             gap: 24px;
             align-items: flex-start;
         }
         .settings-sidebar {
-            width: 190px;
+            width: 220px;
             flex-shrink: 0;
             display: flex;
             flex-direction: column;
-            gap: 4px;
+            gap: 12px;
             position: sticky;
             top: 20px;
         }
+        .settings-search {
+            width: 100%;
+            background: var(--panel-bg);
+            border: 1px solid var(--border-strong);
+            color: var(--text);
+            padding: 10px 14px;
+            border-radius: 10px;
+            font-size: 0.95rem;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+        .settings-search:focus { outline: none; border-color: var(--spotify-green); }
+        .settings-nav { display: flex; flex-direction: column; gap: 4px; }
         .settings-nav-item {
             display: flex;
             align-items: center;
@@ -293,18 +306,62 @@
             text-align: left;
             width: 100%;
             box-sizing: border-box;
+            font-family: inherit;
             transition: background-color 0.15s ease, color 0.15s ease;
         }
-        .settings-nav-item:hover { background: var(--card-bg); color: var(--text); }
+        .settings-nav-item:hover { background: var(--panel-bg); color: var(--text); }
         .settings-nav-item.active-nav { background: var(--spotify-green); color: white; }
-        .settings-nav-item.danger-nav { color: #e97b7b; }
-        .settings-nav-item.danger-nav:hover { background: var(--card-bg); color: #e97b7b; }
-        .settings-nav-item.danger-nav.active-nav { background: var(--red-action); color: white; }
-        .settings-nav-item .nav-icon { font-size: 1rem; flex-shrink: 0; }
 
         .settings-content { flex: 1; min-width: 0; }
         .settings-category-panel { display: none; }
         .settings-category-panel.active-category { display: block; }
+        .settings-cat-title { margin: 0 0 14px 0; font-size: 1.4rem; font-weight: 700; color: var(--spotify-green); }
+
+        .settings-grid {
+            display: grid;
+            gap: var(--page-gap, 16px);
+            grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr));
+            align-items: start;
+        }
+        .settings-page .settings-card {
+            background: var(--panel-bg);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: var(--card-pad, 18px);
+            margin-bottom: 0;
+            min-width: 0;
+        }
+        .settings-page .settings-card.danger-zone { border-color: rgba(233, 20, 41, 0.35); }
+        .settings-page .settings-card.span-all,
+        .settings-group-title { grid-column: 1 / -1; }
+        .settings-page .settings-card.span-all .settings-card-hint { max-width: 760px; }
+        .settings-group-title {
+            margin: 10px 0 -4px 0;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            font-weight: 700;
+        }
+        .settings-group-title:first-child { margin-top: 0; }
+        .settings-page .settings-card .settings-section-label { margin-bottom: 12px; }
+        .settings-page .settings-card .settings-section-label.has-status { margin-bottom: 4px; }
+        .settings-page .settings-card .settings-section-label.sub { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--border); }
+        .settings-status-big { font-size: 1.6rem; font-weight: 800; margin: 0 0 4px 0; letter-spacing: -0.3px; }
+        /* compact pill buttons inside cards (JS swaps these buttons' class names, so the size lives on the parent) */
+        .settings-page .settings-card .toggle-btn { padding: 10px 20px; font-size: 0.9rem; box-shadow: none; }
+        .settings-page .settings-card .config-dashboard { gap: 16px; }
+
+        /* Search: while there's text in the box, every category's matching cards
+           show together (each under its category title); non-matches disappear. */
+        .settings-content.is-searching .settings-category-panel { display: block; margin-bottom: 22px; }
+        .settings-content.is-searching .settings-category-panel.no-match { display: none; }
+        .settings-content.is-searching .settings-card.search-miss { display: none; }
+        .settings-content.is-searching .settings-group-title { display: none; }
+        .settings-search-empty { color: var(--text-muted); padding: 30px 4px; font-size: 0.95rem; }
+        .settings-sidebar.is-searching .settings-nav-item.active-nav { background: transparent; color: var(--text-muted); }
+        .settings-page .qr-card-controls .input-group input { width: 100%; }
+        .settings-page .queue-cap-status-text:empty { display: none; }
 
         .qr-card-body {
             display: flex;
@@ -859,14 +916,12 @@
             .song-row { flex-direction: column; align-items: flex-start; }
             .actions { width: 100%; justify-content: flex-start; margin-top: 10px; }
             .settings-layout { flex-direction: column; }
-            .settings-sidebar {
+            .settings-sidebar { width: 100%; position: static; }
+            .settings-nav {
                 flex-direction: row;
-                width: 100%;
-                position: static;
                 overflow-x: auto;
                 -webkit-overflow-scrolling: touch;
                 padding-bottom: 10px;
-                margin-bottom: 16px;
                 border-bottom: 1px solid var(--border);
             }
             .settings-nav-item { flex-shrink: 0; white-space: nowrap; width: auto; }
@@ -1075,7 +1130,7 @@
                 </div>
             </div>
             <div id="playback-disconnected-view" class="playback-disconnected">
-                Connect the admin Spotify account under <strong>Settings → Spotify</strong> to control playback from here.
+                Connect the admin Spotify account under <strong>Settings → Spotify &amp; playback</strong> to control playback from here.
             </div>
         </div>
     </div>
@@ -1106,40 +1161,47 @@
     </div>
 
     <div id="tab-panel-settings" class="tab-content">
-        <div class="panel">
-            <h2>Settings</h2>
-
+        <div class="settings-page">
             <div class="settings-layout">
                 <div class="settings-sidebar">
-                    <button type="button" id="settings-nav-general" class="settings-nav-item active-nav" onclick="switchSettingsCategory('general')">
-                        General
-                    </button>
-                    <button type="button" id="settings-nav-access" class="settings-nav-item" onclick="switchSettingsCategory('access')">
-                        Access &amp; Guests
-                    </button>
-                    <button type="button" id="settings-nav-music" class="settings-nav-item" onclick="switchSettingsCategory('music')">
-                        Music
-                    </button>
-                    <button type="button" id="settings-nav-location" class="settings-nav-item" onclick="switchSettingsCategory('location')">
-                        Location
-                    </button>
-                    <button type="button" id="settings-nav-spotify" class="settings-nav-item" onclick="switchSettingsCategory('spotify')">
-                        Spotify
-                    </button>
-                    <button type="button" id="settings-nav-kiosk" class="settings-nav-item" onclick="switchSettingsCategory('kiosk')">
-                        Kiosk
-                    </button>
-                    <button type="button" id="settings-nav-visuals" class="settings-nav-item" onclick="switchSettingsCategory('visuals')">
-                        Visuals
-                    </button>
-                    <button type="button" id="settings-nav-danger" class="settings-nav-item danger-nav" onclick="switchSettingsCategory('danger')">
-                        Danger Zone
-                    </button>
+                    <input type="search" id="settings-search" class="settings-search" placeholder="Find a setting..." autocomplete="off"
+                        oninput="filterSettings(this.value)" onkeydown="if (event.key === 'Escape') { this.value = ''; filterSettings(''); }">
+                    <div class="settings-nav">
+                        <button type="button" id="settings-nav-event" class="settings-nav-item active-nav" onclick="switchSettingsCategory('event')">Event</button>
+                        <button type="button" id="settings-nav-access" class="settings-nav-item" onclick="switchSettingsCategory('access')">Access &amp; Guests</button>
+                        <button type="button" id="settings-nav-music" class="settings-nav-item" onclick="switchSettingsCategory('music')">Music rules</button>
+                        <button type="button" id="settings-nav-spotify" class="settings-nav-item" onclick="switchSettingsCategory('spotify')">Spotify &amp; playback</button>
+                        <button type="button" id="settings-nav-screens" class="settings-nav-item" onclick="switchSettingsCategory('screens')">Screens</button>
+                        <button type="button" id="settings-nav-account" class="settings-nav-item" onclick="switchSettingsCategory('account')">Account</button>
+                    </div>
                 </div>
 
-                <div class="settings-content">
-                    <div id="settings-category-general" class="settings-category-panel active-category">
-                        <div class="settings-card">
+                <div class="settings-content" id="settings-content">
+                    <div id="settings-search-empty" class="settings-search-empty" style="display: none;">No settings match that search.</div>
+                    <div id="settings-category-event" class="settings-category-panel active-category">
+                        <h2 class="settings-cat-title">Event</h2>
+                        <div class="settings-grid">
+                        <div class="settings-card" data-search="event name venue title headline save">
+                            <div class="settings-section-label">Event Details</div>
+                            <div class="event-name-box" style="margin-bottom: 20px; display: flex; gap: 16px; flex-wrap: wrap;">
+                                <div class="input-group" style="flex: 1 1 200px;">
+                                    <label>Event Name</label>
+                                    <input type="text" id="input-event-name" placeholder="Cuelistr" maxlength="60" style="width: 100%;">
+                                </div>
+                                <div class="input-group" style="flex: 1 1 200px;">
+                                    <label>Venue Name</label>
+                                    <input type="text" id="input-venue-name" placeholder="e.g. The Blind Pig, Ann Arbor" maxlength="120" style="width: 100%;">
+                                </div>
+                            </div>
+                            <p class="settings-card-hint" style="margin-top: -12px; margin-bottom: 16px;">
+                                Event Name is the headline guests see (e.g. "Sarah's 30th Birthday"). Venue Name is usually
+                                where it's happening, shown underneath in smaller text - leave it blank to hide it.
+                            </p>
+                            <div class="control-bar">
+                                <button class="save-config-btn" onclick="saveSystemRules()">Save Event Details</button>
+                            </div>
+                        </div>
+                        <div class="settings-card" data-search="basic full simple mode switch kiosk visuals scheduler">
                             <div class="settings-section-label">Site Mode</div>
                             <div class="mode-row">
                                 <div class="theme-seg" id="site-mode-seg" role="group" aria-label="Site mode">
@@ -1153,18 +1215,7 @@
                                 <strong>Full</strong> turns everything back on exactly as you left it - nothing is deleted when you switch.
                             </p>
                         </div>
-
-                        <div class="settings-card">
-                            <div class="settings-section-label">Admin Appearance</div>
-                            <div class="theme-seg" id="theme-seg-admin" role="group" aria-label="Admin appearance">
-                                <button type="button" data-mode="auto" onclick="setScreenTheme('admin','auto')">Auto</button>
-                                <button type="button" data-mode="light" onclick="setScreenTheme('admin','light')">Light</button>
-                                <button type="button" data-mode="dark" onclick="setScreenTheme('admin','dark')">Dark</button>
-                            </div>
-                            <p class="settings-card-hint" style="margin-top: 14px; margin-bottom: 0;">Auto follows this device's own light/dark setting.</p>
-                        </div>
-
-                        <div class="settings-card">
+                        <div class="settings-card" data-search="qr code link share print download poster table tent">
                             <div class="settings-section-label">Guest QR Code</div>
                             <div class="qr-card-body">
                                 <div id="guest-qr-code" class="qr-code-box"></div>
@@ -1186,97 +1237,109 @@
                                 Print it onto a table tent or poster before doors open.
                             </p>
                         </div>
-
-                        <div class="settings-card">
-                            <div class="settings-section-label">Event Details</div>
-                            <div class="event-name-box" style="margin-bottom: 20px; display: flex; gap: 16px; flex-wrap: wrap;">
-                                <div class="input-group" style="flex: 1 1 200px;">
-                                    <label>Event Name</label>
-                                    <input type="text" id="input-event-name" placeholder="Cuelistr" maxlength="60" style="width: 100%;">
-                                </div>
-                                <div class="input-group" style="flex: 1 1 200px;">
-                                    <label>Venue Name</label>
-                                    <input type="text" id="input-venue-name" placeholder="e.g. The Blind Pig, Ann Arbor" maxlength="120" style="width: 100%;">
-                                </div>
-                            </div>
-                            <p class="settings-card-hint" style="margin-top: -12px; margin-bottom: 16px;">
-                                Event Name is the headline guests see (e.g. "Sarah's 30th Birthday"). Venue Name is usually
-                                where it's happening, shown underneath in smaller text - leave it blank to hide it.
-                            </p>
-                            <div class="control-bar">
-                                <button class="save-config-btn" onclick="saveSystemRules()">Save Event Details</button>
-                            </div>
-                        </div>
-
-                        <div class="settings-card full-only">
-                            <div class="settings-section-label">Export</div>
+                        <div class="settings-card full-only" data-search="export csv stats download duplicate template copy clone new event">
+                            <div class="settings-section-label">Export &amp; Templates</div>
                             <div class="control-bar">
                                 <button class="save-config-btn" onclick="exportStatsCSV()">Export Night's Stats (CSV)</button>
                             </div>
-                        </div>
-
-                        <div class="settings-card full-only">
-                            <div class="settings-section-label">Duplicate as Template</div>
+                            <div class="settings-section-label sub">Duplicate as Template</div>
                             <p class="settings-card-hint" style="margin-top: 0;">Carries over your credit/countdown/filter/kiosk rules to a brand-new event - not the name, password, venue, or tonight's queue and history.</p>
                             <div class="control-bar">
                                 <button class="save-config-btn" onclick="duplicateAsTemplate()">Duplicate as Template for a New Event</button>
                             </div>
                         </div>
+                        </div>
                     </div>
 
                     <div id="settings-category-access" class="settings-category-panel">
-                        <div class="settings-card">
-                            <div class="settings-section-label">Access Controls</div>
+                        <h2 class="settings-cat-title">Access &amp; Guests</h2>
+                        <div class="settings-grid">
+                        <div class="settings-card" data-search="requests open closed accept pause stop guests send songs access">
+                            <div class="settings-section-label has-status">Requests</div>
+                            <div class="settings-status-big" id="requests-status-big">Open</div>
+                            <p class="settings-card-hint" id="requests-status-hint" style="margin-top: 0;">Guests can send songs right now.</p>
                             <div class="control-bar">
                                 <button id="toggle-requests" class="toggle-btn open-status" onclick="toggleRequests()">Requests: OPEN</button>
                             </div>
                         </div>
-
-                        <div class="settings-card">
-                            <div class="settings-section-label">Guest Credits</div>
+                        <div class="settings-card full-only" data-search="blocked guests block ban devices unblock voters">
+                            <div class="settings-section-label has-status">Blocked guests</div>
+                            <div class="settings-status-big" id="blocked-count-big">0 blocked</div>
+                            <p class="settings-card-hint" style="margin-top: 0;">Block a device from the Stats tab's "Recent Requests" list. A blocked guest can't request or vote for the rest of this event.</p>
+                            <div class="control-bar">
+                                <button type="button" id="manage-blocked-btn" class="toggle-btn neutral-status" onclick="toggleBlockedGuestsList()">Manage blocked guests</button>
+                            </div>
+                            <div id="blocked-guests-list" class="stat-box-body" style="display: none; margin-top: 12px; padding: 0;"></div>
+                        </div>
+                        <div class="settings-card span-all" data-search="guest credits bank refill regen timer countdown queue cap length limit max songs per guest rate">
+                            <div class="settings-section-label">Request limits</div>
+                            <p class="settings-card-hint" style="margin-top: 0;">Credits and queue length in one place, one save.</p>
                             <div class="config-dashboard">
                                 <div class="input-group">
                                     <label>Max Credit Bank</label>
                                     <input type="number" id="input-max-credits" min="1">
                                 </div>
                                 <div class="input-group">
-                                    <label>Regen Timer (Secs)</label>
+                                    <label>Refill Timer (Secs)</label>
                                     <input type="number" id="input-countdown" min="5">
                                 </div>
-                                <button class="save-config-btn" onclick="saveSystemRules()">Update Rules</button>
-                            </div>
-                        </div>
-
-                        <div class="settings-card full-only">
-                            <div class="settings-section-label">Queue Length Cap</div>
-                            <div class="config-dashboard">
-                                <button id="toggle-queue-cap" class="toggle-btn neutral-status" onclick="toggleQueueCap()">Queue Cap: OFF</button>
-                                <div class="input-group">
-                                    <label>Max Queue Length</label>
-                                    <input type="number" id="input-max-queue" min="1" value="50">
+                                <div class="full-only" style="display: contents;">
+                                    <div class="input-group">
+                                        <label>Queue Cap</label>
+                                        <button id="toggle-queue-cap" class="toggle-btn neutral-status" onclick="toggleQueueCap()">Queue Cap: OFF</button>
+                                    </div>
+                                    <div class="input-group">
+                                        <label>Max Queue Length</label>
+                                        <input type="number" id="input-max-queue" min="1" value="50">
+                                    </div>
                                 </div>
                                 <button class="save-config-btn" onclick="saveSystemRules()">Update Rules</button>
-                                <div class="queue-cap-status-text" id="queue-cap-status-text"></div>
+                                <div class="queue-cap-status-text full-only" id="queue-cap-status-text"></div>
                             </div>
                         </div>
-
-                        <div class="settings-card full-only">
-                            <div class="settings-section-label">Blocked Guests</div>
-                            <p class="settings-card-hint" style="margin-top: 0;">Block a guest's device from the Stats tab's "Recent Requests" list. A blocked guest can't request or vote for the rest of this event.</p>
-                            <div id="blocked-guests-list" class="stat-box-body"></div>
+                        <div class="settings-card span-all" data-search="location lock gps distance meters radius check-in venue code display time geofence">
+                            <div class="settings-section-label">Location</div>
+                            <p class="settings-card-hint" style="margin-top: 0;">
+                                When the lock is on, guests must be within the check-in distance of the pinned venue location to request a song.
+                                Turn it off to let anyone request from anywhere. Loosen the distance for a big building or parking lot; tighten it for a small room.
+                            </p>
+                            <div class="config-dashboard">
+                                <div class="input-group">
+                                    <label>Location Lock</label>
+                                    <button id="toggle-location-lock" class="toggle-btn open-status" onclick="toggleLocationLock()">Location Lock: ON</button>
+                                </div>
+                                <div class="full-only" style="display: contents;">
+                                    <div class="input-group">
+                                        <label>Check-In Distance (Meters)</label>
+                                        <input type="number" id="input-location-radius" min="10" max="5000" step="10">
+                                    </div>
+                                    <div class="input-group">
+                                        <label>Venue Code Shows For (Secs)</label>
+                                        <input type="number" id="input-code-display-seconds" min="5" max="300" step="5">
+                                    </div>
+                                    <button class="save-config-btn" onclick="saveLocationSettings()">Update Location</button>
+                                </div>
+                            </div>
+                            <p class="settings-card-hint full-only" style="margin-top: 14px; margin-bottom: 0;">
+                                Guests outside the check-in distance can tap Display Code to show the rotating 6-digit code in the top right of your
+                                Ambient Visuals screen. Venue Code Shows For is how long it stays up (5 to 300 seconds). The screen must be opened
+                                from the admin Visuals button.
+                            </p>
+                        </div>
                         </div>
                     </div>
 
                     <div id="settings-category-music" class="settings-category-panel">
-                        <div class="settings-card">
+                        <h2 class="settings-cat-title">Music rules</h2>
+                        <div class="settings-grid">
+                        <div class="settings-card" data-search="song filters explicit clean radio edits block">
                             <div class="settings-section-label">Song Filters</div>
                             <div class="control-bar">
                                 <button id="toggle-explicit" class="toggle-btn open-status" onclick="toggleExplicitLock()">Explicit: ALLOWED</button>
                                 <button id="toggle-radio-edits" class="toggle-btn open-status" onclick="toggleRadioEditsOnly()">Radio Edits Only: OFF</button>
                             </div>
                         </div>
-
-                        <div class="settings-card full-only">
+                        <div class="settings-card full-only" data-search="decade filters theme night 1960s 1970s 1980s 1990s 2000s era">
                             <div class="settings-section-label">Decade Filters (Theme Nights)</div>
                             <div class="filter-panel">
                                 <p class="filter-hint">Pick any decades to restrict guests to only those. Leave everything unchecked to allow anything.</p>
@@ -1285,50 +1348,13 @@
                                 <button class="save-config-btn" style="margin-top: 18px;" onclick="saveFilters()">Save Filters</button>
                             </div>
                         </div>
-                    </div>
-
-                    <div id="settings-category-location" class="settings-category-panel">
-                        <div class="settings-card">
-                            <div class="settings-section-label">Location Lock</div>
-                            <div class="control-bar">
-                                <button id="toggle-location-lock" class="toggle-btn open-status" onclick="toggleLocationLock()">Location Lock: ON</button>
-                            </div>
-                            <p class="settings-card-hint" style="margin-top: 16px; margin-bottom: 0;">
-                                When on, guests must be within the distance set below of the pinned venue location to request a song. Turn it off to let anyone check in and request from anywhere, regardless of distance.
-                            </p>
-                        </div>
-
-                        <div class="settings-card full-only">
-                            <div class="settings-section-label">Check-In Distance</div>
-                            <p class="settings-card-hint" style="margin-top: 0;">
-                                How close (in meters) a guest's phone has to be to the pinned venue location for Location Lock to let them request a song. Loosen this for a venue that spans a big building or parking lot; tighten it for a small room.
-                            </p>
-                            <div class="config-dashboard">
-                                <div class="input-group">
-                                    <label>Distance (Meters)</label>
-                                    <input type="number" id="input-location-radius" min="10" max="5000" step="10">
-                                </div>
-                                <button class="save-config-btn" onclick="saveLocationRadius()">Update Distance</button>
-                            </div>
-                        </div>
-
-                        <div class="settings-card full-only">
-                            <div class="settings-section-label">Venue Code Display Time</div>
-                            <p class="settings-card-hint" style="margin-top: 0;">
-                                Guests outside the check-in distance can tap Display Code to show the rotating 6-digit code in the top right of your Ambient Visuals screen. This is how long it stays up (5 to 300 seconds). The screen must be opened from the admin Visuals button.
-                            </p>
-                            <div class="config-dashboard">
-                                <div class="input-group">
-                                    <label>Show For (Seconds)</label>
-                                    <input type="number" id="input-code-display-seconds" min="5" max="300" step="5">
-                                </div>
-                                <button class="save-config-btn" onclick="saveCodeDisplaySeconds()">Update Time</button>
-                            </div>
                         </div>
                     </div>
 
                     <div id="settings-category-spotify" class="settings-category-panel">
-                        <div class="settings-card">
+                        <h2 class="settings-cat-title">Spotify &amp; playback</h2>
+                        <div class="settings-grid">
+                        <div class="settings-card" data-search="spotify queue relay connect account auto-queue premium device">
                             <div class="settings-section-label">Spotify Queue Relay</div>
                             <div class="control-bar">
                                 <button id="spotify-relay-status" class="toggle-btn closed-status" onclick="connectDjSpotify()">Checking...</button>
@@ -1340,8 +1366,7 @@
                                 device (open Spotify and play something first). Click to connect - click again to disconnect.
                             </p>
                         </div>
-
-                        <div class="settings-card full-only">
+                        <div class="settings-card full-only" data-search="guest spotify connect playlists">
                             <div class="settings-section-label">Guest Spotify Connect</div>
                             <div class="control-bar">
                                 <button id="toggle-guest-spotify" class="toggle-btn closed-status" onclick="toggleGuestSpotify()">Guest Spotify Connect: OFF</button>
@@ -1350,8 +1375,7 @@
                                 When on, guests can connect their own Spotify account on the request page to browse and request from their playlists.
                             </p>
                         </div>
-
-                        <div class="settings-card full-only">
+                        <div class="settings-card span-all full-only" data-search="fallback playlist baseline scheduler switch now">
                             <div class="settings-section-label">Fallback Playlist</div>
                             <div class="config-dashboard">
                                 <div class="input-group" style="width: 100%; max-width: 460px;">
@@ -1370,20 +1394,14 @@
                             </p>
                             <p id="fallback-playlist-status" style="color:#888; font-size:0.8rem; margin: 0;"></p>
                         </div>
+                        </div>
                     </div>
 
-                    <div id="settings-category-kiosk" class="settings-category-panel">
-                        <div class="settings-card">
-                            <div class="settings-section-label">Kiosk Appearance</div>
-                            <div class="theme-seg" id="theme-seg-kiosk" role="group" aria-label="Kiosk Appearance">
-                                <button type="button" data-mode="auto" onclick="setScreenTheme('kiosk','auto')">Auto</button>
-                                <button type="button" data-mode="light" onclick="setScreenTheme('kiosk','light')">Light</button>
-                                <button type="button" data-mode="dark" onclick="setScreenTheme('kiosk','dark')">Dark</button>
-                            </div>
-                            <p class="settings-card-hint" style="margin-top: 14px; margin-bottom: 0;">Applies to the kiosk page within a few seconds. Auto follows the kiosk device's own light/dark setting.</p>
-                        </div>
-
-                        <div class="settings-card">
+                    <div id="settings-category-screens" class="settings-category-panel">
+                        <h2 class="settings-cat-title">Screens</h2>
+                        <div class="settings-grid">
+                        <div class="settings-group-title">Kiosk</div>
+                        <div class="settings-card" data-search="kiosk page requests spotify display-only board tv open">
                             <div class="settings-section-label">Kiosk Page (kiosk.html)</div>
                             <p class="settings-card-hint" style="margin-top: 0;">
                                 Independent settings for an admin-attended kiosk device - separate on/off, Spotify button, and credit rules from regular guests. Each physical kiosk still gets its own credit bank, same as any guest's phone.
@@ -1399,6 +1417,9 @@
                                 no search, no credits, no voting, just the Live Queue blown up big. Good for a TV or monitor at the venue
                                 instead of a device guests interact with directly.
                             </p>
+                        </div>
+                        <div class="settings-card" data-search="kiosk credits bank regen appearance theme light dark auto">
+                            <div class="settings-section-label">Kiosk credits</div>
                             <div class="config-dashboard">
                                 <div class="input-group">
                                     <label>Kiosk Max Credit Bank</label>
@@ -1410,21 +1431,16 @@
                                 </div>
                                 <button class="save-config-btn" onclick="saveKioskConfig()">Update Kiosk Rules</button>
                             </div>
-                        </div>
-                    </div>
-
-                    <div id="settings-category-visuals" class="settings-category-panel">
-                        <div class="settings-card">
-                            <div class="settings-section-label">Visuals Appearance</div>
-                            <div class="theme-seg" id="theme-seg-visuals" role="group" aria-label="Visuals Appearance">
-                                <button type="button" data-mode="auto" onclick="setScreenTheme('visuals','auto')">Auto</button>
-                                <button type="button" data-mode="light" onclick="setScreenTheme('visuals','light')">Light</button>
-                                <button type="button" data-mode="dark" onclick="setScreenTheme('visuals','dark')">Dark</button>
+                            <div class="settings-section-label sub">Kiosk appearance</div>
+                            <div class="theme-seg" id="theme-seg-kiosk" role="group" aria-label="Kiosk Appearance">
+                                <button type="button" data-mode="auto" onclick="setScreenTheme('kiosk','auto')">Auto</button>
+                                <button type="button" data-mode="light" onclick="setScreenTheme('kiosk','light')">Light</button>
+                                <button type="button" data-mode="dark" onclick="setScreenTheme('kiosk','dark')">Dark</button>
                             </div>
-                            <p class="settings-card-hint" style="margin-top: 14px; margin-bottom: 0;">Applies to the visuals display within a few seconds. Auto follows the display device's own light/dark setting.</p>
+                            <p class="settings-card-hint" style="margin-top: 14px; margin-bottom: 0;">Applies to the kiosk page within a few seconds. Auto follows the kiosk device's own light/dark setting.</p>
                         </div>
-
-                        <div class="settings-card">
+                        <div class="settings-group-title">Visuals display</div>
+                        <div class="settings-card" data-search="visuals display signage tv tablet appearance theme light dark auto ambient">
                             <div class="settings-section-label">Visuals Display (visuals.html)</div>
                             <p class="settings-card-hint" style="margin-top: 0;">
                                 A full-screen signage page for a TV or tablet at the venue. It shows the Ambient Visuals
@@ -1434,9 +1450,15 @@
                             <div class="control-bar">
                                 <button class="toggle-btn neutral-status" onclick="openVisualsPage()">Open Visuals Display</button>
                             </div>
+                            <div class="settings-section-label sub">Visuals appearance</div>
+                            <div class="theme-seg" id="theme-seg-visuals" role="group" aria-label="Visuals Appearance">
+                                <button type="button" data-mode="auto" onclick="setScreenTheme('visuals','auto')">Auto</button>
+                                <button type="button" data-mode="light" onclick="setScreenTheme('visuals','light')">Light</button>
+                                <button type="button" data-mode="dark" onclick="setScreenTheme('visuals','dark')">Dark</button>
+                            </div>
+                            <p class="settings-card-hint" style="margin-top: 14px; margin-bottom: 0;">Applies to the visuals display within a few seconds. Auto follows the display device's own light/dark setting.</p>
                         </div>
-
-                        <div class="settings-card">
+                        <div class="settings-card" data-search="screen controls mute visuals mute all show queue speech announcement">
                             <div class="settings-section-label">Screen Controls</div>
                             <p class="settings-card-hint" style="margin-top: 0;">
                                 Quick overrides for whatever's currently on the venue screen - handy for a speech,
@@ -1454,8 +1476,8 @@
                                 until switched off.
                             </p>
                         </div>
-
-                        <div class="settings-card">
+                        <div class="settings-group-title">Music videos &amp; family mode</div>
+                        <div class="settings-card" data-search="music videos youtube subtitles captions offset timing sync song info display time denylist blacklist">
                             <div class="settings-section-label">Music Videos</div>
                             <p class="settings-card-hint" style="margin-top: 0;">
                                 When a song plays, automatically find its official YouTube music video and show it
@@ -1527,8 +1549,7 @@
                                 </p>
                             </div>
                         </div>
-
-                        <div class="settings-card">
+                        <div class="settings-card" data-search="family mode content safety denylist allowlist approve block videos">
                             <div class="settings-section-label">Family Mode &amp; Content Safety</div>
                             <p class="settings-card-hint" style="margin-top: 0;">
                                 Automated checks (audio match confidence, motion detection, and content-safety scanning)
@@ -1558,10 +1579,22 @@
                             </p>
                             <div id="allowlist-rows" class="family-list-rows"></div>
                         </div>
+                        </div>
                     </div>
 
-                    <div id="settings-category-danger" class="settings-category-panel">
-                        <div class="settings-card danger-zone">
+                    <div id="settings-category-account" class="settings-category-panel">
+                        <h2 class="settings-cat-title">Account</h2>
+                        <div class="settings-grid">
+                        <div class="settings-card" data-search="admin appearance theme light dark auto">
+                            <div class="settings-section-label">Admin Appearance</div>
+                            <div class="theme-seg" id="theme-seg-admin" role="group" aria-label="Admin appearance">
+                                <button type="button" data-mode="auto" onclick="setScreenTheme('admin','auto')">Auto</button>
+                                <button type="button" data-mode="light" onclick="setScreenTheme('admin','light')">Light</button>
+                                <button type="button" data-mode="dark" onclick="setScreenTheme('admin','dark')">Dark</button>
+                            </div>
+                            <p class="settings-card-hint" style="margin-top: 14px; margin-bottom: 0;">Auto follows this device's own light/dark setting.</p>
+                        </div>
+                        <div class="settings-card danger-zone" data-search="danger zone clear queue history close delete event permanently">
                             <div class="settings-section-label">Danger Zone</div>
                             <div class="control-bar">
                                 <button class="utility-btn" onclick="clearSystem('clearQueue', 'Are you sure you want to completely empty the queue?')">Clear Active Queue</button>
@@ -1572,7 +1605,9 @@
                             </div>
                             <p style="color: #a7a7a7; font-size: 0.8rem; margin: 8px 0 0 0;">Permanently deletes this event and everything in it - queue, history, settings, Spotify connection. This can't be undone, and the URL becomes free for anyone to reuse.</p>
                         </div>
+                        </div>
                     </div>
+
                 </div>
             </div>
         </div>
@@ -1762,13 +1797,60 @@
             window.open(eventUrl('/admin/scheduler'), '_blank');
         }
 
-        const SETTINGS_CATEGORIES = ['general', 'access', 'music', 'location', 'spotify', 'kiosk', 'visuals', 'danger'];
+        const SETTINGS_CATEGORIES = ['event', 'access', 'music', 'spotify', 'screens', 'account'];
         function switchSettingsCategory(category) {
+            // Picking a category from the menu ends any search in progress.
+            const searchBox = document.getElementById('settings-search');
+            if (searchBox && searchBox.value) { searchBox.value = ''; filterSettings(''); }
             SETTINGS_CATEGORIES.forEach(name => {
                 const isActive = name === category;
                 document.getElementById(`settings-nav-${name}`).classList.toggle('active-nav', isActive);
                 document.getElementById(`settings-category-${name}`).classList.toggle('active-category', isActive);
             });
+        }
+
+        // Settings search: every card is matched on its own text (plus a few
+        // extra keywords in data-search, e.g. "credits" or "dark mode").
+        // Matching cards from all categories show together; clear the box to
+        // go back to the category view.
+        function filterSettings(raw) {
+            const content = document.getElementById('settings-content');
+            const empty = document.getElementById('settings-search-empty');
+            const sidebar = document.querySelector('.settings-sidebar');
+            const terms = String(raw || '').toLowerCase().split(/\s+/).filter(Boolean);
+            if (!terms.length) {
+                content.classList.remove('is-searching');
+                sidebar.classList.remove('is-searching');
+                content.querySelectorAll('.search-miss, .no-match').forEach(el => el.classList.remove('search-miss', 'no-match'));
+                empty.style.display = 'none';
+                return;
+            }
+            content.classList.add('is-searching');
+            sidebar.classList.add('is-searching');
+            const basic = document.body.classList.contains('basic-mode');
+            let total = 0;
+            SETTINGS_CATEGORIES.forEach(name => {
+                const panel = document.getElementById('settings-category-' + name);
+                let hits = 0;
+                panel.querySelectorAll('.settings-card').forEach(card => {
+                    const off = basic && (name === 'screens' || card.classList.contains('full-only'));
+                    const haystack = ((card.getAttribute('data-search') || '') + ' ' + card.textContent).toLowerCase();
+                    const match = !off && terms.every(t => haystack.includes(t));
+                    card.classList.toggle('search-miss', !match);
+                    if (match) hits++;
+                });
+                panel.classList.toggle('no-match', hits === 0);
+                total += hits;
+            });
+            empty.style.display = total ? 'none' : 'block';
+        }
+
+        function toggleBlockedGuestsList() {
+            const list = document.getElementById('blocked-guests-list');
+            const btn = document.getElementById('manage-blocked-btn');
+            const open = list.style.display === 'none';
+            list.style.display = open ? 'block' : 'none';
+            btn.textContent = open ? 'Hide blocked guests' : 'Manage blocked guests';
         }
 
 let adminPassword = '';
@@ -2244,6 +2326,37 @@ async function verifyPassword() {
                 showToast('Venue code display time updated.', 'success');
             } else {
                 showToast(data.error || 'Could not update time.', 'error');
+            }
+        }
+
+        // The Location card saves distance + venue-code time together, with one
+        // toast (the two single-field savers above are kept for anything else
+        // that still calls them).
+        async function saveLocationSettings() {
+            if (!isAuthorized) return;
+            const meters = parseInt(document.getElementById('input-location-radius').value, 10);
+            const seconds = parseInt(document.getElementById('input-code-display-seconds').value, 10);
+            if (!Number.isInteger(meters) || meters < 10 || meters > 5000) {
+                return showToast('Distance must be between 10 and 5000 meters.', 'error');
+            }
+            if (!Number.isInteger(seconds) || seconds < 5 || seconds > 300) {
+                return showToast('Venue code time must be between 5 and 300 seconds.', 'error');
+            }
+            try {
+                const post = (path, body) => fetch(eventUrl(path), {
+                    method: 'POST',
+                    headers: adminHeaders({ 'Content-Type': 'application/json' }),
+                    body: JSON.stringify(body)
+                });
+                const [r1, r2] = await Promise.all([
+                    post('/api/admin/location-radius', { meters }),
+                    post('/api/admin/code-display-seconds', { seconds })
+                ]);
+                if (r1.ok && r2.ok) return showToast('Location settings updated.', 'success');
+                const bad = await (r1.ok ? r2 : r1).json().catch(() => ({}));
+                showToast(bad.error || 'Could not update location settings.', 'error');
+            } catch (e) {
+                showToast('Could not reach the server. Try again.', 'error');
             }
         }
 
@@ -2789,7 +2902,7 @@ async function verifyPassword() {
                 const activeTab = TAB_NAMES.find(n => document.getElementById('tab-panel-' + n).classList.contains('active-content'));
                 if (hiddenTabs.includes(activeTab)) switchTab('queue');
                 const active = SETTINGS_CATEGORIES.find(n => document.getElementById('settings-category-' + n).classList.contains('active-category'));
-                if (active === 'kiosk' || active === 'visuals') switchSettingsCategory('general');
+                if (active === 'screens') switchSettingsCategory('event');
             }
         }
         async function setSiteMode(mode) {
@@ -2846,6 +2959,8 @@ async function verifyPassword() {
                 requestsAllowed = data.requestsAllowed;
                 toggleBtn.innerText = requestsAllowed ? "Requests: OPEN" : "Requests: CLOSED";
                 toggleBtn.className = requestsAllowed ? "toggle-btn open-status" : "toggle-btn closed-status";
+                document.getElementById('requests-status-big').innerText = requestsAllowed ? "Open" : "Closed";
+                document.getElementById('requests-status-hint').innerText = requestsAllowed ? "Guests can send songs right now." : "Guests can't send songs right now.";
 
                 const explicitBtn = document.getElementById('toggle-explicit');
                 explicitBlockActive = data.explicitBlockActive || false;
@@ -3256,6 +3371,8 @@ async function verifyPassword() {
         function renderBlockedGuests() {
             const el = document.getElementById('blocked-guests-list');
             if (!el) return;
+            const countEl = document.getElementById('blocked-count-big');
+            if (countEl) countEl.innerText = `${lastBlockedVoters.length} blocked`;
             el.innerHTML = lastBlockedVoters.length === 0
                 ? '<p class="empty-placeholder">No one is blocked.</p>'
                 : lastBlockedVoters.map(b => `
