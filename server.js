@@ -3684,6 +3684,70 @@ catalogApi.get('/spotify-search', async (req, res) => {
 
 // OPTIONAL, manual only: one YouTube search.list (100 quota units) for one row.
 // Never called automatically.
+// "Add to Queue" button on the master video catalog table. Puts the row's song
+// into one event's live queue exactly like a request that skipped the gates
+// (same code as the admin page's Add a Song box). The catalog itself is global,
+// so the master picks the event in the toolbar dropdown; "any" = whichever loaded
+// event is playing something right now.
+// Which Spotify track? The row's Spotify ID if it has one, otherwise its ISRC,
+// otherwise a Spotify search on title + artist (first hit). The response says
+// which was used so the master can sanity-check a search match.
+function catalogTrackIdFrom(input) {
+    const s = String(input == null ? '' : input).trim();
+    if (/^[A-Za-z0-9]{22}$/.test(s)) return s;
+    const m = s.match(/open\.spotify\.com\/(?:intl-[a-z]+\/)?track\/([A-Za-z0-9]{22})/i) || s.match(/^spotify:track:([A-Za-z0-9]{22})$/i);
+    return m ? m[1] : '';
+}
+async function spotifyFirstTrackId(q) {
+    if (!spotifyAccessToken) await getSpotifyToken();
+    const call = () => fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(q)}&type=track&limit=1`, {
+        headers: { Authorization: `Bearer ${spotifyAccessToken}` }
+    });
+    let r = await call();
+    if (r.status === 401) { await getSpotifyToken(); r = await call(); }
+    if (!r.ok) return '';
+    const d = await r.json();
+    return (d.tracks && d.tracks.items && d.tracks.items[0] && d.tracks.items[0].id) || '';
+}
+catalogApi.post('/add-to-queue', async (req, res) => {
+    try {
+        const body = req.body || {};
+        const slug = String(body.slug || 'any');
+        let ev = null;
+        if (slug === 'any') {
+            const loaded = events.getLoadedEvents().filter(e => e.cachedNowPlaying && e.cachedNowPlaying.trackId);
+            ev = loaded.find(e => e.cachedNowPlaying.isPlaying) || loaded[0] || null;
+            if (!ev) return res.status(404).json({ error: 'No event is playing right now. Pick an event in the dropdown next to "Add now playing".' });
+        } else {
+            if (!events.isValidSlug(slug)) return res.status(400).json({ error: 'Pick an event in the dropdown next to "Add now playing".' });
+            ev = await events.getEvent(slug);
+            if (!ev) return res.status(404).json({ error: 'Event not found.' });
+        }
+
+        let trackId = catalogTrackIdFrom(body.spotifyId);
+        let matchedBy = 'spotify id';
+        if (!trackId) {
+            const isrc = String(body.isrc || '').toUpperCase().replace(/[\s-]/g, '');
+            const clean = v => String(v || '').replace(/["]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120);
+            const song = clean(body.song);
+            const artist = clean(String(body.artist || '').split(',')[0]);
+            if (/^[A-Z0-9]{12}$/.test(isrc)) { trackId = await spotifyFirstTrackId('isrc:' + isrc); matchedBy = 'isrc'; }
+            if (!trackId && song) {
+                trackId = await spotifyFirstTrackId(artist ? `track:"${song}" artist:"${artist}"` : `track:"${song}"`);
+                if (!trackId) trackId = await spotifyFirstTrackId(`${song} ${artist}`.trim());
+                matchedBy = 'spotify search';
+            }
+            if (!trackId) return res.status(404).json({ error: "Couldn't find that song on Spotify. Use the search button to fill in its Spotify link, then try again." });
+        }
+
+        const result = await addTrackToEventQueue(ev, trackId);
+        if (!result.ok) return res.status(result.status).json({ error: result.error });
+        res.json({ success: true, eventSlug: ev.slug, eventName: ev.systemConfigs.eventName || ev.slug, track: result.track, matchedBy });
+    } catch (e) {
+        res.status(500).json({ error: 'Could not add to the queue: ' + e.message });
+    }
+});
+
 catalogApi.post('/suggest', async (req, res) => {
     const { artist, song, durationMs } = req.body || {};
     if (!song) return res.status(400).json({ error: 'The row needs a Song first.' });
@@ -5512,11 +5576,13 @@ app.get('/e/:slug/api/admin/search', async (req, res) => {
 // guest-side gate (credits, cooldown, queue cap, filters, geofence) - this
 // is the DJ overriding, not a guest requesting. `label` becomes the
 // "requested by" name shown on the card (defaults to "DJ Added").
-app.post('/e/:slug/api/admin/add-track', async (req, res) => {
-    const event = req.event;
-    const { trackId, label } = req.body;
+// The one implementation of "a DJ drops a track straight into the live queue".
+// Used by the admin page's Add a Song box AND the master video catalog's
+// Add to Queue button, so both behave exactly like a guest request that skipped
+// the gates. Returns { ok: true, track } or { ok: false, status, error }.
+async function addTrackToEventQueue(event, trackId, labelRaw) {
     if (!trackId || !/^[A-Za-z0-9]{22}$/.test(trackId)) {
-        return res.status(400).json({ error: 'Invalid track ID.' });
+        return { ok: false, status: 400, error: 'Invalid track ID.' };
     }
     if (!spotifyAccessToken) await getSpotifyToken();
     let t;
@@ -5524,11 +5590,11 @@ app.post('/e/:slug/api/admin/add-track', async (req, res) => {
         const lookupRes = await fetch(`https://api.spotify.com/v1/tracks/${encodeURIComponent(trackId)}`, {
             headers: { 'Authorization': `Bearer ${spotifyAccessToken}` }
         });
-        if (!lookupRes.ok) return res.status(400).json({ error: 'Track not found on Spotify.' });
+        if (!lookupRes.ok) return { ok: false, status: 400, error: 'Track not found on Spotify.' };
         t = await lookupRes.json();
-        if (!t || !t.id) return res.status(400).json({ error: 'Track not found on Spotify.' });
+        if (!t || !t.id) return { ok: false, status: 400, error: 'Track not found on Spotify.' };
     } catch (err) {
-        return res.status(500).json({ error: 'Could not verify track with Spotify.' });
+        return { ok: false, status: 500, error: 'Could not verify track with Spotify.' };
     }
 
     const verifiedTrack = {
@@ -5541,7 +5607,7 @@ app.post('/e/:slug/api/admin/add-track', async (req, res) => {
         durationMs: t.duration_ms || 0, // raw ms, for the music-video eager verification trigger below
         year: parseInt((t.album?.release_date || '').slice(0, 4), 10) || null
     };
-    const requesterName = (typeof label === 'string' && label.trim() !== '') ? label.trim().slice(0, 30) : 'DJ Added';
+    const requesterName = (typeof labelRaw === 'string' && labelRaw.trim() !== '') ? labelRaw.trim().slice(0, 30) : 'DJ Added';
 
     const existingTrack = event.activeQueue.find(tr => tr.id === verifiedTrack.id);
     if (existingTrack) {
@@ -5585,6 +5651,13 @@ app.post('/e/:slug/api/admin/add-track', async (req, res) => {
     if (event.requestLog.length > 2000) event.requestLog = event.requestLog.slice(-2000);
 
     events.scheduleSave(event.slug);
+    return { ok: true, track: { id: verifiedTrack.id, title: verifiedTrack.name, artist: verifiedTrack.artist } };
+}
+
+app.post('/e/:slug/api/admin/add-track', async (req, res) => {
+    const { trackId, label } = req.body;
+    const result = await addTrackToEventQueue(req.event, trackId, label);
+    if (!result.ok) return res.status(result.status).json({ error: result.error });
     res.json({ success: true });
 });
 
