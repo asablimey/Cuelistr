@@ -260,7 +260,17 @@
         .pv-ctl details.pv-hint { margin: 0; }
         .pv-ctl details.pv-hint summary { cursor: pointer; width: fit-content; }
         .pv-ctl details.pv-hint p { margin: 6px 0 0; }
-    </style>
+    
+        /* Video catalog: the toolbar and table span the full screen width (minus
+           the normal page gutter) so the table has room, while the title and tabs
+           above stay aligned with the other tabs. */
+        #tab-videos .vc-bar, #tab-videos .vc-wrap {
+            width: calc(100vw - 2 * var(--page-pad, 25px));
+            max-width: none;
+            margin-left: calc(50% - 50vw + var(--page-pad, 25px));
+        }
+        body { overflow-x: hidden; }
+</style>
 </head>
 <body>
 
