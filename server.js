@@ -336,7 +336,9 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 //                           Must be registered exactly (including https and path)
 //                           in your Spotify Developer Dashboard app settings.
 const SPOTIFY_REDIRECT_URI = process.env.SPOTIFY_REDIRECT_URI;
-const DJ_QUEUE_SCOPES = 'user-modify-playback-state user-read-playback-state';
+// user-read-currently-playing is listed by Spotify as required for GET /me/player/queue. Accounts
+// connected before it was added keep their old grant until they press Connect Spotify again.
+const DJ_QUEUE_SCOPES = 'user-modify-playback-state user-read-playback-state user-read-currently-playing';
 
 // Exchanges an event's stored DJ refresh token for a fresh access token,
 // caching it on the event until shortly before it expires. Returns null
@@ -5704,6 +5706,31 @@ app.post('/e/:slug/api/admin/action', (req, res) => {
         events.scheduleSave(event.slug);
         return res.json({ success: true });
     }
+    if (action === 'resetSettings') {
+        // Danger Zone -> Reset all settings. Puts every setting back to what a brand new event
+        // starts with (taken from the same blankEventState used at creation, so the two can't drift).
+        // KEPT: the event name, Site Mode (it can be a plan limit, not a preference), the "what's
+        // playing now" readout, and everything that isn't a setting - venue name/pin, passwords,
+        // Spotify login, queue, played history, request log, blocked guests/artists/songs,
+        // the Music Scheduler's playlists + timetable, uploaded visuals, and the live Mute/Show Queue
+        // screen overrides.
+        const fresh = events.blankEventState(event.slug, event.systemConfigs.eventName, null, null);
+        const keep = {
+            eventName: event.systemConfigs.eventName,
+            siteMode: event.systemConfigs.siteMode,
+            lastSwitchedPlaylist: event.systemConfigs.lastSwitchedPlaylist
+        };
+        event.systemConfigs = { ...fresh.systemConfigs, ...keep };
+        event.kioskConfigs = fresh.kioskConfigs;
+        const vcfg = ensureVisualsConfigs(event);
+        vcfg.musicVideosEnabled = false;
+        vcfg.musicVideoSubtitlesEnabled = false;
+        vcfg.familyModeEnabled = false;
+        vcfg.musicVideoOffsetMs = MUSIC_VIDEO_OFFSET_DEFAULT_MS;
+        vcfg.musicVideoInfoSeconds = MUSIC_VIDEO_INFO_SECONDS_DEFAULT;
+        events.scheduleSave(event.slug);
+        return res.json({ success: true });
+    }
 
     const trackIndex = event.activeQueue.findIndex(t => t.id === id);
     if (trackIndex !== -1) {
@@ -5749,6 +5776,7 @@ app.post('/e/:slug/api/admin/reorder', (req, res) => {
 //      pages can poll a cheap local endpoint instead of every browser hitting
 //      Spotify's API directly every few seconds.
 const spotifyErrLoggedAt = new Map();
+const spotifyQueueErrLoggedAt = new Map();
 const spotifyAccountCache = new Map(); // slug -> { name, at } (diagnostics only)
 async function syncNowPlayingForEvent(event) {
     const token = await getDjAccessToken(event);
@@ -5847,7 +5875,33 @@ async function syncNowPlayingForEvent(event) {
         const item = data?.item;
 
         let upcoming = event.cachedNowPlaying.upcoming;
+        let upcomingSource = (event.cachedNowPlaying && event.cachedNowPlaying.upcomingSource) || 'spotify';   // kept as-is through a transient failure
+        let queueDiag = null;   // set when Spotify's queue could not be read; shown at /api/now-playing
+        if (!(queueRes && queueRes.ok)) {
+            // This used to be swallowed silently, which is why "now playing" could work while "up
+            // next" stayed empty with no clue why. Spotify answers 403 here for accounts that are
+            // not Premium (it is a generic "Forbidden", not a clear message), and for a missing
+            // permission or a development-mode restriction.
+            let qErr = '';
+            if (queueRes) { try { qErr = (await queueRes.text()).slice(0, 200); } catch (e) { /* ignore */ } }
+            const qStatus = queueRes ? queueRes.status : 'network error';
+            queueDiag = { queueStatus: qStatus, queueError: qErr || null };
+            if (Date.now() - (spotifyQueueErrLoggedAt.get(event.slug) || 0) > 60000) {
+                spotifyQueueErrLoggedAt.set(event.slug, Date.now());
+                console.error(`[SPOTIFY SYNC] (${event.slug}) Spotify's queue (/me/player/queue) answered ${qStatus}${qErr ? ': ' + qErr : ''}` +
+                    (qStatus === 403 ? ' - usually a non-Premium account, a missing permission (reconnect Spotify), or a development-mode restriction. Showing this app\'s own request queue as "up next" instead.' : ''));
+            }
+            if (qStatus === 403) {
+                // Persistent refusal: show what this app knows is coming (guest requests, in queue order).
+                upcoming = buildSortedQueue(event).slice(0, 40).map(q => ({
+                    id: q.id, title: q.title, artist: q.artist, artwork: q.artwork || null, durationMs: 0, year: q.year || null
+                }));
+                upcomingSource = 'requests';
+            }
+            // Any other failure (429, 5xx, network) is transient: keep the last good list.
+        }
         if (queueRes && queueRes.ok) {
+            upcomingSource = 'spotify';
             const queueData = await queueRes.json();
             upcoming = (queueData.queue || []).slice(0, 40).map(t => ({
                 id: t.id,
@@ -5886,6 +5940,8 @@ async function syncNowPlayingForEvent(event) {
             updatedAt: Date.now(),
             progressCapturedAt: Math.round((requestedAt + playerReceivedAt) / 2),
             upcoming,
+            upcomingSource,
+            ...(queueDiag || {}),
             deviceName: data.device?.name || null,
             volumePercent: typeof data.device?.volume_percent === 'number' ? data.device.volume_percent : null,
             shuffleState: !!data.shuffle_state,
