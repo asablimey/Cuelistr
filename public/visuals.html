@@ -2493,13 +2493,21 @@
 
             const infoAt = Math.max(0, releaseMs - MV_INFO_LEAD_BEFORE_SWITCH_MS);
             const title = data.title || '', artist = data.artist || '', year = data.year || null;
+            // The popup only flips to the new song's info when the new song has a
+            // video to cut to. If it has none, the old video just finishes and the
+            // popup keeps showing the old song instead of announcing a song that
+            // never appears on screen.
+            const nextHasVideo = !!(data.enabled && data.matched && data.videoId);
             const showInfo = () => {
+                if (!nextHasVideo) return;
                 if (mvInfoPreview && mvInfoPreview.trackId === data.trackId) return;
                 mvInfoPreview = { trackId: data.trackId, title, artist, year, until: Date.now() + MV_INFO_POPUP_WINDOW_SEC * 1000 };
             };
             clearTimeout(mvGateInfoTimer); mvGateInfoTimer = null;
-            if (posNow >= infoAt) showInfo();
-            else mvGateInfoTimer = setTimeout(showInfo, infoAt - posNow);
+            if (nextHasVideo) {
+                if (posNow >= infoAt) showInfo();
+                else mvGateInfoTimer = setTimeout(showInfo, infoAt - posNow);
+            }
 
             // Wake up exactly when the cut is due instead of waiting for the next 1s poll.
             clearTimeout(mvGatePollTimer);
