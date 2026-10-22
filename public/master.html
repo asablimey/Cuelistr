@@ -315,7 +315,7 @@
             <div class="header">
                 <div>
                     <h1>Music Videos</h1>
-                    <div class="subtitle"><b>One catalog for ALL events.</b> <span id="vc-count">Loading...</span></div>
+                    <div class="subtitle"><span id="vc-count">Loading...</span></div>
                 </div>
                 <button class="refresh-btn" onclick="vcLoad()">↻ Reload</button>
             </div>
@@ -820,7 +820,7 @@
             const playable = vcRows.filter(r => r.enabled && r.youtubeId).length;
             const q = document.getElementById('vc-search').value.trim();
             const filtered = typeof matchingCount === 'number' && matchingCount !== vcRows.length;
-            let t = `${vcRows.length} row${vcRows.length === 1 ? '' : 's'} · ${playable} playable`;
+            let t = `${vcRows.length} Tracks · ${playable} Playable`;
             if (filtered) t += ` · ${matchingCount} match${q ? ' the search' : ' the filter'}`;
             if (matchingCount > VC_RENDER_CAP) t += ` (showing the first ${VC_RENDER_CAP}; narrow the search)`;
             document.getElementById('vc-count').textContent = t;
