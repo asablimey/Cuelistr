@@ -2,7 +2,8 @@
  * Load this FIRST in <head> (blocking, no defer) so the right theme is on
  * <html> before anything paints - no dark flash on a light screen.
  *
- *   CrowdTheme.use(storageKey)    apply the mode last saved under that key
+ *   CrowdTheme.use(storageKey, defaultMode)  apply the mode last saved under that key
+ *                                 (defaultMode: 'auto' | 'light' | 'dark', used when nothing is saved; default 'auto')
  *   CrowdTheme.set(mode, persist) 'auto' | 'light' | 'dark'
  *   CrowdTheme.follow(screen, slug)  DJ-controlled screens (kiosk / visuals):
  *                                 keep in step with the admin's Settings choice
@@ -30,10 +31,10 @@
     function write(k, v) { try { window.localStorage.setItem(k, v); } catch (e) {} }
 
     window.CrowdTheme = {
-        use: function (storageKey) {
+        use: function (storageKey, defaultMode) {
             key = storageKey;
             var saved = key ? read(key) : null;
-            mode = VALID[saved] ? saved : 'auto';
+            mode = VALID[saved] ? saved : (VALID[defaultMode] ? defaultMode : 'auto');
             apply();
         },
         set: function (m, persist) {
