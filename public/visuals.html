@@ -186,7 +186,6 @@
         .qv-row-text { flex: 1; min-width: 0; }
         .qv-row-title { font-size: 1.15rem; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .qv-row-artist { color: var(--text-muted); font-size: 0.95rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .qv-row-votes { color: var(--spotify-green); font-weight: 700; font-size: 1.1rem; flex-shrink: 0; }
 
         .qv-empty {
             flex: 1; display: flex; align-items: center; justify-content: center;
@@ -519,7 +518,7 @@
 
         /* =========================================================
            Shared "Up Next" list
-           Guest requests come first (with their net votes), followed by
+           Guest requests come first (no vote counts on the display), followed by
            whatever Spotify has lined up after them - the same merge the
            guest page and kiosk do. Before, only guest requests were
            shown, so any time nobody had requested anything the board
@@ -536,11 +535,6 @@
 
         function queueRowHtml(song, idx) {
             const art = safeImageUrl(song.artwork);
-            let votes = '';
-            if (song.isRequest) {
-                const net = (song.ups || 0) - (song.downs || 0);
-                votes = `<div class="qv-row-votes">${net > 0 ? '+' : ''}${net}</div>`;
-            }
             return `
                 <div class="qv-row">
                     <div class="qv-row-rank">${idx + 1}</div>
@@ -549,7 +543,6 @@
                         <div class="qv-row-title">${escapeHtml(song.title)}</div>
                         <div class="qv-row-artist">${escapeHtml(song.artist)}</div>
                     </div>
-                    ${votes}
                 </div>`;
         }
 
@@ -576,7 +569,7 @@
         function applyQueueList(listEl, requests, upcoming) {
             if (!listEl) return;
             const rows = buildQueueRows(requests, upcoming);
-            const sig = rows.map(r => [r.id, r.title, r.artist, r.ups, r.downs, r.isRequest ? 1 : 0].join('|')).join(';');
+            const sig = rows.map(r => [r.id, r.title, r.artist, r.isRequest ? 1 : 0].join('|')).join(';');
             if (listEl.dataset.sig !== sig) {
                 listEl.dataset.sig = sig;
                 listEl.innerHTML = rows.length === 0
