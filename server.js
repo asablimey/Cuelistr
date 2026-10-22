@@ -2886,6 +2886,7 @@ function buildSortedQueueForAdmin(event) {
         upvoters: t.upvoters || [],
         downvoters: t.downvoters || [],
         requesters: t.requesters || [],
+        requested: !!t.requested, // true if added via the guest or kiosk page
         order: t.order || 0
         // Sorted by the DJ's own manual order (see the admin reorder route),
         // NOT by votes - votes are shown as a signal, but the admin's Live
@@ -4213,6 +4214,7 @@ function buildRequestHandler(isKiosk) {
             }
             if (!existingTrack.requesters) existingTrack.requesters = [];
             existingTrack.requesters.push(requesterName);
+            existingTrack.requested = true; // asked for via the guest or kiosk page (admin shows a "Requested" tag)
         } else {
             event.activeQueue.push({
                 id: trackId,
@@ -4225,6 +4227,7 @@ function buildRequestHandler(isKiosk) {
                 upvoters: [],
                 downvoters: [],
                 requesters: [requesterName],
+                requested: true, // came in through the guest or kiosk page, not added by the DJ
                 order: nextQueueOrder(event)
             });
             // Don't push to Spotify's real queue here - only the one track
