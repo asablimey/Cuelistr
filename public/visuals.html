@@ -1,6 +1,54 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <script>
+    /* Background-proof timers. Browsers throttle setInterval/setTimeout on a hidden
+     * tab (to ~1/sec, and to ~1/min after a few minutes), which froze the video sync
+     * loop and let the video drift. Dedicated Web Workers aren't throttled, so every
+     * timer with a real delay is run by a worker and just calls back here. */
+    (function () {
+        if (!window.Worker || !window.Blob || !window.URL || !URL.createObjectURL) return;
+        var worker;
+        try {
+            var src = "var t={};onmessage=function(e){var d=e.data;if(d.c==='s'){var f=function(){postMessage(d.id)};t[d.id]=d.r?setInterval(f,d.ms):setTimeout(function(){delete t[d.id];f()},d.ms)}else if(d.c==='x'){if(d.r)clearInterval(t[d.id]);else clearTimeout(t[d.id]);delete t[d.id]}}";
+            worker = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
+        } catch (e) { return; }
+        var nativeSetTimeout = window.setTimeout.bind(window);
+        var nativeSetInterval = window.setInterval.bind(window);
+        var nativeClearTimeout = window.clearTimeout.bind(window);
+        var nativeClearInterval = window.clearInterval.bind(window);
+        var jobs = {};
+        var nextId = 1000000000;
+        worker.onmessage = function (e) {
+            var j = jobs[e.data];
+            if (!j) return;
+            if (!j.repeat) delete jobs[e.data];
+            try { j.fn.apply(window, j.args); } catch (err) { console.error(err); }
+        };
+        function make(repeat, nativeFn) {
+            return function (fn, ms) {
+                if (typeof fn !== 'function') return nativeFn.apply(window, arguments);
+                ms = Math.max(0, Number(ms) || 0);
+                var args = Array.prototype.slice.call(arguments, 2);
+                if (ms < 4) return nativeFn.apply(window, arguments); // zero-delay "next tick" calls stay native
+                var id = ++nextId;
+                jobs[id] = { fn: fn, args: args, repeat: repeat };
+                worker.postMessage({ c: 's', id: id, ms: ms, r: repeat });
+                return id;
+            };
+        }
+        function clear(repeat, nativeClear) {
+            return function (id) {
+                if (jobs[id]) { delete jobs[id]; worker.postMessage({ c: 'x', id: id, r: repeat }); }
+                else nativeClear(id);
+            };
+        }
+        window.setTimeout = make(false, nativeSetTimeout);
+        window.setInterval = make(true, nativeSetInterval);
+        window.clearTimeout = clear(false, nativeClearTimeout);
+        window.clearInterval = clear(true, nativeClearInterval);
+    })();
+    </script>
     <script src="/theme.js"></script>
     <script>(function(){var s=location.pathname.split("/")[2]||"";CrowdTheme.use("crowddj_theme_visuals_"+s);CrowdTheme.follow("visuals",s);})();</script>
     <meta charset="UTF-8">
@@ -518,7 +566,7 @@
 
         /* =========================================================
            Shared "Up Next" list
-           Guest requests come first (no vote counts on the display), followed by
+           Guest requests come first (no vote counts or position numbers on the display), followed by
            whatever Spotify has lined up after them - the same merge the
            guest page and kiosk do. Before, only guest requests were
            shown, so any time nobody had requested anything the board
@@ -537,7 +585,6 @@
             const art = safeImageUrl(song.artwork);
             return `
                 <div class="qv-row">
-                    <div class="qv-row-rank">${idx + 1}</div>
                     ${art ? `<img src="${escapeHtml(art)}" alt="">` : '<div class="qv-row-art"></div>'}
                     <div class="qv-row-text">
                         <div class="qv-row-title">${escapeHtml(song.title)}</div>
@@ -1981,6 +2028,14 @@
             mvUpdateOverlay();
             if (++mvSampleCount % MV_CHECK_EVERY_N_SAMPLES === 0) mvCheck();
         }
+
+        // The video keeps playing while the tab is hidden (timers run in a worker, see
+        // the top of <head>). On return, re-measure and nudge straight away instead of
+        // waiting for the next scheduled check, and un-pause if the browser paused it.
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) return;
+            try { mvTick(); mvCheck(); } catch (e) { /* player not ready yet */ }
+        });
 
         // Drives the logo + song-info popup over whatever video is on
         // screen. Always reads the CURRENTLY ACTIVE slot's own player, so a
