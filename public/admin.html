@@ -325,8 +325,8 @@
             align-items: center;
             justify-content: center;
         }
-        .qr-card-controls { flex: 1 1 260px; min-width: 220px; display: flex; flex-direction: column; gap: 14px; }
-        #guest-url-display { cursor: pointer; }
+        .qr-card-controls { flex: 1 1 420px; min-width: 240px; display: flex; flex-direction: column; gap: 14px; }
+        #guest-url-display { cursor: pointer; width: 100%; padding: 14px 16px; font-size: 1rem; text-overflow: ellipsis; }
         .qr-card-controls .toggle-btn {
             padding: 10px 18px;
             font-size: 0.85rem;
@@ -407,7 +407,7 @@
         .sidebar-panel.is-visible { transform: translateX(0); }
 
         /* --- Account: sidebar My Events + login popup --- */
-        .sidebar-my-events { display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto; }
+        .sidebar-my-events { display: flex; flex-direction: column; gap: 6px; max-height: clamp(220px, 38vh, 340px); overflow-y: auto; padding-right: 2px; }
         .sidebar-my-events-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); font-weight: 700; margin-top: 4px; }
         .sidebar-event-link {
             display: block; text-decoration: none; color: var(--text); background: var(--card-bg);
@@ -2046,14 +2046,35 @@ async function verifyPassword() {
             }
         }
 
+        // The PNG people download / print is the QR drawn onto a larger white
+        // canvas with a quiet-zone border around it (scanners and printers
+        // both need that white margin; the raw QR has none). Scaled up with
+        // hard pixel edges so it stays sharp when printed.
+        function guestQrBorderedDataUrl() {
+            const container = document.getElementById('guest-qr-code');
+            const canvas = container?.querySelector('canvas');
+            const img = container?.querySelector('img');
+            const source = canvas || (img && img.complete && img.naturalWidth ? img : null);
+            if (!source) return null;
+            const srcSize = canvas ? canvas.width : img.naturalWidth;
+            const scale = Math.max(1, Math.round(640 / srcSize));
+            const qrPx = srcSize * scale;
+            const border = Math.round(qrPx * 0.16);
+            const out = document.createElement('canvas');
+            out.width = out.height = qrPx + border * 2;
+            const ctx = out.getContext('2d');
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, out.width, out.height);
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(source, border, border, qrPx, qrPx);
+            return out.toDataURL('image/png');
+        }
+
         // qrcodejs renders onto an internal <canvas> (or an <img> fallback in
         // browsers without canvas support) inside the container - grab whichever
         // one is actually present and export that.
         function downloadGuestQR() {
-            const container = document.getElementById('guest-qr-code');
-            const canvas = container?.querySelector('canvas');
-            const img = container?.querySelector('img');
-            const dataUrl = canvas ? canvas.toDataURL('image/png') : (img ? img.src : null);
+            const dataUrl = guestQrBorderedDataUrl();
             if (!dataUrl) { showToast('QR code not ready yet.', 'error'); return; }
             const link = document.createElement('a');
             link.href = dataUrl;
@@ -2067,10 +2088,7 @@ async function verifyPassword() {
         // on the whole dashboard - a DJ printing this wants a clean poster-style
         // page, not the entire admin UI with dark backgrounds and every tab's CSS.
         function printGuestQR() {
-            const container = document.getElementById('guest-qr-code');
-            const canvas = container?.querySelector('canvas');
-            const img = container?.querySelector('img');
-            const dataUrl = canvas ? canvas.toDataURL('image/png') : (img ? img.src : null);
+            const dataUrl = guestQrBorderedDataUrl();
             if (!dataUrl) { showToast('QR code not ready yet.', 'error'); return; }
 
             const eventName = document.getElementById('input-event-name')?.value?.trim() || 'Request a Song';
@@ -2082,7 +2100,7 @@ async function verifyPassword() {
                     body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; text-align: center; padding: 60px 20px; }
                     h1 { font-size: 1.6rem; margin-bottom: 4px; }
                     p { color: #555; margin-top: 0; }
-                    img { width: 320px; height: 320px; margin: 30px 0; }
+                    img { width: 380px; height: 380px; margin: 20px 0; }
                 </style>
                 </head><body>
                     <h1>${escapeHtml(eventName)}</h1>
