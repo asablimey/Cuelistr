@@ -1023,19 +1023,16 @@
            specific than a bare class selector (class+element beats class
            alone) and was winning over a plain ".venue-popup-name" rule,
            leaving a huge 18px gap above and below each line. */
-        .venue-popup-box { width: 220px; max-width: 100%; text-align: left; }
-        .venue-popup-box .venue-popup-name { font-weight: 800; font-size: 1.05rem; line-height: 1.25; margin: 0 0 4px 0; padding-right: 22px; color: var(--text); overflow-wrap: anywhere; }
-        .venue-popup-box .venue-popup-sub { font-size: 0.82rem; line-height: 1.3; color: var(--text-muted); margin: 0 0 14px 0; overflow-wrap: anywhere; }
+        .venue-popup-box { min-width: 200px; }
+        .venue-popup-box .venue-popup-name { font-weight: 800; font-size: 1rem; margin: 0 0 4px 0; color: var(--spotify-black); }
+        .venue-popup-box .venue-popup-sub { font-size: 0.8rem; color: #555; margin: 0 0 12px 0; }
         .venue-popup-select-btn {
             display: block; width: 100%; background-color: var(--spotify-green); color: white;
-            border: none; padding: 10px 0; border-radius: 50px; font-weight: 700;
-            font-size: 0.88rem; font-family: inherit; cursor: pointer;
+            border: none; padding: 9px 0; border-radius: 50px; font-weight: 700;
+            font-size: 0.85rem; font-family: inherit; cursor: pointer;
         }
-        .leaflet-popup-content-wrapper { padding: 0; border-radius: 14px; background: var(--card-bg); color: var(--text); box-shadow: 0 6px 24px rgba(0,0,0,0.45); }
-        .leaflet-popup-tip { background: var(--card-bg); }
-        .leaflet-popup-content { margin: 16px 16px 16px 16px; font-family: inherit; line-height: 1.3; }
-        .leaflet-container a.leaflet-popup-close-button { top: 8px; right: 8px; width: 22px; height: 22px; font: 20px/22px inherit; color: var(--text-muted); }
-        .leaflet-container a.leaflet-popup-close-button:hover { color: var(--text); background: none; }
+        .leaflet-popup-content-wrapper { padding: 0; border-radius: 10px; }
+        .leaflet-popup-content { margin: 14px; }
 
         .venue-empty-msg { color: var(--text-muted); text-align: center; padding: 40px 20px; font-style: italic; }
 
@@ -1057,14 +1054,6 @@
         <button type="button" class="sidebar-item" onclick="closeSidebar(); openVenueScreen();">
             <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>
             <span>Change Venue</span>
-        </button>
-        <button type="button" class="sidebar-item" id="sidebar-spotify-item" onclick="closeSidebar(); handleSpotifyConnectClick();">
-            <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.586 14.424a.622.622 0 0 1-.857.207c-2.348-1.435-5.304-1.76-8.785-.964a.622.622 0 1 1-.277-1.215c3.809-.871 7.077-.496 9.712 1.115a.622.622 0 0 1 .207.857zm1.223-2.722a.78.78 0 0 1-1.072.257c-2.688-1.652-6.786-2.131-9.965-1.166a.78.78 0 0 1-.453-1.492c3.632-1.102 8.147-.568 11.233 1.329a.78.78 0 0 1 .257 1.072zm.105-2.835C14.692 9.115 9.375 8.93 6.297 9.885a.936.936 0 1 1-.55-1.79c3.532-1.095 9.404-.882 13.115 1.36a.936.936 0 0 1-.948 1.612z"/></svg>
-            <span id="sidebar-spotify-label">Connect Spotify</span>
-        </button>
-        <button type="button" class="sidebar-item" id="sidebar-playlist-item" onclick="closeSidebar(); openPlaylistModal();">
-            <svg viewBox="0 0 24 24"><path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z"/></svg>
-            <span>Copy Playlist</span>
         </button>
         <button type="button" class="sidebar-item" id="sidebar-myrequests-item" onclick="closeSidebar(); openMyRequestsModal();">
             <svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 15h-2v-2h2zm0-4h-2V7h2z"/></svg>
@@ -1139,10 +1128,6 @@
             </div>
             <div class="credits-container">
                 <div class="top-pill-row">
-                    <button id="connect-spotify-btn" class="pill-btn connect-spotify-btn" onclick="handleSpotifyConnectClick()">
-                        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.586 14.424a.622.622 0 0 1-.857.207c-2.348-1.435-5.304-1.76-8.785-.964a.622.622 0 1 1-.277-1.215c3.809-.871 7.077-.496 9.712 1.115a.622.622 0 0 1 .207.857zm1.223-2.722a.78.78 0 0 1-1.072.257c-2.688-1.652-6.786-2.131-9.965-1.166a.78.78 0 0 1-.453-1.492c3.632-1.102 8.147-.568 11.233 1.329a.78.78 0 0 1 .257 1.072zm.105-2.835C14.692 9.115 9.375 8.93 6.297 9.885a.936.936 0 1 1-.55-1.79c3.532-1.095 9.404-.882 13.115 1.36a.936.936 0 0 1-.948 1.612z"/></svg>
-                        <span id="connect-spotify-label">Connect Spotify</span>
-                    </button>
                     <div class="credit-block">
                         <div id="credits-status" class="credit-badge" onclick="onCreditBadgeClick()" onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onCreditBadgeClick(); }">
                             <div id="credit-badge-number" class="credit-badge-number">--</div>
@@ -1167,11 +1152,10 @@
 
         <div class="search-bar-wrapper">
             <input type="text" id="search-input" class="search-box" placeholder="Search for songs or artists..." oninput="executeSearch()">
-            <button type="button" id="inline-playlists-btn" class="inline-playlists-btn" onclick="openPlaylistModal()">My Playlists</button>
         </div>
 
         <div class="section-title-row">
-            <div class="section-title" id="list-title">Live Queue</div>
+            <div class="section-title" id="list-title">Up Next</div>
         </div>
         <div id="main-display-list"></div>
     </div>
@@ -1279,22 +1263,6 @@
 
                 <h4>Questions</h4>
                 <p>This site is made and maintained by Sam B. If you have questions about these terms, ask whoever's running the event tonight, or reach out directly if you know how to find them.</p>
-            </div>
-        </div>
-    </div>
-
-    <!-- PLAYLIST BROWSER MODAL -->
-    <div class="modal-overlay" id="playlist-modal">
-        <div class="modal-box">
-            <div class="modal-header">
-                <button class="modal-back-btn" id="modal-back-btn" onclick="showPlaylistGrid()" title="Back">
-                    <svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20z"/></svg>
-                </button>
-                <div class="modal-title" id="modal-title">Your Playlists</div>
-                <button class="modal-close-btn" onclick="closePlaylistModal()">✕</button>
-            </div>
-            <div class="modal-body" id="modal-body">
-                <p class="modal-loading">Loading your playlists…</p>
             </div>
         </div>
     </div>
@@ -1677,7 +1645,7 @@
                     </div>
                 `;
                 const marker = L.marker([v.latitude, v.longitude], { icon: venueIcon })
-                    .bindPopup(popupHtml, { offset: [0, -18], closeButton: true, minWidth: 220, maxWidth: 220, autoPanPadding: [24, 24] })
+                    .bindPopup(popupHtml, { offset: [0, -18], closeButton: true })
                     .addTo(venueMap);
                 venueMapMarkers.push(marker);
             });
@@ -1887,7 +1855,7 @@
 
         // Shown in the queue area and as the search placeholder before any
         // venue has been picked - kept in one place so both call sites (init
-        // and disconnectSpotify-adjacent resets) can't drift out of sync.
+        // and other resets) can't drift out of sync.
         function renderNoVenueState() {
             const nameHeader = document.getElementById('event-name-header');
             if (nameHeader && nameHeader.innerText !== 'Cuelistr') {
@@ -1905,11 +1873,9 @@
                 searchInput.value = '';
                 searchInput.placeholder = 'Pick a venue to start requesting songs...';
             }
-            document.getElementById('list-title').innerText = 'Live Queue';
+            document.getElementById('list-title').innerText = 'Up Next';
             document.getElementById('main-display-list').innerHTML =
                 '<p class="empty-placeholder">No venue selected yet. Tap the menu button above and choose <strong>Change Venue</strong> to get started.</p>';
-            const spotifyBtn = document.getElementById('connect-spotify-btn');
-            if (spotifyBtn) spotifyBtn.style.display = 'none';
             updateCreditBadge(0);
         }
 
@@ -1947,14 +1913,6 @@
                 } else {
                     stopGeofenceWatch();
                 }
-
-                const spotifyBtn = document.getElementById('connect-spotify-btn');
-                const spotifyEnabled = data.spotifyConnectEnabled !== false;
-                if (spotifyBtn) spotifyBtn.style.display = spotifyEnabled ? '' : 'none';
-                const sidebarSpotifyItem = document.getElementById('sidebar-spotify-item');
-                const sidebarPlaylistItem = document.getElementById('sidebar-playlist-item');
-                if (sidebarSpotifyItem) sidebarSpotifyItem.style.display = spotifyEnabled ? '' : 'none';
-                if (sidebarPlaylistItem) sidebarPlaylistItem.style.display = spotifyEnabled ? '' : 'none';
 
                 const nameHeader = document.getElementById('event-name-header');
                 const newName = (data.eventName && data.eventName.trim() !== '') ? data.eventName.trim() : 'Cuelistr';
@@ -2005,7 +1963,7 @@
                         : queueIsFull
                         ? "Queue is full right now — wait for songs to play, it'll reopen automatically."
                         : "Song submissions are currently paused by the admin.";
-                    document.getElementById('list-title').innerText = "Live Queue";
+                    document.getElementById('list-title').innerText = "Up Next";
                     renderQueue(data.queue);
                 } else {
                     if (searchInput.disabled) {
@@ -2014,7 +1972,7 @@
                     }
 
                     if (searchInput.value.trim() === "") {
-                        document.getElementById('list-title').innerText = "Live Queue";
+                        document.getElementById('list-title').innerText = "Up Next";
                         renderQueue(data.queue);
                     }
                 }
@@ -2112,7 +2070,7 @@
             // the Spotify continuation rows - but if the guest is actively
             // viewing search results, overwriting #main-display-list here
             // would yank those results away out from under them a few
-            // seconds after they typed. Only render the Live Queue view when
+            // seconds after they typed. Only render the Up Next view when
             // that's actually what's on screen.
             const searchInput = document.getElementById('search-input');
             if (searchInput && searchInput.value.trim() !== '' && !searchInput.disabled) {
@@ -2401,174 +2359,6 @@
             if (!document.hidden) { fetchSystemState(); pollNowPlaying(); }
         });
 
-        // --- Guest Spotify Connect (browse-your-playlists) ---
-        // Uses Authorization Code + PKCE entirely in the browser: no server session or
-        // secret needed, the token just lives for this tab so the guest can pick songs
-        // from their own playlists. Scopes are read-only (playlists only).
-
-        const GUEST_SPOTIFY_SCOPES = 'playlist-read-private playlist-read-collaborative';
-        let guestSpotifyToken = null;
-        let activePlaylistId = null;
-
-        function randomPkceString(length) {
-            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-            let text = '';
-            const randomValues = crypto.getRandomValues(new Uint8Array(length));
-            for (let i = 0; i < length; i++) text += chars[randomValues[i] % chars.length];
-            return text;
-        }
-
-        function base64UrlEncode(buffer) {
-            return btoa(String.fromCharCode(...new Uint8Array(buffer)))
-                .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-        }
-
-        async function pkceChallengeFromVerifier(verifier) {
-            const data = new TextEncoder().encode(verifier);
-            const digest = await crypto.subtle.digest('SHA-256', data);
-            return base64UrlEncode(digest);
-        }
-
-        function guestRedirectUri() {
-            return window.location.origin + window.location.pathname;
-        }
-
-        function updateSpotifyConnectButton(connected) {
-            const btn = document.getElementById('connect-spotify-btn');
-            const label = document.getElementById('connect-spotify-label');
-            btn.classList.toggle('is-connected', connected);
-            label.innerText = connected ? 'Connected' : 'Connect Spotify';
-            const sidebarLabel = document.getElementById('sidebar-spotify-label');
-            if (sidebarLabel) sidebarLabel.innerText = connected ? 'Spotify Connected' : 'Connect Spotify';
-
-            const inlineBtn = document.getElementById('inline-playlists-btn');
-            const searchBox = document.getElementById('search-input');
-            inlineBtn.classList.toggle('is-visible', connected);
-            searchBox.classList.toggle('has-inline-btn', connected);
-        }
-
-        function disconnectSpotify() {
-            guestSpotifyToken = null;
-            sessionStorage.removeItem('guest_spotify_token');
-            sessionStorage.removeItem('guest_spotify_token_expiry');
-            updateSpotifyConnectButton(false);
-            closePlaylistModal();
-        }
-
-        async function handleSpotifyConnectClick() {
-            if (guestSpotifyToken) {
-                disconnectSpotify();
-                return;
-            }
-            if (!hasVenueSelected()) {
-                showToast("Pick a venue first.", "error");
-                return;
-            }
-
-            try {
-                const configRes = await fetch(eventUrl('/api/public-config'));
-                if (!configRes.ok) {
-                    showToast("Could not reach the server to start Spotify login.", "error");
-                    return;
-                }
-                const config = await configRes.json();
-                if (!config.spotifyClientId) {
-                    showToast("Spotify connect is not configured on the server yet (missing SPOTIFY_CLIENT_ID).", "error");
-                    return;
-                }
-
-                const verifier = randomPkceString(64);
-                sessionStorage.setItem('guest_pkce_verifier', verifier);
-                const challenge = await pkceChallengeFromVerifier(verifier);
-
-                // A random state value tied to this specific login attempt, checked
-                // again when Spotify redirects back - without it, an attacker could
-                // craft their own authorize link and trick a guest into completing
-                // a login the guest never actually started (CSRF on the login flow).
-                const state = randomPkceString(32);
-                sessionStorage.setItem('guest_pkce_state', state);
-
-                const params = new URLSearchParams({
-                    response_type: 'code',
-                    client_id: config.spotifyClientId,
-                    scope: GUEST_SPOTIFY_SCOPES,
-                    redirect_uri: guestRedirectUri(),
-                    code_challenge_method: 'S256',
-                    code_challenge: challenge,
-                    state: state
-                });
-                window.location.href = `https://accounts.spotify.com/authorize?${params.toString()}`;
-            } catch (e) {
-                showToast("Could not start Spotify login.", "error");
-            }
-        }
-
-        async function completeGuestSpotifyLogin() {
-            const params = new URLSearchParams(window.location.search);
-            const code = params.get('code');
-            const returnedState = params.get('state');
-            if (!code) return;
-
-            // Clean the ?code=...&state=... out of the URL either way, so a refresh doesn't re-trigger this
-            window.history.replaceState({}, document.title, guestRedirectUri());
-
-            const verifier = sessionStorage.getItem('guest_pkce_verifier');
-            const expectedState = sessionStorage.getItem('guest_pkce_state');
-            sessionStorage.removeItem('guest_pkce_state');
-            if (!verifier) return;
-
-            // If the state doesn't match what this browser actually started, this
-            // isn't a login we initiated - bail out rather than completing it.
-            if (!expectedState || returnedState !== expectedState) {
-                console.log('Spotify login state mismatch - aborting.');
-                return;
-            }
-
-            try {
-                const configRes = await fetch(eventUrl('/api/public-config'));
-                const config = await configRes.json();
-
-                const tokenRes = await fetch('https://accounts.spotify.com/api/token', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: new URLSearchParams({
-                        grant_type: 'authorization_code',
-                        code,
-                        redirect_uri: guestRedirectUri(),
-                        client_id: config.spotifyClientId,
-                        code_verifier: verifier
-                    })
-                });
-                const data = await tokenRes.json();
-                if (data.access_token) {
-                    guestSpotifyToken = data.access_token;
-                    sessionStorage.setItem('guest_spotify_token', data.access_token);
-                    sessionStorage.setItem('guest_spotify_token_expiry', String(Date.now() + data.expires_in * 1000));
-                    updateSpotifyConnectButton(true);
-                    openPlaylistModal();
-                } else {
-                    console.log('Spotify token exchange failed:', data);
-                    showToast(data.error_description || "Spotify login failed. Check that the redirect URI is registered in the Spotify Dashboard.", "error");
-                }
-            } catch (e) { console.log('Guest Spotify token exchange failed.'); }
-        }
-
-        function restoreGuestSpotifySession() {
-            const token = sessionStorage.getItem('guest_spotify_token');
-            const expiry = parseInt(sessionStorage.getItem('guest_spotify_token_expiry') || '0', 10);
-            if (token && Date.now() < expiry) {
-                guestSpotifyToken = token;
-                updateSpotifyConnectButton(true);
-            }
-        }
-
-        function openPlaylistModal() {
-            document.getElementById('playlist-modal').classList.add('is-visible');
-            showPlaylistGrid();
-        }
-        function closePlaylistModal() {
-            document.getElementById('playlist-modal').classList.remove('is-visible');
-        }
 
         // Tapping the dimmed backdrop (not the modal box itself) closes whichever
         // popup is open - applies to every .modal-overlay except the username
@@ -2675,138 +2465,8 @@
             openTermsModal();
         }
 
-        async function showPlaylistGrid() {
-            activePlaylistId = null;
-            document.getElementById('modal-title').innerText = 'Your Playlists';
-            document.getElementById('modal-back-btn').classList.remove('is-visible');
-            const body = document.getElementById('modal-body');
-            body.innerHTML = '<p class="modal-loading">Loading your playlists…</p>';
-
-            try {
-                const res = await fetch('https://api.spotify.com/v1/me/playlists?limit=50', {
-                    headers: { Authorization: `Bearer ${guestSpotifyToken}` }
-                });
-                if (res.status === 401) {
-                    guestSpotifyToken = null;
-                    sessionStorage.removeItem('guest_spotify_token');
-                    updateSpotifyConnectButton(false);
-                    closePlaylistModal();
-                    showToast('Your Spotify session expired — hit "Connect Spotify" again.', "error");
-                    return;
-                }
-                const data = await res.json();
-                const playlists = data.items || [];
-
-                if (playlists.length === 0) {
-                    body.innerHTML = '<p class="modal-empty">No playlists found on your Spotify account.</p>';
-                    return;
-                }
-
-                body.innerHTML = playlists.map(pl => `
-                    <div class="playlist-row" data-id="${escapeHtml(pl.id)}" data-name="${escapeHtml(pl.name)}" onclick="showPlaylistTracks(this.dataset.id, this.dataset.name)">
-                        <img src="${safeImageUrl(pl.images?.[0]?.url)}">
-                        <div>
-                            <p class="pl-name">${escapeHtml(pl.name)}</p>
-                            <p class="pl-count">${pl.items?.total ?? pl.tracks?.total ?? 0} tracks</p>
-                        </div>
-                    </div>
-                `).join('');
-            } catch (e) {
-                body.innerHTML = '<p class="modal-empty">Could not load playlists. Try again.</p>';
-            }
-        }
-
-        function formatMsToClock(ms) {
-            if (!ms) return '--:--';
-            const totalSeconds = Math.floor(ms / 1000);
-            const minutes = Math.floor(totalSeconds / 60);
-            const seconds = totalSeconds % 60;
-            return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
-        }
-
-        function mapSpotifyTrack(t) {
-            return {
-                id: t.id,
-                name: t.name,
-                artist: (t.artists || []).map(a => a.name).join(', '),
-                artwork: t.album?.images?.[0]?.url || 'https://picsum.photos/48',
-                explicit: t.explicit || false,
-                duration: formatMsToClock(t.duration_ms)
-            };
-        }
-
-        async function showPlaylistTracks(playlistId, playlistName) {
-            activePlaylistId = playlistId;
-            document.getElementById('modal-title').innerText = playlistName;
-            document.getElementById('modal-back-btn').classList.add('is-visible');
-            const body = document.getElementById('modal-body');
-            body.innerHTML = '<p class="modal-loading">Loading tracks…</p>';
-
-            try {
-                const res = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/items?limit=50`, {
-                    headers: { Authorization: `Bearer ${guestSpotifyToken}` }
-                });
-
-                // Spotify only serves playlist contents for playlists you own or collaborate on.
-                // For anything you just follow, this call comes back non-OK (or with no items).
-                if (!res.ok) {
-                    body.innerHTML = '<p class="modal-empty">Sorry, you dont own the playlist</p>';
-                    return;
-                }
-
-                const data = await res.json();
-                // Spotify (Feb 2026 API changes) renamed each entry's "track" field to "item".
-                let tracks = (data.items || []).map(i => i.item || i.track).filter(t => t && t.id);
-
-                // Match the DJ's explicit-content rule the same way search results already do
-                if (explicitBlockActive) tracks = tracks.filter(t => !t.explicit);
-
-                if (tracks.length === 0) {
-                    body.innerHTML = '<p class="modal-empty">No requestable tracks in this playlist.</p>';
-                    return;
-                }
-
-                body.innerHTML = tracks.map((t, index) => `
-                    <div class="song-row" style="margin-bottom: 8px;">
-                        <div class="song-details">
-                            <img src="${safeImageUrl(t.album?.images?.[0]?.url)}">
-                            <div class="text-block">
-                                <div class="title-wrapper">
-                                    <p class="song-title">${escapeHtml(t.name)}</p>
-                                    ${t.explicit ? '<span class="explicit-badge">E</span>' : ''}
-                                </div>
-                                <p class="song-artist">${escapeHtml((t.artists || []).map(a => a.name).join(', '))}</p>
-                            </div>
-                        </div>
-                        <div class="actions">
-                            <button class="btn-request" id="pl-track-btn-${index}" onclick="requestFromPlaylist(${index}, this)">Request</button>
-                        </div>
-                    </div>
-                `).join('');
-
-                window.__currentPlaylistTracks = tracks;
-            } catch (e) {
-                body.innerHTML = '<p class="modal-empty">Could not load this playlist. Try again.</p>';
-            }
-        }
-
-        async function requestFromPlaylist(index, btnEl) {
-            const rawTrack = (window.__currentPlaylistTracks || [])[index];
-            if (!rawTrack) return;
-            const track = mapSpotifyTrack(rawTrack);
-
-            btnEl.disabled = true;
-            const ok = await submitTrackRequest(track);
-            if (ok) {
-                btnEl.innerText = 'Added ✓';
-            } else {
-                btnEl.disabled = false;
-            }
-        }
 
         promptForUsernameIfNeeded();
-        restoreGuestSpotifySession();
-        completeGuestSpotifyLogin();
     </script>
     <div id="venue-code-overlay" role="dialog" aria-modal="true" aria-labelledby="vc-title">
         <div class="vc-card">
@@ -2828,7 +2488,7 @@
 
     <!-- Now Playing bar - live from the DJ's connected Spotify account. The
          "up next" queue used to live in a slide-up panel toggled from here;
-         it now renders inline in the Live Queue view instead (see
+         it now renders inline in the Up Next view instead (see
          renderQueue() below), so this bar is just the current-track strip. -->
     <div class="now-playing-bar" id="now-playing-bar">
         <div class="now-playing-progress-track">
@@ -2896,7 +2556,7 @@
 
             if (!nowPlayingTicker) nowPlayingTicker = setInterval(renderNowPlayingProgress, 250);
 
-            // Feeds the merged Live Queue renderer (see renderQueue() above)
+            // Feeds the merged Up Next renderer (see renderQueue() above)
             // rather than drawing its own separate list - Spotify's live "up
             // next" now shows inline in the main queue view.
             spotifyUpcomingQueue = data.upcoming || [];
