@@ -966,6 +966,7 @@
         }
         .venue-list-item-name { font-weight: 700; font-size: 1rem; }
         .venue-list-item-sub { color: var(--text-muted); font-size: 0.8rem; margin-top: 2px; }
+        .venue-history-clear { background: none; border: none; color: var(--text-muted); font: inherit; font-size: 0.8rem; text-decoration: underline; cursor: pointer; }
         .venue-list-item-distance { color: var(--spotify-green); font-size: 0.75rem; font-weight: 700; margin-top: 4px; }
         .venue-select-btn {
             background-color: var(--spotify-green); color: white; border: none;
@@ -1000,7 +1001,9 @@
         .venue-map-marker {
             width: 30px; height: 30px; border-radius: 50%;
             border: 2px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.5);
-            cursor: pointer; background: var(--spotify-black) url('/assets/favicon.png') center/70% no-repeat;
+            /* The logo IS the marker: it fills the whole round pin edge to edge (no smaller
+               logo sitting inside a darker circle). The dark colour only shows if the image fails to load. */
+            cursor: pointer; background: url('/assets/favicon.png') center/cover no-repeat var(--spotify-black);
         }
 
         /* The guest's own location - a plain blue dot (not clickable, no
@@ -1107,11 +1110,13 @@
         </div>
         <div class="venue-tabs">
             <button class="venue-tab is-active" id="venue-tab-list" onclick="switchVenueTab('list')">Venue List</button>
+            <button class="venue-tab" id="venue-tab-history" onclick="switchVenueTab('history')">History</button>
             <button class="venue-tab" id="venue-tab-map" onclick="switchVenueTab('map')">Map</button>
         </div>
         <div class="venue-tab-content is-active" id="venue-list-content">
             <p class="venue-empty-msg" id="venue-list-status">Loading venues…</p>
         </div>
+        <div class="venue-tab-content" id="venue-history-content"></div>
         <div class="venue-tab-content" id="venue-map-content">
             <div id="venue-map"></div>
             <button type="button" class="venue-map-locate-btn" id="venue-map-locate-btn" onclick="zoomToMyLocation()" title="Zoom to my location" aria-label="Zoom to my location">
@@ -1398,6 +1403,58 @@
             if (el) el.innerText = name || 'None selected';
         }
 
+        // --- Venue history: the venues this device has recently checked in to ---
+        // Saved on this device only (localStorage), newest first, capped at 10. A venue is
+        // recorded once it has actually loaded (see fetchSystemState), so QR-code visits count
+        // as well as venues picked from the list, and a venue that doesn't exist is never saved.
+        const VENUE_HISTORY_KEY = 'crowddj_venue_history';
+        const VENUE_HISTORY_MAX = 10;
+        let lastRecordedVenueSlug = null;
+        function readVenueHistory() {
+            try {
+                const raw = JSON.parse(localStorage.getItem(VENUE_HISTORY_KEY) || '[]');
+                return Array.isArray(raw) ? raw.filter(v => v && typeof v.slug === 'string' && v.slug) : [];
+            } catch (e) { return []; }
+        }
+        function recordVenueVisit(slug, eventName, venueName) {
+            if (!slug) return;
+            const list = readVenueHistory().filter(v => v.slug !== slug);
+            list.unshift({ slug, eventName: eventName || slug, venueName: venueName || '', at: Date.now() });
+            try { localStorage.setItem(VENUE_HISTORY_KEY, JSON.stringify(list.slice(0, VENUE_HISTORY_MAX))); } catch (e) { /* storage blocked */ }
+        }
+        function clearVenueHistory() {
+            try { localStorage.removeItem(VENUE_HISTORY_KEY); } catch (e) { /* ignore */ }
+            renderVenueHistory();
+        }
+        function formatLastVisit(ts) {
+            const startOfDay = d => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+            const days = Math.round((startOfDay(new Date()) - startOfDay(new Date(ts))) / 86400000);
+            if (days <= 0) return 'Today';
+            if (days === 1) return 'Yesterday';
+            if (days < 7) return days + ' days ago';
+            return new Date(ts).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+        }
+        function renderVenueHistory() {
+            const el = document.getElementById('venue-history-content');
+            const list = readVenueHistory();
+            if (list.length === 0) {
+                el.innerHTML = '<p class="venue-empty-msg">No recent venues yet. Venues you check in to will show up here.</p>';
+                return;
+            }
+            el.innerHTML = list.map(v => `
+                <div class="venue-list-item">
+                    <div>
+                        <div class="venue-list-item-name">${escapeHtml(v.eventName)}</div>
+                        ${v.venueName ? `<div class="venue-list-item-sub">${escapeHtml(v.venueName)}</div>` : ''}
+                        <div class="venue-list-item-sub">${escapeHtml(formatLastVisit(v.at))}</div>
+                    </div>
+                    ${v.slug === EVENT_SLUG
+                        ? '<span class="venue-list-item-distance">Current</span>'
+                        : `<button class="venue-select-btn" data-slug="${escapeHtml(v.slug)}" data-name="${escapeHtml(v.eventName)}" onclick="selectVenue(this.dataset.slug, this.dataset.name)">Select</button>`}
+                </div>
+            `).join('') + '<div style="text-align:center;padding:14px;"><button type="button" class="venue-history-clear" onclick="clearVenueHistory()">Clear history</button></div>';
+        }
+
         function selectVenue(slug, displayName) {
             EVENT_SLUG = slug;
             localStorage.setItem(SELECTED_VENUE_KEY, slug);
@@ -1454,7 +1511,7 @@
         // --- Change Venue screen ---
         function openVenueScreen(tab) {
             document.getElementById('venue-screen').classList.add('is-visible');
-            switchVenueTab(tab === 'map' || tab === 'list' ? tab : activeVenueTab);
+            switchVenueTab(tab === 'map' || tab === 'list' || tab === 'history' ? tab : activeVenueTab);
         }
         function closeVenueScreen() {
             document.getElementById('venue-screen').classList.remove('is-visible');
@@ -1463,12 +1520,16 @@
         async function switchVenueTab(tab) {
             activeVenueTab = tab;
             document.getElementById('venue-tab-list').classList.toggle('is-active', tab === 'list');
+            document.getElementById('venue-tab-history').classList.toggle('is-active', tab === 'history');
             document.getElementById('venue-tab-map').classList.toggle('is-active', tab === 'map');
             document.getElementById('venue-list-content').classList.toggle('is-active', tab === 'list');
+            document.getElementById('venue-history-content').classList.toggle('is-active', tab === 'history');
             document.getElementById('venue-map-content').classList.toggle('is-active', tab === 'map');
 
             if (tab === 'list') {
                 loadVenueList();
+            } else if (tab === 'history') {
+                renderVenueHistory();
             } else {
                 // Leaflet needs to be created (or resized) only once its
                 // container is actually visible - creating it while the tab
@@ -1905,6 +1966,10 @@
                 // stale name from an older /venue-list fetch. This is the
                 // one place both eventually get corrected.
                 updateSidebarCurrentVenueLabel(newName);
+                if (lastRecordedVenueSlug !== EVENT_SLUG) {
+                    lastRecordedVenueSlug = EVENT_SLUG;
+                    recordVenueVisit(EVENT_SLUG, newName === 'Cuelistr' ? '' : newName, data.venueName ? data.venueName.trim() : '');
+                }
 
                 const venueSubtitle = document.getElementById('venue-name-subtitle');
                 const newVenueName = (data.venueName && data.venueName.trim() !== '') ? data.venueName.trim() : '';
