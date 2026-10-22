@@ -1106,6 +1106,7 @@ async function deleteEvent(slug) {
 }
 
 module.exports = {
+    blankEventState, // the defaults a brand new event starts with - reused by the admin "Reset all settings"
     redis, // raw Upstash command helper, used by videoCatalog.js
     isValidSlug,
     getEvent,
