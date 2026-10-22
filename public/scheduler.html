@@ -852,7 +852,8 @@
         .chip-text { flex:1; min-width:0; display:flex; flex-direction:column; gap:1px; }
         .chip-desc { font-size:0.7rem; color:var(--text-dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
         .playlist-chip.curated { border-color:var(--lane-color, var(--border-strong)); }
-        .curated-badge { color:var(--text-dim); }
+        .save-state { font-size:0.8rem; color:var(--text-dim); white-space:nowrap; min-width:110px; text-align:right; }
+        .save-state.error { color:var(--red-action); }
         .btn.cur-on { background:var(--text); color:var(--spotify-black); }
         .block-days { position:absolute; right:6px; top:3px; font-size:0.6rem; font-weight:700; background:rgba(0,0,0,0.35);
             color:#fff; border-radius:4px; padding:1px 5px; pointer-events:none; }
@@ -922,7 +923,7 @@
                     <button type="button" class="zoom-btn" id="undo-btn" onclick="performUndo()" title="Undo (Ctrl+Z)" disabled>&#8630;</button>
                     <button type="button" class="zoom-btn" id="redo-btn" onclick="performRedo()" title="Redo (Ctrl+Y)" disabled>&#8631;</button>
                 </div>
-                <button class="btn btn-primary" onclick="saveSchedule()">Save Schedule</button>
+                <span class="save-state" id="save-state" aria-live="polite">All changes saved</span>
             </div>
         </div>
 
@@ -1535,12 +1536,13 @@
                     const warning = document.getElementById('tz-warning');
                     if (!eventTimezone) {
                         warning.style.display = 'block';
-                        warning.textContent = `No timezone was saved for this schedule yet, so it defaulted to server time and blocks likely fired at the wrong hours. Set to "${document.getElementById('timezone-select').value}" below and hit Save Schedule to fix that.`;
+                        warning.textContent = `No timezone was saved for this schedule yet, so it defaulted to server time and blocks likely fired at the wrong hours. Pick the right one in the timezone box - it saves automatically.`;
                     } else {
                         warning.style.display = 'none';
                     }
                     document.getElementById('lock-screen').style.display = 'none';
                     document.getElementById('dashboard').classList.add('show');
+                    autosaveStart();
                     renderAll();
                     loadCuratedPlaylists();
                     refreshStatus();
@@ -1559,7 +1561,7 @@
         }
         document.getElementById('password-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') verifyLogin(); });
         document.getElementById('scheduler-enabled-toggle').addEventListener('change', (e) => {
-            if (!e.target.checked) document.getElementById('status-chip').innerHTML = '<span class="status-dot" style="background:#555;"></span>Scheduler off (save to apply)';
+            if (!e.target.checked) document.getElementById('status-chip').innerHTML = '<span class="status-dot" style="background:#555;"></span>Scheduler off';
         });
 
         // Reloading (or opening this page from admin) restores a recent session without asking for the password again.
@@ -1923,7 +1925,6 @@
                          ondragstart="onCuratedDragStart(event, '${escapeHtml(c.id)}')" onclick="addFromLibrary('curated', '${escapeHtml(c.id)}')" title="Tap to add to the day shown, or drag onto the timeline. Curated playlists can't be deleted.">
                         <span class="chip-swatch" style="background:${LANE_TYPES[libraryTab].color}"></span>
                         <span class="chip-text"><span class="chip-label">${escapeHtml(c.label)}</span>${c.description ? `<span class="chip-desc">${escapeHtml(c.description)}</span>` : ''}</span>
-                        <span class="chip-type curated-badge">&#128274; Curated</span>
                     </div>
                 `));
                 if (!rows.length) rows.push(`<div class="lib-empty">No curated ${escapeHtml(LANE_TYPES[libraryTab].label)} playlists available yet.</div>`);
@@ -4559,52 +4560,129 @@
             renderDayBoxes();
         });
 
-        // ---------- Save ----------
+        // ---------- Auto-save ----------
+        // There's no Save button: every change to the schedule (blocks,
+        // playlists, the on/off switch, the timezone, undo/redo) is noticed
+        // by comparing a snapshot of the schedule twice a second, and saved
+        // shortly after the changes stop (so a drag or a typed name saves
+        // once, when you let go). Overlapping blocks are never sent - the
+        // save just waits until the conflict is fixed.
+        const AUTOSAVE_QUIET_MS = 700;
+        const AUTOSAVE_RETRY_MS = 5000;
+        let autosaveOn = false;
+        let lastSavedSnap = '';
+        let lastSeenSnap = '';
+        let changedAt = 0;
+        let saveInFlight = false;
+        let lastFailAt = 0;
+        let tzTouched = false;
+        let pointerIsDown = false;
+
+        document.addEventListener('pointerdown', () => { pointerIsDown = true; }, true);
+        document.addEventListener('pointerup', () => { pointerIsDown = false; }, true);
+        document.addEventListener('pointercancel', () => { pointerIsDown = false; }, true);
+        document.addEventListener('dragend', () => { pointerIsDown = false; }, true);
+        document.getElementById('timezone-select').addEventListener('change', () => { tzTouched = true; });
         document.getElementById('scheduler-enabled-toggle').addEventListener('change', (e) => {
             schedulerEnabled = e.target.checked;
         });
 
-        async function saveSchedule() {
-            // Block the save locally first - no point round-tripping to the
-            // server for something the timetable can already tell isn't
-            // savable. renderDayBoxes() re-runs the same check, so the
-            // conflicting blocks are already outlined at this point.
-            if (findConflictingRuleIds().size > 0) {
-                renderDayBoxes();
-                showToast('Two blocks overlap - fix the outlined conflict before saving.', 'error');
-                return;
-            }
+        function scheduleSnapshot() {
+            const sel = document.getElementById('timezone-select').value;
+            // A schedule that never had a timezone only gets one saved once
+            // the DJ picks it (or changes something else).
+            const tz = (eventTimezone || tzTouched) ? sel : null;
+            return JSON.stringify({ enabled: schedulerEnabled, playlists, rules, tz });
+        }
+        function setSaveState(text, cls) {
+            const el = document.getElementById('save-state');
+            if (!el) return;
+            el.textContent = text;
+            el.className = 'save-state' + (cls ? ' ' + cls : '');
+        }
+        function autosaveStart() {
+            lastSavedSnap = scheduleSnapshot();
+            lastSeenSnap = lastSavedSnap;
+            changedAt = 0;
+            autosaveOn = true;
+            setSaveState('All changes saved');
+        }
 
+        async function saveSchedule(opts) {
+            const keepalive = !!(opts && opts.keepalive);
+            if (saveInFlight && !keepalive) return false;
+            if (findConflictingRuleIds().size > 0) return false;
+            const snap = scheduleSnapshot();
+            const selectedTz = document.getElementById('timezone-select').value;
+            saveInFlight = true;
+            setSaveState('Saving…');
             try {
-                const selectedTz = document.getElementById('timezone-select').value;
                 const res = await fetch(eventUrl('/api/admin/scheduler'), {
                     method: 'POST',
                     headers: adminHeaders(),
+                    keepalive,
                     body: JSON.stringify({ enabled: schedulerEnabled, playlists, rules, timezone: selectedTz })
                 });
                 const data = await res.json();
                 if (res.ok && data.success) {
-                    playlists = data.playlists;
-                    rules = data.rules;
+                    lastSavedSnap = snap;
+                    lastFailAt = 0;
                     eventTimezone = data.timezone || selectedTz;
                     document.getElementById('tz-warning').style.display = 'none';
-                    renderAll();
-                    showToast('Schedule saved.');
+                    setSaveState(scheduleSnapshot() === snap ? 'All changes saved' : 'Saving…');
                     refreshStatus();
-                } else if (data.conflictingRuleIds) {
-                    // Backstop in case something slipped past the client
-                    // check (e.g. stale state) - the server re-checked and
-                    // rejected the whole save, so re-render to outline
-                    // whatever it flagged.
+                    return true;
+                }
+                lastFailAt = Date.now();
+                if (data.conflictingRuleIds) {
                     renderDayBoxes();
-                    showToast(data.error || 'Two blocks overlap - fix the conflict before saving.', 'error');
+                    setSaveState('Not saved - blocks overlap', 'error');
                 } else {
+                    setSaveState('Could not save - retrying', 'error');
                     showToast(data.error || 'Could not save the schedule.', 'error');
                 }
             } catch (e) {
-                showToast('Could not reach the server. Try again.', 'error');
+                lastFailAt = Date.now();
+                setSaveState('Offline - will retry', 'error');
+            } finally {
+                saveInFlight = false;
             }
+            return false;
         }
+
+        setInterval(() => {
+            if (!autosaveOn || saveInFlight) return;
+            const snap = scheduleSnapshot();
+            if (snap !== lastSeenSnap) {          // still changing
+                lastSeenSnap = snap;
+                changedAt = Date.now();
+            }
+            if (snap === lastSavedSnap) {
+                changedAt = 0;
+                const el = document.getElementById('save-state');
+                if (el && el.textContent !== 'All changes saved') setSaveState('All changes saved');
+                return;
+            }
+            if (!changedAt) changedAt = Date.now();
+            if (findConflictingRuleIds().size > 0) {
+                setSaveState('Not saved - blocks overlap', 'error');
+                return;
+            }
+            if (!lastFailAt) setSaveState('Unsaved changes…');
+            if (pointerIsDown) return;            // mid-drag / mid-resize
+            if (Date.now() - changedAt < AUTOSAVE_QUIET_MS) return;
+            if (lastFailAt && Date.now() - lastFailAt < AUTOSAVE_RETRY_MS) return;
+            saveSchedule();
+        }, 500);
+
+        // Leaving / hiding the page: push out anything still waiting.
+        function flushAutosave() {
+            if (!autosaveOn || saveInFlight) return;
+            if (scheduleSnapshot() === lastSavedSnap) return;
+            saveSchedule({ keepalive: true });
+        }
+        document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushAutosave(); });
+        window.addEventListener('pagehide', flushAutosave);
     </script>
 </body>
 </html>
