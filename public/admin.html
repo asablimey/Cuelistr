@@ -712,6 +712,11 @@
             max-width: 60%;
             flex-shrink: 0;
         }
+        .requested-badge {
+            display: inline-block; flex-shrink: 0; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.4px;
+            text-transform: uppercase; line-height: 1; padding: 3px 7px; border-radius: 20px;
+            color: var(--spotify-green); background-color: rgba(29, 185, 84, 0.14); border: 1px solid rgba(29, 185, 84, 0.45);
+        }
         .requester-badge svg { width: 12px; height: 12px; fill: var(--spotify-green); flex-shrink: 0; display: block; }
 
         .admin-vote-block {
@@ -972,8 +977,7 @@
             <h3>Menu</h3>
             <button class="sidebar-close-btn" onclick="closeSidebar()">✕</button>
         </div>
-        <button type="button" id="sidebar-nav-playback" class="sidebar-nav-item" onclick="switchTab('playback')">Playback</button>
-        <button type="button" id="sidebar-nav-queue" class="sidebar-nav-item active-tab" onclick="switchTab('queue')">Up Next</button>
+        <button type="button" id="sidebar-nav-queue" class="sidebar-nav-item active-tab" onclick="switchTab('queue')">Playback &amp; Queue</button>
         <button type="button" id="sidebar-nav-history" class="sidebar-nav-item" onclick="switchTab('history')">Song History</button>
         <button type="button" id="sidebar-nav-settings" class="sidebar-nav-item" onclick="switchTab('settings')">Settings</button>
         <button type="button" id="sidebar-nav-stats" class="sidebar-nav-item" onclick="switchTab('stats')">Stats</button>
@@ -1025,7 +1029,7 @@
         </div>
     </div>
 
-    <div id="tab-panel-playback" class="tab-content">
+    <div id="tab-panel-queue" class="tab-content active-content">
         <div class="panel">
             <h2>Playback</h2>
             <div id="playback-connected-view" class="playback-panel" style="display:none;">
@@ -1070,21 +1074,14 @@
                         oninput="onVolumeSliderInput(this)" onchange="onVolumeSliderChange(this); isDraggingVolume = false">
                     <span id="playback-volume-label" style="font-size:0.8rem; color:#888; min-width:28px;">50%</span>
                 </div>
-
-                <div class="playback-upcoming" id="playback-upcoming-wrap" style="display:none;">
-                    <h3>Up Next (Spotify Queue)</h3>
-                    <div id="playback-upcoming-list"></div>
-                </div>
             </div>
             <div id="playback-disconnected-view" class="playback-disconnected">
                 Connect the admin Spotify account under <strong>Settings → Spotify</strong> to control playback from here.
             </div>
         </div>
-    </div>
 
-    <div id="tab-panel-queue" class="tab-content active-content">
         <div class="panel">
-            <h2>Current Queue</h2>
+            <h2>Queue</h2>
 
             <div class="settings-card full-only" style="margin-bottom: 20px;">
                 <div class="settings-section-label">Add a Song</div>
@@ -1260,12 +1257,6 @@
                                 <button class="save-config-btn" onclick="saveSystemRules()">Update Rules</button>
                                 <div class="queue-cap-status-text" id="queue-cap-status-text"></div>
                             </div>
-                        </div>
-
-                        <div class="settings-card full-only">
-                            <div class="settings-section-label">Blocked Guests</div>
-                            <p class="settings-card-hint" style="margin-top: 0;">Block a guest's device from the Stats tab's "Recent Requests" list. A blocked guest can't request or vote for the rest of this event.</p>
-                            <div id="blocked-guests-list" class="stat-box-body"></div>
                         </div>
                     </div>
 
@@ -1505,16 +1496,13 @@
                                 <div class="control-bar" style="margin-top: 10px;">
                                     <button class="utility-btn" onclick="nudgeManualOffset(-100)">− 100ms</button>
                                     <button class="utility-btn" onclick="nudgeManualOffset(100)">+ 100ms</button>
-                                    <button class="utility-btn" onclick="denylistCurrentTrack()">Denylist This Track</button>
                                     <button class="utility-btn" onclick="allowlistCurrentMatch()">Approve for Family Mode</button>
-                                    <button class="utility-btn" style="background: var(--red-action, #e91429); border-color: var(--red-action, #e91429); color: white;" onclick="blacklistCurrentVideo()">Blacklist This Video</button>
                                 </div>
                                 <p class="settings-card-hint" style="margin-top: 10px; margin-bottom: 0;">
                                     Adjusts THIS specific song's video only - separate from the whole-stream Video Timing
                                     Offset above. Use this when one particular video won't sync no matter what the global
-                                    offset is set to. <strong>Blacklist This Video</strong> throws out this match entirely
-                                    and searches for a different candidate next time the song plays, everywhere, not just
-                                    here.
+                                    offset is set to. To throw this video out or block the song's video entirely, use
+                                    the Music Videos section of the Blocked tab.
                                 </p>
                             </div>
                         </div>
@@ -1526,20 +1514,12 @@
                                 catch most bad matches on their own, but they're not perfect. <strong>Family Mode</strong>
                                 flips the default: with it on, a song's video plays ONLY if a human has already approved
                                 that exact video below - nothing plays automatically no matter what the automated checks
-                                concluded. The denylist below applies regardless of Family Mode and blocks a song's video
+                                concluded. The denylist (in the Blocked tab) applies regardless of Family Mode and blocks a song's video
                                 everywhere, for every event on this platform.
                             </p>
                             <div class="control-bar">
                                 <button id="toggle-family-mode" class="toggle-btn closed-status" onclick="toggleFamilyMode()">Family Mode: OFF</button>
                             </div>
-
-                            <div class="settings-section-label" style="margin-top: 20px;">Denylist (blocked everywhere)</div>
-                            <div class="input-group">
-                                <label>Search for a song to block</label>
-                                <input type="text" id="denylist-search-input" placeholder="Search for a song or artist" oninput="onDenylistSearchInput()">
-                            </div>
-                            <div id="denylist-search-results"></div>
-                            <div id="denylist-rows" class="family-list-rows"></div>
 
                             <div class="settings-section-label" style="margin-top: 20px;">Allowlist (approved for Family Mode)</div>
                             <p class="settings-card-hint" style="margin-top: 0;">
@@ -1614,8 +1594,8 @@
             </details>
 
             <details class="stat-box">
-                <summary>Recent Requests (block a guest)</summary>
-                <p class="settings-card-hint" style="margin: 0 0 10px 0;">Blocking stops that guest's device from requesting or voting for the rest of this event. Manage blocked guests under Settings → Access &amp; Guests.</p>
+                <summary>Recent Requests</summary>
+                <p class="settings-card-hint" style="margin: 0 0 10px 0;">To block a guest, use the Guests list in the Blocked tab.</p>
                 <div id="stat-recent-requests" class="stat-box-body"></div>
             </details>
         </div>
@@ -1637,6 +1617,26 @@
                 <p class="settings-card-hint" style="margin-top: 0;">Every guest who's requested a song tonight. Blocking stops their device from requesting or voting for the rest of this event.</p>
                 <input type="text" id="blocked-guest-filter-input" placeholder="Filter by name" oninput="renderBlockedTabGuests()" style="width: 100%; margin-bottom: 12px;">
                 <div id="blocklist-guests-list"></div>
+            </div>
+
+            <div class="settings-card">
+                <div class="settings-section-label">Music Videos</div>
+                <p class="settings-card-hint" style="margin-top: 0;">Block a song's music video everywhere on this platform. The song still plays - it just never gets a video.</p>
+                <div id="mv-block-current-box" style="display:none; margin-bottom: 14px; padding: 12px; background: rgba(255,255,255,0.04); border-radius: 8px;">
+                    <div class="settings-section-label" style="margin-bottom: 6px;">Video on screen now</div>
+                    <p class="settings-card-hint" style="margin: 0 0 10px 0;"><strong>Denylist This Track</strong> never shows a video for this song. <strong>Blacklist This Video</strong> throws out this match and searches for a different one next time the song plays.</p>
+                    <div class="control-bar">
+                        <button class="utility-btn" onclick="denylistCurrentTrack()">Denylist This Track</button>
+                        <button class="utility-btn" style="background: var(--red-action, #e91429); border-color: var(--red-action, #e91429); color: white;" onclick="blacklistCurrentVideo()">Blacklist This Video</button>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label>Search for a song to block</label>
+                    <input type="text" id="denylist-search-input" placeholder="Search for a song or artist" oninput="onDenylistSearchInput()">
+                </div>
+                <div id="denylist-search-results"></div>
+                <div class="settings-section-label" style="margin-top: 16px;">Denylisted Videos</div>
+                <div id="denylist-rows" class="family-list-rows"></div>
             </div>
 
             <div class="settings-card">
@@ -1721,7 +1721,7 @@
         // chip selection before they hit "Save Filters".
         let filtersInitialized = false;
 
-        const TAB_NAMES = ['playback', 'queue', 'history', 'settings', 'stats', 'blocked'];
+        const TAB_NAMES = ['queue', 'history', 'settings', 'stats', 'blocked'];
 
         // --- Sidebar (hamburger menu) ---
         function openSidebar() {
@@ -2377,13 +2377,16 @@ async function verifyPassword() {
                 if (!res.ok) return;
                 const data = await res.json();
                 const box = document.getElementById('mv-current-match-box');
+                const blockBox = document.getElementById('mv-block-current-box');
                 if (!data.matched || !data.videoId) {
                     mvCurrentMatch = null;
                     box.style.display = 'none';
+                    if (blockBox) blockBox.style.display = 'none';
                     return;
                 }
                 mvCurrentMatch = { trackId: data.trackId, videoId: data.videoId, introOffsetMs: data.introOffsetMs || 0 };
                 box.style.display = 'block';
+                if (blockBox) blockBox.style.display = 'block';
                 document.getElementById('mv-current-match-summary').innerHTML =
                     `Video <a href="https://youtube.com/watch?v=${encodeURIComponent(data.videoId)}" target="_blank" rel="noopener">${escapeHtml(data.videoId)}</a>` +
                     ` &middot; offset source: ${escapeHtml(data.offsetSource || 'unknown')}`;
@@ -2646,6 +2649,7 @@ async function verifyPassword() {
                             <div class="title-wrapper">
                                 <p class="song-title">${escapeHtml(song.title)}</p>
                                 ${song.explicit ? '<span class="explicit-badge">E</span>' : ''}
+                                ${song.requested ? '<span class="requested-badge">Requested</span>' : ''}
                             </div>
                             <p class="song-artist">${escapeHtml(artistWithYear(song.artist, song.year))}</p>
                             <div class="length-requester-row">
@@ -3216,9 +3220,7 @@ async function verifyPassword() {
                         <div class="stat-row-text" style="text-align:right; flex:0;">
                             <div class="stat-row-title">${escapeHtml(r.username)}</div>
                         </div>
-                        ${r.blocked
-                            ? '<span class="outcome-badge dropped" style="margin-left:4px;">Blocked</span>'
-                            : `<button class="btn btn-block" onclick="blockGuest('${r.voterId}', '${escapeHtml(r.username).replace(/'/g, "\\'")}')">Block</button>`}
+                        ${r.blocked ? '<span class="outcome-badge dropped" style="margin-left:4px;">Blocked</span>' : ''}
                     `)).join('');
             } catch (e) { console.log('Stats load failed.'); }
         }
@@ -3234,7 +3236,8 @@ async function verifyPassword() {
                 });
                 showToast(`Blocked "${label}".`, 'success');
                 loadStats();
-                renderBlockedGuests();
+                renderBlockedTabGuests();
+                renderBlockedEverything();
             } catch (err) {
                 showToast('Could not block that guest.', 'error');
             }
@@ -3248,7 +3251,12 @@ async function verifyPassword() {
                     headers: adminHeaders({ 'Content-Type': 'application/json' }),
                     body: JSON.stringify({ voterId })
                 });
+                // Reflect it straight away; the next poll confirms.
+                lastBlockedVoters = lastBlockedVoters.filter(b => b.voterId !== voterId);
+                (lastGuests || []).forEach(g => { if (g.voterId === voterId) g.blocked = false; });
                 renderBlockedGuests();
+                renderBlockedTabGuests();
+                renderBlockedEverything();
             } catch (err) {
                 showToast('Could not unblock that guest.', 'error');
             }
@@ -3913,6 +3921,7 @@ async function verifyPassword() {
         function renderPlaybackUpcoming(upcoming) {
             const wrap = document.getElementById('playback-upcoming-wrap');
             const list = document.getElementById('playback-upcoming-list');
+            if (!wrap || !list) return; // the queue list below the controls shows Spotify's upcoming tracks now
             if (!upcoming || upcoming.length === 0) { wrap.style.display = 'none'; return; }
             wrap.style.display = 'block';
             list.innerHTML = upcoming.slice(0, 8).map(t => `
