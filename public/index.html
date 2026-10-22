@@ -1023,16 +1023,22 @@
            specific than a bare class selector (class+element beats class
            alone) and was winning over a plain ".venue-popup-name" rule,
            leaving a huge 18px gap above and below each line. */
-        .venue-popup-box { min-width: 200px; }
-        .venue-popup-box .venue-popup-name { font-weight: 800; font-size: 1rem; margin: 0 0 4px 0; color: var(--spotify-black); }
-        .venue-popup-box .venue-popup-sub { font-size: 0.8rem; color: #555; margin: 0 0 12px 0; }
+        .venue-popup-box { width: 220px; max-width: 100%; text-align: left; }
+        .venue-popup-box .venue-popup-name { font-weight: 800; font-size: 1.05rem; line-height: 1.25; margin: 0 0 4px 0; padding-right: 22px; color: var(--text); overflow-wrap: anywhere; }
+        .venue-popup-box .venue-popup-sub { font-size: 0.82rem; line-height: 1.3; color: var(--text-muted); margin: 0 0 14px 0; overflow-wrap: anywhere; }
         .venue-popup-select-btn {
             display: block; width: 100%; background-color: var(--spotify-green); color: white;
-            border: none; padding: 9px 0; border-radius: 50px; font-weight: 700;
-            font-size: 0.85rem; font-family: inherit; cursor: pointer;
+            border: none; padding: 10px 0; border-radius: 50px; font-weight: 700;
+            font-size: 0.88rem; font-family: inherit; cursor: pointer;
         }
-        .leaflet-popup-content-wrapper { padding: 0; border-radius: 10px; }
-        .leaflet-popup-content { margin: 14px; }
+        .venue-popup-select-btn:hover { filter: brightness(1.1); }
+        /* Match the popup to the page theme (Leaflet ships a white box) and
+           keep the close button inside the corner instead of over the title. */
+        .leaflet-popup-content-wrapper { padding: 0; border-radius: 14px; background: var(--card-bg); color: var(--text); box-shadow: 0 6px 24px rgba(0,0,0,0.45); }
+        .leaflet-popup-tip { background: var(--card-bg); }
+        .leaflet-popup-content { margin: 16px; font-family: inherit; line-height: 1.3; }
+        .leaflet-container a.leaflet-popup-close-button { top: 8px; right: 8px; width: 22px; height: 22px; font: 20px/22px inherit; color: var(--text-muted); }
+        .leaflet-container a.leaflet-popup-close-button:hover { color: var(--text); background: none; }
 
         .venue-empty-msg { color: var(--text-muted); text-align: center; padding: 40px 20px; font-style: italic; }
 
@@ -1645,7 +1651,7 @@
                     </div>
                 `;
                 const marker = L.marker([v.latitude, v.longitude], { icon: venueIcon })
-                    .bindPopup(popupHtml, { offset: [0, -18], closeButton: true })
+                    .bindPopup(popupHtml, { offset: [0, -18], closeButton: true, minWidth: 220, maxWidth: 220, autoPanPadding: [24, 24] })
                     .addTo(venueMap);
                 venueMapMarkers.push(marker);
             });
