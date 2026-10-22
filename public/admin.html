@@ -158,6 +158,8 @@
         .lock-btn:hover { filter: brightness(1.1); }
         .lock-error { color: var(--red-action); font-size: 0.85rem; margin-top: 10px; display: none; }
 
+        /* A long event name shortens with an ellipsis instead of pushing the header buttons off-screen. */
+        .header h1 { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .header { 
             display: flex; 
             justify-content: space-between; 
@@ -1008,7 +1010,7 @@
         <button type="button" class="menu-btn" onclick="openSidebar()" aria-label="Menu">
             <svg viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
         </button>
-        <h1>Current Requests</h1>
+        <h1 id="admin-title">Cuelistr</h1>
         <div style="display:flex; align-items:center; gap:4px;">
             <button id="toggle-hints" class="hints-icon-btn" title="Show/hide setting hints" onclick="toggleHints()">
                 <svg viewBox="0 0 24 24" id="hints-svg">
@@ -1568,6 +1570,10 @@
                                 <button class="utility-btn" onclick="clearSystem('clearHistory', 'Are you sure you want to clear your played history log?')">Clear Played History</button>
                             </div>
                             <div class="control-bar" style="margin-top: 10px;">
+                                <button class="utility-btn" onclick="resetAllSettings()">Reset All Settings</button>
+                            </div>
+                            <p style="color: #a7a7a7; font-size: 0.8rem; margin: 8px 0 0 0;">Puts credits, queue cap, filters, location lock, kiosk, music video and appearance settings back to their defaults. Keeps the event name, venue, Spotify connection, queue, history, blocked guests, and the schedule.</p>
+                            <div class="control-bar" style="margin-top: 18px;">
                                 <button class="utility-btn" style="background: var(--red-action, #e91429); border-color: var(--red-action, #e91429); color: white;" onclick="closeEvent()">Close This Event</button>
                             </div>
                             <p style="color: #a7a7a7; font-size: 0.8rem; margin: 8px 0 0 0;">Permanently deletes this event and everything in it - queue, history, settings, Spotify connection. This can't be undone, and the URL becomes free for anyone to reuse.</p>
@@ -2826,6 +2832,11 @@ async function verifyPassword() {
                 const data = await res.json();
                 applyAdminMode(data.siteMode);
                 applyThemesFromData(data.themes);
+                // Page title: "Cuelistr · <event name>". An event with no real name just shows "Cuelistr".
+                {
+                    const evName = (data.eventName || '').trim();
+                    document.getElementById('admin-title').textContent = (evName && evName.toLowerCase() !== 'cuelistr') ? 'Cuelistr \u00b7 ' + evName : 'Cuelistr';
+                }
                 venueScreenKey = data.screenKey || '';
                 renderVenueCode(data.venueCode);
                 
@@ -3053,6 +3064,23 @@ async function verifyPassword() {
                 });
                 updateDashboard();
             }
+        }
+
+        async function resetAllSettings() {
+            if (!isAuthorized) return;
+            if (!confirm('Reset ALL settings for this event back to their defaults?\n\nThis resets credits, the queue cap, song/decade filters, location lock, request toggles, kiosk settings, music video settings, appearance and the fallback playlist.\n\nIt keeps the event name, venue, Spotify connection, queue, history, blocked guests and the schedule. This can\'t be undone.')) return;
+            try {
+                const res = await fetch(eventUrl('/api/admin/action'), {
+                    method: 'POST',
+                    headers: adminHeaders({ 'Content-Type': 'application/json' }),
+                    body: JSON.stringify({ id: null, action: 'resetSettings' })
+                });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                showToast('All settings were reset to their defaults.', 'success');
+            } catch (e) {
+                showToast('Could not reset the settings. Try again.', 'error');
+            }
+            updateDashboard();
         }
 
         async function closeEvent() {
