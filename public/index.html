@@ -1427,10 +1427,9 @@
                         <div class="venue-list-item-name">${escapeHtml(v.eventName)}</div>
                         ${v.venueName ? `<div class="venue-list-item-sub">${escapeHtml(v.venueName)}</div>` : ''}
                         <div class="venue-list-item-sub">${escapeHtml(formatLastVisit(v.at))}</div>
+                        ${v.slug === EVENT_SLUG ? '<div class="venue-list-item-distance">Current venue</div>' : ''}
                     </div>
-                    ${v.slug === EVENT_SLUG
-                        ? '<span class="venue-list-item-distance">Current</span>'
-                        : `<button class="venue-select-btn" data-slug="${escapeHtml(v.slug)}" data-name="${escapeHtml(v.eventName)}" onclick="selectVenue(this.dataset.slug, this.dataset.name)">Select</button>`}
+                    <button class="venue-select-btn" data-slug="${escapeHtml(v.slug)}" data-name="${escapeHtml(v.eventName)}" onclick="selectVenue(this.dataset.slug, this.dataset.name)">Select</button>
                 </div>
             `).join('') + '<div style="text-align:center;padding:14px;"><button type="button" class="venue-history-clear" onclick="clearVenueHistory()">Clear history</button></div>';
         }
