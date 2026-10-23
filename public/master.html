@@ -131,6 +131,25 @@
         .cp-del { color: #ff6b6b; }
         @media (max-width: 720px) { .cp-row { flex-wrap: wrap; } }
 
+        /* ---- Premade visuals tab ---- */
+        .pv-drop { display: block; text-align: center; padding: 22px 16px; margin-bottom: 16px; background: var(--card-bg); border: 2px dashed #3a3a3a; border-radius: 14px; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+        .pv-drop:hover, .pv-drop.over { border-color: var(--spotify-green); background: rgba(29,185,84,0.06); }
+        .pv-drop-title { font-weight: 800; font-size: 1rem; }
+        .pv-drop-sub { color: #a7a7a7; font-size: 0.85rem; margin-top: 4px; }
+        .pv-progress { margin-top: 8px; font-size: 0.8rem; color: var(--spotify-green); }
+        .pv-progress:empty { display: none; }
+        .pv-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+        .pv-card { background: var(--panel-bg); border: 1px solid #282828; border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; }
+        .pv-thumb { position: relative; display: block; aspect-ratio: 16 / 10; background: #000; }
+        .pv-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .pv-tag { position: absolute; left: 8px; top: 8px; background: rgba(0,0,0,0.7); color: white; font-size: 0.65rem; font-weight: 800; letter-spacing: 0.4px; text-transform: uppercase; padding: 3px 7px; border-radius: 20px; }
+        .pv-meta { display: flex; gap: 6px; align-items: center; padding: 8px; }
+        .pv-meta input { flex: 1 1 auto; min-width: 0; background: var(--card-bg); border: 1px solid #333; color: white; border-radius: 8px; padding: 7px 9px; font-size: 0.85rem; outline: none; }
+        .pv-meta input:focus { border-color: var(--spotify-green); }
+        .pv-meta button { flex-shrink: 0; background: none; border: 1px solid #333; color: #ff6b6b; border-radius: 8px; padding: 7px 10px; font-size: 0.8rem; font-weight: 700; cursor: pointer; }
+        .pv-meta button:hover { border-color: #ff6b6b; }
+        .pv-empty { grid-column: 1 / -1; padding: 26px 16px; color: #a7a7a7; font-size: 0.9rem; text-align: center; background: var(--panel-bg); border: 1px solid #282828; border-radius: 12px; }
+
         /* ---- Tabs + Videos catalog ---- */
         .tabs { display: flex; gap: 8px; margin-bottom: 20px; }
         .tabs { display: flex; gap: 8px; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; scrollbar-width: none; }
@@ -287,6 +306,7 @@
             <button class="tab-btn" id="tabbtn-videos" onclick="switchTab('videos')">Videos</button>
             <button class="tab-btn" id="tabbtn-playlists" onclick="switchTab('playlists')">Playlists</button>
             <button class="tab-btn" id="tabbtn-karaoke" onclick="switchTab('karaoke')">Karaoke</button>
+            <button class="tab-btn" id="tabbtn-visuals" onclick="switchTab('visuals')">Visuals</button>
         </div>
         <div id="tab-events">
         <div class="header">
@@ -310,6 +330,23 @@
 
         <div id="tab-playlists" style="display:none"></div>
         <div id="tab-karaoke" style="display:none"></div>
+
+        <div id="tab-visuals" style="display:none">
+            <div class="header">
+                <div>
+                    <h1>Visuals</h1>
+                    <div class="subtitle"><b>One library for ALL events.</b> Photos and videos uploaded here appear under <b>Premade Visuals</b> in the Ambient Visuals tab of every event's scheduler, and venues can't delete them. <span id="pv-count"></span></div>
+                </div>
+                <button class="refresh-btn" onclick="pvLoad()">↻ Reload</button>
+            </div>
+            <label class="pv-drop" id="pv-drop">
+                <input type="file" id="pv-file" accept="image/*,video/*" multiple style="display:none" onchange="pvPicked(this.files); this.value = ''">
+                <div class="pv-drop-title">+ Upload visuals</div>
+                <div class="pv-drop-sub">Click to choose photos or videos, or drop them here. Several at once is fine.</div>
+                <div class="pv-progress" id="pv-progress"></div>
+            </label>
+            <div class="pv-grid" id="pv-grid"></div>
+        </div>
 
         <div id="tab-videos" style="display:none">
             <div class="header">
@@ -596,13 +633,14 @@
         let vcToastTimer = null;
 
         function switchTab(tab) {
-            ['events', 'videos', 'playlists', 'karaoke'].forEach(t => {
+            ['events', 'videos', 'playlists', 'karaoke', 'visuals'].forEach(t => {
                 document.getElementById('tab-' + t).style.display = tab === t ? 'block' : 'none';
                 document.getElementById('tabbtn-' + t).classList.toggle('active', tab === t);
             });
             document.getElementById('dashboard').classList.toggle('wide', tab === 'videos');
             if (tab === 'videos' && !vcLoaded) vcLoad();
             if ((tab === 'playlists' || tab === 'karaoke') && !cpLoaded) cpLoad();
+            if (tab === 'visuals' && !pvLoaded) pvLoad();
         }
 
         async function vcApi(method, path, body) {
@@ -1629,6 +1667,112 @@
             await cpLoad();
         }
         cpBuildShell();
+
+        /* ===================== Visuals tab (premade Ambient Visuals) ===================== */
+        // Files go straight from this browser to Cloudinary (the same unsigned upload preset
+        // the scheduler uses); only the resulting URL is saved on the server, via
+        // /api/master/curated-visuals. Every event's scheduler then lists them as "Premade Visuals".
+        const PV_CLOUD_NAME = 'zqywiwqr';
+        const PV_UPLOAD_PRESET = 'dylhzuki';
+        let pvRows = [];
+        let pvLoaded = false;
+        let pvUploading = false;
+
+        // Small preview: Cloudinary makes a cropped thumbnail on the fly. For a video it returns a JPG of the first frame.
+        function pvThumb(row) {
+            const u = String(row.url || '');
+            if (u.indexOf('/upload/') === -1) return u;
+            if (row.type === 'video') {
+                return u.replace('/upload/', '/upload/so_0,w_360,h_225,c_fill,f_jpg,q_auto/').replace(/\.[A-Za-z0-9]+(\?.*)?$/, '.jpg');
+            }
+            return u.replace('/upload/', '/upload/w_360,h_225,c_fill,f_auto,q_auto/');
+        }
+        async function pvApi(method, path, body) {
+            try {
+                const res = await fetch('/api/master/curated-visuals' + path, {
+                    method,
+                    headers: Object.assign({ 'x-admin-password': masterPassword }, body ? { 'Content-Type': 'application/json' } : {}),
+                    body: body ? JSON.stringify(body) : undefined
+                });
+                let data = {};
+                try { data = await res.json(); } catch (e) { /* non-JSON error body */ }
+                return { ok: res.ok, data };
+            } catch (e) {
+                return { ok: false, data: { error: 'Could not reach the server.' } };
+            }
+        }
+        function pvRender() {
+            document.getElementById('pv-count').textContent = pvRows.length ? `${pvRows.length} ${pvRows.length === 1 ? 'visual' : 'visuals'}.` : '';
+            const grid = document.getElementById('pv-grid');
+            if (!pvRows.length) { grid.innerHTML = '<div class="pv-empty">No premade visuals yet. Upload some above.</div>'; return; }
+            grid.innerHTML = pvRows.map(r => `
+                <div class="pv-card">
+                    <a class="pv-thumb" href="${cpEsc(r.url)}" target="_blank" rel="noopener" title="Open full size">
+                        <img src="${cpEsc(pvThumb(r))}" alt="" loading="lazy">
+                        <span class="pv-tag">${r.type === 'video' ? 'Video' : 'Photo'}</span>
+                    </a>
+                    <div class="pv-meta">
+                        <input type="text" value="${cpEsc(r.label)}" maxlength="60" title="Name shown in schedulers" onchange="pvRename('${cpEsc(r.id)}', this.value)">
+                        <button onclick="pvDelete('${cpEsc(r.id)}')">Delete</button>
+                    </div>
+                </div>`).join('');
+        }
+        async function pvLoad() {
+            const r = await pvApi('GET', '');
+            if (!r.ok) { showToast(r.data.error || 'Could not load visuals.', 'error'); return; }
+            pvRows = r.data.visuals || [];
+            pvLoaded = true;
+            pvRender();
+        }
+        async function pvUploadOne(file) {
+            const isVideo = file.type.startsWith('video/');
+            if (!isVideo && !file.type.startsWith('image/')) throw new Error('Only photos and videos can be uploaded.');
+            const form = new FormData();
+            form.append('file', file);
+            form.append('upload_preset', PV_UPLOAD_PRESET);
+            const cloudRes = await fetch(`https://api.cloudinary.com/v1_1/${PV_CLOUD_NAME}/auto/upload`, { method: 'POST', body: form });
+            const cloud = await cloudRes.json();
+            if (!cloudRes.ok || !cloud.secure_url) throw new Error((cloud.error && cloud.error.message) || 'Cloudinary upload failed');
+            const label = file.name.replace(/\.[^.]+$/, '').slice(0, 60);
+            const r = await pvApi('POST', '', { url: cloud.secure_url, type: isVideo ? 'video' : 'photo', label });
+            if (!r.ok) throw new Error(r.data.error || 'Could not save the upload.');
+        }
+        async function pvPicked(fileList) {
+            const files = Array.from(fileList || []);
+            if (!files.length || pvUploading) return;
+            pvUploading = true;
+            const prog = document.getElementById('pv-progress');
+            let done = 0, failed = 0;
+            for (const file of files) {
+                prog.textContent = `Uploading ${done + failed + 1} of ${files.length}: ${file.name}`;
+                try { await pvUploadOne(file); done++; }
+                catch (e) { failed++; showToast(`${file.name}: ${e.message}`, 'error'); }
+            }
+            prog.textContent = '';
+            pvUploading = false;
+            if (done) showToast(`Uploaded ${done} ${done === 1 ? 'visual' : 'visuals'}.`);
+            await pvLoad();
+        }
+        async function pvRename(id, label) {
+            const r = await pvApi('POST', '', { id, label });
+            if (!r.ok) showToast(r.data.error || 'Could not rename that.', 'error');
+            await pvLoad();
+        }
+        async function pvDelete(id) {
+            const row = pvRows.find(x => x.id === id);
+            if (!row || !confirm(`Delete "${row.label}"? It disappears from every event's Premade Visuals list. Blocks that already use it keep working.`)) return;
+            const r = await pvApi('DELETE', '/' + encodeURIComponent(id));
+            if (!r.ok) { showToast(r.data.error || 'Could not delete.', 'error'); return; }
+            showToast('Deleted.');
+            await pvLoad();
+        }
+        (function () {
+            const drop = document.getElementById('pv-drop');
+            if (!drop) return;
+            ['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+            ['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+            drop.addEventListener('drop', e => { if (e.dataTransfer && e.dataTransfer.files) pvPicked(e.dataTransfer.files); });
+        })();
     </script>
 
     <script>
