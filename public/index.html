@@ -13,7 +13,6 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Khula:wght@600&display=swap">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <title>Cuelistr</title>
-    <link rel="stylesheet" href="/theme.css">
     <style>
         :root {
             --spotify-green: #1DB954;
@@ -65,6 +64,23 @@
         .vc-btn-primary { background: var(--spotify-green); color: #000; }
         .vc-note { margin-top: 16px; font-size: 0.78rem; color: var(--text-muted); }
 
+        /* ---- Light theme (html[data-theme="light"], set by theme.js) ---- */
+        html[data-theme="light"] {
+            --spotify-green: #16a34a;
+            --spotify-black: #f3f4f6;
+            --panel-bg: #ffffff;
+            --card-bg: #eceff3;
+            --red-action: #d1122a;
+            --text: #111318;
+            --text-muted: #5b6472;
+            --border: #dfe3e8;
+            --border-strong: #c8ced6;
+            --hover-bg: #e3e7ec;
+            --overlay-soft: rgba(0,0,0,0.06);
+            --stage-bg: #f3f4f6;
+            --inset-bg: #ffffff;
+            --text-soft: #374151;
+        }
 
         /* ---- Theme picker (sidebar) ---- */
         .theme-picker { padding: 14px 20px 6px; }
