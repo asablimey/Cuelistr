@@ -2886,7 +2886,6 @@ function buildSortedQueueForAdmin(event) {
         upvoters: t.upvoters || [],
         downvoters: t.downvoters || [],
         requesters: t.requesters || [],
-        requested: !!t.requested, // true if added via the guest or kiosk page
         order: t.order || 0
         // Sorted by the DJ's own manual order (see the admin reorder route),
         // NOT by votes - votes are shown as a signal, but the admin's Live
@@ -3629,80 +3628,6 @@ app.get('/e/:slug/api/admin/curated-playlists', async (req, res) => {
     }
 });
 
-// --- Master: premade Ambient Visuals (Visuals tab on /master) -------------------
-// Server-wide, like the curated playlists: the master uploads a photo/video once
-// (straight to Cloudinary from the browser - this server never sees the bytes) and
-// it shows up under "Premade Visuals" in every event's scheduler. Picking one there
-// copies it into that event's own ambient library (see the premadeId handling in
-// POST /api/admin/ambient-media), so blocks keep working even if it's deleted here.
-// One Redis hash, field = row id, value = JSON.
-//   row = { id, label, url, type: 'photo'|'video', createdAt, updatedAt }
-const CURATED_VISUALS_KEY = 'curated-visuals:rows';
-const CURATED_VISUALS_MAX = 300;
-
-async function curatedVisualsList() {
-    const flat = await events.redis(['HGETALL', CURATED_VISUALS_KEY]);
-    const rows = [];
-    for (let i = 0; i + 1 < (flat || []).length; i += 2) {
-        try { rows.push(JSON.parse(flat[i + 1])); } catch (e) { /* skip an unreadable row */ }
-    }
-    return rows.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-}
-
-const curatedVisualsApi = express.Router();
-app.use('/api/master/curated-visuals', catalogAuthLimiter, requireMaster, curatedVisualsApi);
-
-curatedVisualsApi.get('/', async (req, res) => {
-    try { res.json({ visuals: await curatedVisualsList() }); }
-    catch (e) { res.status(500).json({ error: 'Could not load premade visuals: ' + e.message }); }
-});
-
-// Create (url + type + label) or rename (id + label).
-curatedVisualsApi.post('/', async (req, res) => {
-    try {
-        const body = req.body || {};
-        const all = await curatedVisualsList();
-        const existing = body.id ? all.find(r => r.id === String(body.id)) : null;
-        if (body.id && !existing) return res.status(404).json({ error: 'That visual no longer exists.' });
-        let label = typeof body.label === 'string' ? body.label.trim().slice(0, 60) : '';
-        if (existing) {
-            if (!label) label = existing.label;
-            const row = Object.assign({}, existing, { label, updatedAt: Date.now() });
-            await events.redis(['HSET', CURATED_VISUALS_KEY, row.id, JSON.stringify(row)]);
-            return res.json({ success: true, visual: row, created: false });
-        }
-        if (!isCloudinaryUrl(body.url)) return res.status(400).json({ error: 'That upload URL is not recognized.' });
-        if (body.type !== 'photo' && body.type !== 'video') return res.status(400).json({ error: 'Type must be "photo" or "video".' });
-        if (all.length >= CURATED_VISUALS_MAX) return res.status(400).json({ error: `Limit of ${CURATED_VISUALS_MAX} premade visuals reached.` });
-        if (!label) label = body.type === 'video' ? 'Untitled video' : 'Untitled photo';
-        const now = Date.now();
-        const row = { id: crypto.randomBytes(6).toString('hex'), label, url: body.url, type: body.type, createdAt: now, updatedAt: now };
-        await events.redis(['HSET', CURATED_VISUALS_KEY, row.id, JSON.stringify(row)]);
-        res.json({ success: true, visual: row, created: true });
-    } catch (e) {
-        res.status(500).json({ error: 'Could not save: ' + e.message });
-    }
-});
-
-curatedVisualsApi.delete('/:id', async (req, res) => {
-    try {
-        const n = await events.redis(['HDEL', CURATED_VISUALS_KEY, String(req.params.id)]);
-        res.json({ success: true, removed: Number(n) > 0 });
-    } catch (e) {
-        res.status(500).json({ error: 'Could not delete: ' + e.message });
-    }
-});
-
-// What each event's scheduler reads. Behind the normal per-event admin auth.
-app.get('/e/:slug/api/admin/curated-visuals', async (req, res) => {
-    try {
-        const rows = await curatedVisualsList();
-        res.json({ visuals: rows.map(r => ({ id: r.id, label: r.label, url: r.url, type: r.type })) });
-    } catch (e) {
-        res.status(500).json({ error: 'Could not load premade visuals.' });
-    }
-});
-
 // Is this YouTube video playable in the embedded player? (used by the grid)
 catalogApi.get('/check-video', async (req, res) => {
     const id = String(req.query.id || '');
@@ -4288,7 +4213,6 @@ function buildRequestHandler(isKiosk) {
             }
             if (!existingTrack.requesters) existingTrack.requesters = [];
             existingTrack.requesters.push(requesterName);
-            existingTrack.requested = true; // asked for via the guest or kiosk page (admin shows a "Requested" tag)
         } else {
             event.activeQueue.push({
                 id: trackId,
@@ -4301,7 +4225,6 @@ function buildRequestHandler(isKiosk) {
                 upvoters: [],
                 downvoters: [],
                 requesters: [requesterName],
-                requested: true, // came in through the guest or kiosk page, not added by the DJ
                 order: nextQueueOrder(event)
             });
             // Don't push to Spotify's real queue here - only the one track
@@ -4988,31 +4911,16 @@ function isCloudinaryUrl(url) {
     }
 }
 
-app.post('/e/:slug/api/admin/ambient-media', async (req, res) => {
+app.post('/e/:slug/api/admin/ambient-media', (req, res) => {
     const event = req.event;
-    let { url, filename, type, premadeId } = req.body || {};
-    if (!Array.isArray(event.ambientMedia)) event.ambientMedia = [];
-
-    // Importing one of the master's premade visuals: take url/type/name from the
-    // master's own row (never from the request), and don't import the same one twice.
-    if (premadeId !== undefined && premadeId !== null) {
-        premadeId = String(premadeId);
-        const already = event.ambientMedia.find(m => m.premadeId === premadeId);
-        if (already) return res.json({ success: true, item: already, existing: true });
-        let row = null;
-        try { row = (await curatedVisualsList()).find(r => r.id === premadeId); } catch (e) { /* handled below */ }
-        if (!row) return res.status(404).json({ error: 'That premade visual no longer exists.' });
-        url = row.url; type = row.type; filename = row.label;
-    } else {
-        premadeId = null;
-    }
-
+    const { url, filename, type } = req.body || {};
     if (!isCloudinaryUrl(url)) {
         return res.status(400).json({ error: 'That upload URL is not recognized.' });
     }
     if (type !== 'photo' && type !== 'video') {
         return res.status(400).json({ error: 'Media type must be "photo" or "video".' });
     }
+    if (!Array.isArray(event.ambientMedia)) event.ambientMedia = [];
     if (event.ambientMedia.length >= 300) {
         return res.status(400).json({ error: 'This event already has 300 ambient files - delete some before adding more.' });
     }
@@ -5020,7 +4928,6 @@ app.post('/e/:slug/api/admin/ambient-media', async (req, res) => {
         ? filename.trim().slice(0, 120)
         : (type === 'video' ? 'Untitled video' : 'Untitled photo');
     const item = { id: crypto.randomUUID(), url, filename: safeFilename, type, createdAt: Date.now() };
-    if (premadeId) item.premadeId = premadeId;
     event.ambientMedia.push(item);
     events.scheduleSave(event.slug);
     res.json({ success: true, item });
