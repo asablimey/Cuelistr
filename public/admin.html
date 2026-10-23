@@ -2,7 +2,6 @@
 <html lang="en">
 <head>
     <script src="/theme.js"></script>
-    <script>CrowdTheme.use("crowddj_theme_admin_" + (location.pathname.split("/")[2] || ""));</script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="/layout.css">
@@ -35,23 +34,6 @@
             --text-soft: #cccccc;
         }
 
-        /* ---- Light theme (html[data-theme="light"], set by theme.js) ---- */
-        html[data-theme="light"] {
-            --spotify-green: #16a34a;
-            --spotify-black: #f3f4f6;
-            --panel-bg: #ffffff;
-            --card-bg: #eceff3;
-            --red-action: #d1122a;
-            --text: #111318;
-            --text-muted: #5b6472;
-            --border: #dfe3e8;
-            --border-strong: #c8ced6;
-            --hover-bg: #e3e7ec;
-            --overlay-soft: rgba(0,0,0,0.06);
-            --stage-bg: #f3f4f6;
-            --inset-bg: #ffffff;
-            --text-soft: #374151;
-        }
 
         /* ---- Segmented controls (theme + mode pickers) ---- */
         .theme-seg { display: inline-flex; background: var(--card-bg); border: 1px solid var(--border-strong); border-radius: 8px; overflow: hidden; }
@@ -695,6 +677,11 @@
             font-weight: 600;
             white-space: nowrap;
         }
+        .requested-tag {
+            display: inline-flex; align-items: center; line-height: 1; font-size: 0.7rem; font-weight: 700;
+            letter-spacing: 0.4px; text-transform: uppercase; color: #fff; background: var(--spotify-green);
+            padding: 4px 8px; border-radius: 20px; white-space: nowrap; flex-shrink: 0;
+        }
         .requester-badge {
             display: inline-flex;
             align-items: center;
@@ -972,8 +959,7 @@
             <h3>Menu</h3>
             <button class="sidebar-close-btn" onclick="closeSidebar()">✕</button>
         </div>
-        <button type="button" id="sidebar-nav-playback" class="sidebar-nav-item" onclick="switchTab('playback')">Playback</button>
-        <button type="button" id="sidebar-nav-queue" class="sidebar-nav-item active-tab" onclick="switchTab('queue')">Up Next</button>
+        <button type="button" id="sidebar-nav-queue" class="sidebar-nav-item active-tab" onclick="switchTab('queue')">Playback &amp; Up Next</button>
         <button type="button" id="sidebar-nav-history" class="sidebar-nav-item" onclick="switchTab('history')">Song History</button>
         <button type="button" id="sidebar-nav-settings" class="sidebar-nav-item" onclick="switchTab('settings')">Settings</button>
         <button type="button" id="sidebar-nav-stats" class="sidebar-nav-item" onclick="switchTab('stats')">Stats</button>
@@ -1025,9 +1011,9 @@
         </div>
     </div>
 
-    <div id="tab-panel-playback" class="tab-content">
+    <div id="tab-panel-queue" class="tab-content active-content">
         <div class="panel">
-            <h2>Playback</h2>
+            <h2>Playback &amp; Up Next</h2>
             <div id="playback-connected-view" class="playback-panel" style="display:none;">
                 <img class="playback-artwork" id="playback-artwork" src="" alt="">
                 <div>
@@ -1072,19 +1058,15 @@
                 </div>
 
                 <div class="playback-upcoming" id="playback-upcoming-wrap" style="display:none;">
-                    <h3>Up Next (Spotify Queue)</h3>
+                    <h3>Coming Up on Spotify</h3>
                     <div id="playback-upcoming-list"></div>
                 </div>
             </div>
             <div id="playback-disconnected-view" class="playback-disconnected">
                 Connect the admin Spotify account under <strong>Settings → Spotify</strong> to control playback from here.
             </div>
-        </div>
-    </div>
 
-    <div id="tab-panel-queue" class="tab-content active-content">
-        <div class="panel">
-            <h2>Current Queue</h2>
+            <div class="settings-section-label" style="margin: 22px 0 10px 0;">Up Next</div>
 
             <div class="settings-card full-only" style="margin-bottom: 20px;">
                 <div class="settings-section-label">Add a Song</div>
@@ -1154,16 +1136,6 @@
                                 Kiosk, visuals, the music scheduler, blocklists, stats, filters and music videos are switched off, on the server too.
                                 <strong>Full</strong> turns everything back on exactly as you left it - nothing is deleted when you switch.
                             </p>
-                        </div>
-
-                        <div class="settings-card">
-                            <div class="settings-section-label">Admin Appearance</div>
-                            <div class="theme-seg" id="theme-seg-admin" role="group" aria-label="Admin appearance">
-                                <button type="button" data-mode="auto" onclick="setScreenTheme('admin','auto')">Auto</button>
-                                <button type="button" data-mode="light" onclick="setScreenTheme('admin','light')">Light</button>
-                                <button type="button" data-mode="dark" onclick="setScreenTheme('admin','dark')">Dark</button>
-                            </div>
-                            <p class="settings-card-hint" style="margin-top: 14px; margin-bottom: 0;">Auto follows this device's own light/dark setting.</p>
                         </div>
 
                         <div class="settings-card">
@@ -1360,16 +1332,6 @@
 
                     <div id="settings-category-kiosk" class="settings-category-panel">
                         <div class="settings-card">
-                            <div class="settings-section-label">Kiosk Appearance</div>
-                            <div class="theme-seg" id="theme-seg-kiosk" role="group" aria-label="Kiosk Appearance">
-                                <button type="button" data-mode="auto" onclick="setScreenTheme('kiosk','auto')">Auto</button>
-                                <button type="button" data-mode="light" onclick="setScreenTheme('kiosk','light')">Light</button>
-                                <button type="button" data-mode="dark" onclick="setScreenTheme('kiosk','dark')">Dark</button>
-                            </div>
-                            <p class="settings-card-hint" style="margin-top: 14px; margin-bottom: 0;">Applies to the kiosk page within a few seconds. Auto follows the kiosk device's own light/dark setting.</p>
-                        </div>
-
-                        <div class="settings-card">
                             <div class="settings-section-label">Kiosk Page (kiosk.html)</div>
                             <p class="settings-card-hint" style="margin-top: 0;">
                                 Independent settings for an admin-attended kiosk device - separate on/off and credit rules from regular guests. Each physical kiosk still gets its own credit bank, same as any guest's phone.
@@ -1399,16 +1361,6 @@
                     </div>
 
                     <div id="settings-category-visuals" class="settings-category-panel">
-                        <div class="settings-card">
-                            <div class="settings-section-label">Visuals Appearance</div>
-                            <div class="theme-seg" id="theme-seg-visuals" role="group" aria-label="Visuals Appearance">
-                                <button type="button" data-mode="auto" onclick="setScreenTheme('visuals','auto')">Auto</button>
-                                <button type="button" data-mode="light" onclick="setScreenTheme('visuals','light')">Light</button>
-                                <button type="button" data-mode="dark" onclick="setScreenTheme('visuals','dark')">Dark</button>
-                            </div>
-                            <p class="settings-card-hint" style="margin-top: 14px; margin-bottom: 0;">Applies to the visuals display within a few seconds. Auto follows the display device's own light/dark setting.</p>
-                        </div>
-
                         <div class="settings-card">
                             <div class="settings-section-label">Visuals Display (visuals.html)</div>
                             <p class="settings-card-hint" style="margin-top: 0;">
@@ -1520,20 +1472,12 @@
                                 catch most bad matches on their own, but they're not perfect. <strong>Family Mode</strong>
                                 flips the default: with it on, a song's video plays ONLY if a human has already approved
                                 that exact video below - nothing plays automatically no matter what the automated checks
-                                concluded. The denylist below applies regardless of Family Mode and blocks a song's video
+                                concluded. The music-video denylist (Blocked tab) applies regardless of Family Mode and blocks a song's video
                                 everywhere, for every event on this platform.
                             </p>
                             <div class="control-bar">
                                 <button id="toggle-family-mode" class="toggle-btn closed-status" onclick="toggleFamilyMode()">Family Mode: OFF</button>
                             </div>
-
-                            <div class="settings-section-label" style="margin-top: 20px;">Denylist (blocked everywhere)</div>
-                            <div class="input-group">
-                                <label>Search for a song to block</label>
-                                <input type="text" id="denylist-search-input" placeholder="Search for a song or artist" oninput="onDenylistSearchInput()">
-                            </div>
-                            <div id="denylist-search-results"></div>
-                            <div id="denylist-rows" class="family-list-rows"></div>
 
                             <div class="settings-section-label" style="margin-top: 20px;">Allowlist (approved for Family Mode)</div>
                             <p class="settings-card-hint" style="margin-top: 0;">
@@ -1634,6 +1578,17 @@
             </div>
 
             <div class="settings-card">
+                <div class="settings-section-label">Music Videos (blocked everywhere)</div>
+                <p class="settings-card-hint" style="margin-top: 0;">Stops a song's music video from ever playing, for every event on this platform. The song itself can still be requested and played.</p>
+                <div class="input-group">
+                    <label>Search for a song to block</label>
+                    <input type="text" id="denylist-search-input" placeholder="Search for a song or artist" oninput="onDenylistSearchInput()">
+                </div>
+                <div id="denylist-search-results"></div>
+                <div id="denylist-rows" class="family-list-rows"></div>
+            </div>
+
+            <div class="settings-card">
                 <div class="settings-section-label">Currently Blocked</div>
                 <div id="blocklist-everything-list"></div>
             </div>
@@ -1715,7 +1670,7 @@
         // chip selection before they hit "Save Filters".
         let filtersInitialized = false;
 
-        const TAB_NAMES = ['playback', 'queue', 'history', 'settings', 'stats', 'blocked'];
+        const TAB_NAMES = ['queue', 'history', 'settings', 'stats', 'blocked'];
 
         // --- Sidebar (hamburger menu) ---
         function openSidebar() {
@@ -2644,6 +2599,7 @@ async function verifyPassword() {
                             <p class="song-artist">${escapeHtml(artistWithYear(song.artist, song.year))}</p>
                             <div class="length-requester-row">
                                 <span class="length-text">Length: ${song.duration}</span>
+                                ${song.requested ? '<span class="requested-tag">Requested</span>' : ''}
                                 ${buildRequesterBadge(song.requesters)}
                             </div>
                         </div>
@@ -2753,17 +2709,10 @@ async function verifyPassword() {
             handleEl.addEventListener('pointercancel', onUp);
         }
 
-        // ---- Site mode (Basic / Full) + themes ----
+        // ---- Site mode (Basic / Full) ----
         let adminBasicMode = false;
-        let lastThemes = { admin: 'auto', kiosk: 'auto', visuals: 'auto' };
         function markSeg(id, mode) {
             document.querySelectorAll('#' + id + ' button').forEach(b => b.classList.toggle('is-active', b.dataset.mode === mode));
-        }
-        function applyThemesFromData(themes) {
-            if (!themes) return;
-            lastThemes = themes;
-            CrowdTheme.set(themes.admin || 'auto');
-            ['admin', 'kiosk', 'visuals'].forEach(k => markSeg('theme-seg-' + k, themes[k] || 'auto'));
         }
         function applyAdminMode(mode) {
             const basic = mode === 'basic';
@@ -2792,17 +2741,6 @@ async function verifyPassword() {
                 showToast(mode === 'basic' ? 'Basic mode on.' : 'Full mode on.', 'success');
             } catch (e) { showToast('Could not reach the server.', 'error'); }
         }
-        async function setScreenTheme(screen, mode) {
-            try {
-                const res = await fetch(eventUrl('/api/admin/theme'), {
-                    method: 'POST', headers: adminHeaders({ 'Content-Type': 'application/json' }),
-                    body: JSON.stringify({ screen, theme: mode })
-                });
-                if (!res.ok) { showToast('Could not change the appearance.', 'error'); return; }
-                lastThemes[screen] = mode;
-                applyThemesFromData(lastThemes);
-            } catch (e) { showToast('Could not reach the server.', 'error'); }
-        }
 
         async function updateDashboard() {
             if (!isAuthorized) return; 
@@ -2812,7 +2750,6 @@ async function verifyPassword() {
                 if (!res.ok) return;
                 const data = await res.json();
                 applyAdminMode(data.siteMode);
-                applyThemesFromData(data.themes);
                 // Page title: "Cuelistr · <event name>". An event with no real name just shows "Cuelistr".
                 {
                     const evName = (data.eventName || '').trim();
