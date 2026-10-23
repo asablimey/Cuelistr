@@ -1,7 +1,39 @@
+/* eventStore.js - saving and loading events and accounts (stored in Upstash Redis).
+ *
+ * FILE MAP
+ *    1. IMPORTS
+ *    2. REDIS CONNECTION ............ Upstash settings + the raw redis() helper
+ *    3. EVENT KEYS & SLUGS .......... how events are named in Redis
+ *    4. ACCOUNT KEYS & CHECKS ....... username / email rules and Redis key names
+ *    5. REDIS HELPERS ............... get / set / delete / event index
+ *    6. NEW EVENT TEMPLATE .......... blankEventState() - every default setting
+ *    7. EVENT CACHE & SAVING ........ in-memory copy + debounced saves
+ *    8. MUSIC-VIDEO CACHE ........... saved audio-verification results
+ *    9. FAMILY LISTS ................ saved music-video deny / allow lists
+ *   10. LOADING EVENTS .............. getEvent()
+ *   11. CACHE CLEAN-UP .............. dropping idle events from memory
+ *   12. CREATING EVENTS ............. templates + createEvent()
+ *   13. EVENT PASSWORDS ............. hash / verify / reset
+ *   14. EVENT LISTS & SUMMARIES ..... what guests and the master page see
+ *   15. ACCOUNTS .................... users, logins, password resets
+ *   16. DELETING EVENTS
+ *   17. EXPORTS ..................... what server.js can use
+ */
+
+
+/* ===========================================================================
+ * 1. IMPORTS
+ * ========================================================================== */
+
 const crypto = require('crypto');
 const fetch = require('node-fetch');
 const { promisify } = require('util');
 const scryptAsync = promisify(crypto.scrypt);
+
+
+/* ===========================================================================
+ * 2. REDIS CONNECTION (Upstash)
+ * ========================================================================== */
 
 // --- Upstash Redis (free tier) as the persistence layer -------------------
 // Render's free plan spins the whole instance down after idle time and wipes
@@ -32,6 +64,11 @@ if (!UPSTASH_URL || !UPSTASH_TOKEN) {
     console.error('[EVENTS] Events will not persist across restarts. See eventStore.js header for setup.');
 }
 
+
+/* ===========================================================================
+ * 3. EVENT KEYS & SLUGS
+ * ========================================================================== */
+
 const SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/; // e.g. "prom-2026", 2-40 chars, lowercase/digits/hyphens
 
 function isValidSlug(slug) {
@@ -41,6 +78,11 @@ function isValidSlug(slug) {
 function eventKey(slug) {
     return `event:${slug}`;
 }
+
+
+/* ===========================================================================
+ * 4. ACCOUNT KEYS & CHECKS
+ * ========================================================================== */
 
 // --- Accounts -------------------------------------------------------------
 // A thin layer alongside events: an account just needs a username, an email
@@ -72,6 +114,11 @@ function emailIndexKey(email) {
 function userEventsKey(username) {
     return `user-events:${username.toLowerCase()}`;
 }
+
+
+/* ===========================================================================
+ * 5. REDIS HELPERS
+ * ========================================================================== */
 
 // Upstash's REST API takes commands as a path-segment array, e.g.
 // GET /GET/mykey  or  POST /SET  with body ["SET","mykey","value"].
@@ -110,6 +157,9 @@ async function redisDel(key) {
     return redis(['DEL', key]);
 }
 
+
+/* ----- Event index (list every slug without a KEYS scan) ----------------- */
+
 // SADD/SREM/SMEMBERS on a single "event-index" set let us list every slug
 // without doing a KEYS scan (which Upstash discourages / rate-limits harder).
 const INDEX_KEY = 'event-index';
@@ -126,6 +176,12 @@ async function redisIndexMembers() {
     const members = await redis(['SMEMBERS', INDEX_KEY]);
     return Array.isArray(members) ? members : [];
 }
+
+
+/* ===========================================================================
+ * 6. NEW EVENT TEMPLATE
+ * Every default setting a brand new event starts with.
+ * ========================================================================== */
 
 // Fresh state for a brand new event - mirrors what used to be hardcoded
 // module-level globals in the single-tenant version of server.js.
@@ -328,6 +384,11 @@ function blankEventState(slug, eventName, adminPasswordHash, venue) {
     };
 }
 
+
+/* ===========================================================================
+ * 7. EVENT CACHE & SAVING
+ * ========================================================================== */
+
 // In-memory cache of loaded events: slug -> event object. This is the live
 // working copy every route reads/mutates directly; writes to Redis are what
 // make that copy durable across restarts/deploys/idle-sleeps.
@@ -397,6 +458,11 @@ async function flushAllSaves() {
     await Promise.all(slugs.map(slug => writeToRedisNow(slug)));
 }
 
+
+/* ===========================================================================
+ * 8. MUSIC-VIDEO CACHE
+ * ========================================================================== */
+
 // --- Music-video verification cache (global, not per-event) ---------------
 // Persists verifiedMusicVideoCache (see server.js's findAudioVerifiedMusicVideo
 // / triggerMusicVideoVerification) across restarts and deploys, so audio-
@@ -460,6 +526,11 @@ async function flushMusicVideoCacheSave(getSnapshot) {
     }
 }
 
+
+/* ===========================================================================
+ * 9. FAMILY LISTS
+ * ========================================================================== */
+
 // Mirrors loadMusicVideoCache/scheduleMusicVideoCacheSave/flushMusicVideoCacheSave
 // above, but for item 8's family-mode safety lists rather than the technical
 // match cache. Deliberately global (one key, not per-event) - the denylist in
@@ -519,6 +590,11 @@ async function flushFamilyListsSave(getSnapshot) {
         console.error('[EVENTS] Failed to flush family-mode lists to Redis:', err.message);
     }
 }
+
+
+/* ===========================================================================
+ * 10. LOADING EVENTS
+ * ========================================================================== */
 
 // slug -> last time it was touched via getEvent. Used only to decide what's
 // safe to drop from the in-memory cache below; has no effect on the data
@@ -582,6 +658,11 @@ async function getEvent(slug) {
     return loaded;
 }
 
+
+/* ===========================================================================
+ * 11. CACHE CLEAN-UP
+ * ========================================================================== */
+
 // Without this, every event ever created stays in memory for the life of
 // the process - anyone can create events with no auth (see POST /api/events),
 // so unbounded cache growth is an easy, unauthenticated memory-exhaustion
@@ -602,6 +683,11 @@ function evictIdleEvents() {
     }
 }
 setInterval(evictIdleEvents, CACHE_SWEEP_INTERVAL_MS);
+
+
+/* ===========================================================================
+ * 12. CREATING EVENTS
+ * ========================================================================== */
 
 // Copies over a whitelisted, type-checked subset of another event's
 // systemConfigs/kioskConfigs onto a freshly-created blank event - powers
@@ -690,6 +776,11 @@ async function createEvent(slug, eventName, adminPassword, venue, templateConfig
     return { event };
 }
 
+
+/* ===========================================================================
+ * 13. EVENT PASSWORDS
+ * ========================================================================== */
+
 // Salted scrypt hash, stored as "salt:hash" hex - avoids pulling in bcrypt
 // for what's a single low-stakes password per event.
 //
@@ -732,6 +823,11 @@ async function resetEventPassword(slug) {
     await writeToRedisNow(slug); // immediate, like createEvent - don't leave this on the debounce timer
     return { newPassword };
 }
+
+
+/* ===========================================================================
+ * 14. EVENT LISTS & SUMMARIES
+ * ========================================================================== */
 
 // Only iterates events currently held in memory - used by the Spotify polling
 // loop so it doesn't wake up every event ever created, just ones with recent
@@ -814,9 +910,10 @@ async function getAllEventsForMaster() {
     return summaries;
 }
 
-// ===========================================================================
-// Accounts
-// ===========================================================================
+/* ===========================================================================
+ * 15. ACCOUNTS
+ * Users, logins and password resets.
+ * ========================================================================== */
 // Same storage philosophy as events: Redis is the source of truth, an
 // in-memory cache avoids paying a network round-trip on every request that
 // needs to check a password. This matters here specifically because
@@ -858,6 +955,9 @@ async function writeUserNow(username) {
 }
 
 const DB_ERROR = { error: 'Could not reach the database right now. Try again in a moment.' };
+
+
+/* ----- Creating accounts ------------------------------------------------- */
 
 // Creates a new account. Returns { user } (never including passwordHash) or
 // { error }. Username uniqueness and email uniqueness are both enforced -
@@ -950,6 +1050,9 @@ async function getUserByEmail(email) {
     }
 }
 
+
+/* ----- Checking logins --------------------------------------------------- */
+
 // Returns the account's public fields + a verified flag - never the hash
 // itself. Used by the login route.
 async function verifyUserCredentials(username, password) {
@@ -967,6 +1070,9 @@ async function verifyUserPassword(username, password) {
     if (!user) return false;
     return verifyPassword(password, user.passwordHash);
 }
+
+
+/* ----- Changing & resetting passwords ------------------------------------ */
 
 async function setUserPassword(username, newPassword) {
     const key = username.toLowerCase();
@@ -1043,6 +1149,9 @@ async function verifyAndConsumeResetToken(username, token) {
     return valid;
 }
 
+
+/* ----- Events owned by an account ---------------------------------------- */
+
 async function getUserEventSlugs(username) {
     try {
         const members = await redis(['SMEMBERS', userEventsKey(username.toLowerCase())]);
@@ -1079,6 +1188,11 @@ async function getUserOwnedEventsSummary(username) {
     return summaries;
 }
 
+
+/* ===========================================================================
+ * 16. DELETING EVENTS
+ * ========================================================================== */
+
 // Permanently removes an event: cancels any pending debounced write (so it
 // can't resurrect the entry a moment later), deletes it from Redis, removes
 // it from the slug index, and drops it from the in-memory cache. The slug
@@ -1104,6 +1218,11 @@ async function deleteEvent(slug) {
         throw err;
     }
 }
+
+
+/* ===========================================================================
+ * 17. EXPORTS
+ * ========================================================================== */
 
 module.exports = {
     blankEventState, // the defaults a brand new event starts with - reused by the admin "Reset all settings"
