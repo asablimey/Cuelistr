@@ -1,9 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <script src="/theme.js"></script>
+    <script>CrowdTheme.use("cuelistr_theme_site");</script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="/layout.css">
+    <link rel="stylesheet" href="/theme.css">
     <link rel="icon" type="image/svg+xml" href="/assets/cuelistr-icon.svg">
     <link rel="icon" type="image/png" href="/assets/favicon.png">
     <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
@@ -22,7 +25,7 @@
         html { overflow-x: hidden; }
         body {
             background-color: var(--spotify-black);
-            color: white;
+            color: var(--text);
             font-family: -apple-system, BlinkMacSystemFont, sans-serif;
             margin: 0;
             padding: var(--page-pad, 25px);
@@ -34,11 +37,11 @@
         }
         .wrap { width: 100%; max-width: 460px; }
         h1 { font-size: 1.9rem; font-weight: 800; letter-spacing: -0.5px; margin: 0 0 6px 0; text-align: center; }
-        .subtitle { color: #a7a7a7; text-align: center; margin: 0 0 28px 0; font-size: 0.95rem; }
+        .subtitle { color: var(--text-muted); text-align: center; margin: 0 0 28px 0; font-size: 0.95rem; }
 
         .card {
             background: var(--panel-bg);
-            border: 1px solid #282828;
+            border: 1px solid var(--border);
             border-radius: 14px;
             padding: 24px;
             margin-bottom: 16px;
@@ -46,21 +49,21 @@
         .card h2 { font-size: 1.1rem; margin: 0 0 16px 0; }
 
         .input-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; position: relative; }
-        .input-group label { font-size: 0.8rem; text-transform: uppercase; color: #a7a7a7; font-weight: 700; letter-spacing: 0.5px; }
-        .input-group label .optional-tag { text-transform: none; font-weight: 400; color: #666; letter-spacing: 0; }
+        .input-group label { font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700; letter-spacing: 0.5px; }
+        .input-group label .optional-tag { text-transform: none; font-weight: 400; color: var(--text-faint); letter-spacing: 0; }
         .input-group input {
             background-color: var(--card-bg);
-            border: 1px solid #333;
+            border: 1px solid var(--border-strong);
             padding: 12px 14px;
-            color: white;
+            color: var(--text);
             border-radius: 6px;
             font-size: 1rem;
             box-sizing: border-box;
             width: 100%;
         }
         .input-group input:focus { outline: none; border-color: var(--spotify-green); }
-        .url-preview { font-size: 0.8rem; color: #666; margin-top: 2px; }
-        .url-preview strong { color: #a7a7a7; }
+        .url-preview { font-size: 0.8rem; color: var(--text-faint); margin-top: 2px; }
+        .url-preview strong { color: var(--text-muted); }
 
         .availability { font-size: 0.8rem; margin-top: 4px; min-height: 1em; }
         .availability.ok { color: var(--spotify-green); }
@@ -83,14 +86,14 @@
 
         .error-msg { color: var(--red-action); font-size: 0.85rem; margin-top: 12px; display: none; }
 
-        .divider { text-align: center; color: #555; font-size: 0.8rem; margin: 20px 0; }
+        .divider { text-align: center; color: var(--text-ghost); font-size: 0.8rem; margin: 20px 0; }
 
         .join-row { display: flex; gap: 10px; }
         .join-row input { flex: 1; }
         .join-row button {
             background: var(--card-bg);
-            border: 1px solid #333;
-            color: white;
+            border: 1px solid var(--border-strong);
+            color: var(--text);
             border-radius: 6px;
             padding: 0 18px;
             font-weight: 700;
@@ -106,7 +109,7 @@
             right: 0;
             margin-top: 2px;
             background: var(--card-bg);
-            border: 1px solid #333;
+            border: 1px solid var(--border-strong);
             border-radius: 6px;
             overflow: hidden;
             z-index: 500;
@@ -119,17 +122,17 @@
             padding: 10px 14px;
             font-size: 0.85rem;
             cursor: pointer;
-            border-bottom: 1px solid #2f2f2f;
+            border-bottom: 1px solid var(--border);
         }
         .location-suggestion-item:last-child { border-bottom: none; }
-        .location-suggestion-item:hover { background: #2f2f2f; }
+        .location-suggestion-item:hover { background: var(--hover-bg); }
 
         .location-map {
             height: 220px;
             width: 100%;
             border-radius: 8px;
             margin-top: 10px;
-            border: 1px solid #333;
+            border: 1px solid var(--border-strong);
             /* Leaflet's default marker/panes assume its own stacking context;
                keep the map itself below the suggestions dropdown above it. */
             z-index: 1;
@@ -137,7 +140,7 @@
         .location-clear-btn {
             background: none;
             border: none;
-            color: #a7a7a7;
+            color: var(--text-muted);
             font-size: 0.8rem;
             text-decoration: underline;
             cursor: pointer;
@@ -145,7 +148,7 @@
             margin-top: 6px;
             align-self: flex-start;
         }
-        .location-clear-btn:hover { color: white; }
+        .location-clear-btn:hover { color: var(--text); }
 
         /* Plain floating attribution text, no box/badge - matches how
            Google Maps itself shows required credit: quiet grey text
@@ -160,8 +163,8 @@
         }
         .leaflet-control-attribution a { color: rgba(255, 255, 255, 0.7) !important; }
         .leaflet-container { border-radius: 8px; background: var(--card-bg); font-family: inherit; }
-        .leaflet-control-zoom a { background: var(--card-bg) !important; color: white !important; border-color: #333 !important; }
-        .leaflet-control-zoom a:hover { background: #2f2f2f !important; }
+        .leaflet-control-zoom a { background: var(--card-bg) !important; color: var(--text) !important; border-color: var(--border-strong) !important; }
+        .leaflet-control-zoom a:hover { background: var(--hover-bg) !important; }
 
         /* Red teardrop pin for the draggable venue marker. */
         .venue-pin-dot {
@@ -173,10 +176,10 @@
         /* --- Account gate (login/signup) + account bar + My Events --- */
         .auth-tabs { display: flex; gap: 8px; margin-bottom: 18px; }
         .auth-tab {
-            flex: 1; background: var(--card-bg); border: 1px solid #333; color: #a7a7a7;
+            flex: 1; background: var(--card-bg); border: 1px solid var(--border-strong); color: var(--text-muted);
             padding: 10px; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 0.9rem;
         }
-        .auth-tab.active { color: white; border-color: var(--spotify-green); }
+        .auth-tab.active { color: var(--text); border-color: var(--spotify-green); }
         .auth-form { display: none; }
         .auth-form.active { display: block; }
         .link-btn {
@@ -185,31 +188,31 @@
         }
         .account-bar {
             display: flex; align-items: center; justify-content: space-between; gap: 12px;
-            background: var(--panel-bg); border: 1px solid #282828; border-radius: 10px;
+            background: var(--panel-bg); border: 1px solid var(--border); border-radius: 10px;
             padding: 12px 16px; margin-bottom: 16px; font-size: 0.85rem; flex-wrap: wrap;
         }
-        .account-bar .who { color: #a7a7a7; }
-        .account-bar .who strong { color: white; }
+        .account-bar .who { color: var(--text-muted); }
+        .account-bar .who strong { color: var(--text); }
         .account-bar-actions { display: flex; gap: 10px; }
         .account-bar-actions button {
-            background: var(--card-bg); border: 1px solid #333; color: white; border-radius: 6px;
+            background: var(--card-bg); border: 1px solid var(--border-strong); color: var(--text); border-radius: 6px;
             padding: 6px 12px; font-size: 0.8rem; font-weight: 700; cursor: pointer;
         }
-        .account-bar-actions button:hover { border-color: #555; }
+        .account-bar-actions button:hover { border-color: var(--text-ghost); }
         .my-events-list { display: none; margin-bottom: 16px; }
         .my-events-list.visible { display: block; }
         .my-event-item {
             display: flex; justify-content: space-between; align-items: center; gap: 10px;
-            background: var(--panel-bg); border: 1px solid #282828; border-radius: 10px;
+            background: var(--panel-bg); border: 1px solid var(--border); border-radius: 10px;
             padding: 12px 16px; margin-bottom: 10px;
         }
         .my-event-item .name { font-weight: 700; font-size: 0.95rem; }
-        .my-event-item .meta { color: #a7a7a7; font-size: 0.78rem; margin-top: 2px; }
+        .my-event-item .meta { color: var(--text-muted); font-size: 0.78rem; margin-top: 2px; }
         .my-event-item a.btn-admin {
-            background: var(--card-bg); border: 1px solid #333; color: white; text-decoration: none;
+            background: var(--card-bg); border: 1px solid var(--border-strong); color: var(--text); text-decoration: none;
             border-radius: 6px; padding: 8px 14px; font-size: 0.82rem; font-weight: 700; white-space: nowrap;
         }
-        .my-event-item a.btn-admin:hover { border-color: #555; }
+        .my-event-item a.btn-admin:hover { border-color: var(--text-ghost); }
         #main-content { display: none; }
 
         /* Fullscreen login/signup gate - same pattern as the master-admin
