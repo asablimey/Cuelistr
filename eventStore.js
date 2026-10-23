@@ -594,6 +594,11 @@ function evictIdleEvents() {
     const now = Date.now();
     for (const slug of cache.keys()) {
         if (pendingSaves.has(slug)) continue; // never evict something with an unsaved write pending
+        // An event whose Music Scheduler is switched on must stay loaded: the scheduler
+        // only ticks for events held in memory, so evicting it would silently stop
+        // its playlist switches until someone happened to open one of its pages.
+        const cached = cache.get(slug);
+        if (cached && cached.musicScheduler && cached.musicScheduler.enabled) continue;
         const touched = lastAccess.get(slug) || 0;
         if (now - touched > CACHE_IDLE_EVICT_MS) {
             cache.delete(slug);
@@ -738,6 +743,38 @@ async function resetEventPassword(slug) {
 // activity in this server session.
 function getLoadedEvents() {
     return [...cache.values()];
+}
+
+// Loads every event whose Music Scheduler is switched on into memory. The scheduler
+// tick only runs for events held in the cache, and after a restart, redeploy or
+// idle-sleep nothing is cached until someone opens one of that event's pages - so
+// without this, scheduled playlist switches never fire on their own. Events with the
+// scheduler off are dropped from the cache again straight away (one Redis read each).
+async function preloadSchedulerEvents() {
+    let slugs;
+    try {
+        slugs = await redisIndexMembers();
+    } catch (err) {
+        console.error('[EVENTS] Could not read event index to preload scheduler events:', err.message);
+        return 0;
+    }
+    let kept = 0;
+    for (const slug of slugs) {
+        try {
+            const wasCached = cache.has(slug);
+            const ev = await getEvent(slug);
+            if (!ev) continue;
+            if (ev.musicScheduler && ev.musicScheduler.enabled) {
+                kept++;
+            } else if (!wasCached) {
+                cache.delete(slug);
+                lastAccess.delete(slug);
+            }
+        } catch (err) {
+            console.error(`[EVENTS] Could not preload "${slug}":`, err.message);
+        }
+    }
+    return kept;
 }
 
 // Lightweight summary of every event that exists - "active" here just means
@@ -1123,6 +1160,7 @@ module.exports = {
     flushFamilyListsSave,
     verifyPassword,
     getLoadedEvents,
+    preloadSchedulerEvents,
     getActiveEventsSummary,
     getAllEventsForMaster,
 
