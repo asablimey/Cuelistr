@@ -447,6 +447,35 @@ async function switchDjPlaylist(event, playlistUri) {
             console.log(`[SPOTIFY QUEUE] (${event.slug}) Switched playlist to:`, playlistId);
             return { success: true };
         } else if (res.status === 404) {
+            // "No active device" - Spotify has no player marked active right now (the app
+            // was idle/backgrounded, or nothing has played for a while). The account may
+            // still list devices it can start playback on, so pick one and target it
+            // directly instead of giving up.
+            try {
+                const devRes = await fetch('https://api.spotify.com/v1/me/player/devices', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const devData = devRes.ok ? await devRes.json() : { devices: [] };
+                const usable = (devData.devices || []).filter(d => d && d.id && !d.is_restricted);
+                const target = usable.find(d => d.is_active) || usable[0];
+                if (target) {
+                    const retry = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${encodeURIComponent(target.id)}`, {
+                        method: 'PUT',
+                        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ context_uri: `spotify:playlist:${playlistId}` })
+                    });
+                    if (retry.status === 204 || retry.status === 200) {
+                        console.log(`[SPOTIFY QUEUE] (${event.slug}) No active player - started playlist ${playlistId} on "${target.name}" instead.`);
+                        return { success: true };
+                    }
+                    const rb = await retry.text();
+                    console.error(`[SPOTIFY QUEUE] (${event.slug}) Retry on "${target.name}" failed`, retry.status, rb);
+                    return { success: false, error: `Spotify has no active player and starting it on "${target.name}" failed (status ${retry.status}). Open Spotify on that device and press play once.` };
+                }
+                return { success: false, error: 'Spotify lists no devices for the linked account - open Spotify on the speaker/device and press play once, then it can be controlled.' };
+            } catch (e) {
+                console.error(`[SPOTIFY QUEUE] (${event.slug}) Device lookup failed:`, e.message);
+            }
             return { success: false, error: 'No active device - open Spotify and play something first, then try switching again.' };
         } else if (res.status === 403) {
             return { success: false, error: 'Forbidden - this usually means the account is not Spotify Premium.' };
@@ -2398,6 +2427,19 @@ function musicSchedulerActiveIsKaraoke(event, now = new Date()) {
     return !!playlist && playlist.type === 'karaoke';
 }
 
+// Is this playlist already what Spotify is playing? Uses Spotify's own reported
+// context when we have it - "the last playlist we switched to" can be stale (the
+// DJ changed it in Spotify, a switch was cut off, the server restarted), and when
+// it was stale the scheduler wrongly decided there was nothing to switch.
+function playlistIsAlreadyPlaying(event, uri) {
+    const wantId = extractSpotifyPlaylistId(uri);
+    const np = event.cachedNowPlaying || {};
+    if (np.isPlaying && np.contextUri && wantId) {
+        return np.contextUri === `spotify:playlist:${wantId}`;
+    }
+    return uri === event.systemConfigs.lastSwitchedPlaylist;
+}
+
 // Per-slug "which trackId are we waiting to finish" state for the reactive
 // boundary check. Deliberately kept out of the event object - it's pure
 // runtime bookkeeping, not something that needs to survive a restart (the
@@ -2444,6 +2486,13 @@ async function fireScheduledSwitch(event) {
     }
     // On failure (e.g. no active device), pendingSwitchUri is deliberately
     // left set - the next tick will just try the whole flow again.
+    if (!result.success) {
+        const rt = event.schedulerRuntime;
+        if (Date.now() - (rt._lastFailLogAt || 0) > 15000) {
+            rt._lastFailLogAt = Date.now();
+            console.log(`[SCHEDULER] (${event.slug}) Playlist switch failed, will retry: ${result.error}`);
+        }
+    }
 }
 
 // Called once per event on every sync tick (see syncAllLoadedEvents).
@@ -2469,7 +2518,12 @@ async function tickMusicScheduler(event) {
                 event.systemConfigs.requestsAllowed = currentRule.requestsAllowed;
             }
             const playlist = (event.musicScheduler.playlists || []).find(p => p.id === currentRule.playlistId);
-            if (playlist && playlist.uri && playlist.uri !== event.systemConfigs.lastSwitchedPlaylist) {
+            if (!playlist || !playlist.uri) {
+                console.log(`[SCHEDULER] (${event.slug}) \"${currentRule.id}\" is active but its playlist could not be found in the schedule's playlist list.`);
+            }
+            if (playlist && playlist.uri && playlistIsAlreadyPlaying(event, playlist.uri)) {
+                console.log(`[SCHEDULER] (${event.slug}) \"${currentRule.id}\" now active - \"${playlist.label}\" is already the playlist playing, nothing to switch.`);
+            } else if (playlist && playlist.uri) {
                 event.schedulerRuntime.pendingSwitchUri = playlist.uri;
                 event.schedulerRuntime.pendingSwitchLabel = playlist.label;
                 console.log(`[SCHEDULER] (${event.slug}) "${currentRule.id}" now active - queued handoff to "${playlist.label}".`);
@@ -2482,7 +2536,7 @@ async function tickMusicScheduler(event) {
             // seamlessly hand back to the admin's own Fallback Playlist,
             // the same way a rule boundary would hand off to a new one.
             const fallbackUri = event.systemConfigs.fallbackPlaylistUri;
-            if (fallbackUri && fallbackUri !== event.systemConfigs.lastSwitchedPlaylist) {
+            if (fallbackUri && !playlistIsAlreadyPlaying(event, fallbackUri)) {
                 event.schedulerRuntime.pendingSwitchUri = fallbackUri;
                 event.schedulerRuntime.pendingSwitchLabel = 'Fallback Playlist';
                 console.log(`[SCHEDULER] (${event.slug}) No rule covers this time - queued handoff back to the Fallback Playlist.`);
@@ -2503,6 +2557,11 @@ async function tickMusicScheduler(event) {
     // against a track that was current before the guest request cut in.
     if (event.activeQueue.length > 0 || event.pushedNextTrackId) {
         clearSchedulerBoundaryWatch(event.slug);
+        const rt = event.schedulerRuntime;
+        if (Date.now() - (rt._lastHoldLogAt || 0) > 30000) {
+            rt._lastHoldLogAt = Date.now();
+            console.log(`[SCHEDULER] (${event.slug}) Switch to \"${rt.pendingSwitchLabel}\" is waiting for ${event.activeQueue.length} guest-requested song(s) to finish first.`);
+        }
         return;
     }
 
@@ -5964,7 +6023,8 @@ async function syncNowPlayingForEvent(event) {
             deviceName: data.device?.name || null,
             volumePercent: typeof data.device?.volume_percent === 'number' ? data.device.volume_percent : null,
             shuffleState: !!data.shuffle_state,
-            repeatState: data.repeat_state || 'off'
+            repeatState: data.repeat_state || 'off',
+            contextUri: data.context?.uri || null
         };
 
         const nowPlayingId = item?.id;
