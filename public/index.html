@@ -2,7 +2,6 @@
 <html lang="en">
 <head>
     <script src="/theme.js"></script>
-    <script>CrowdTheme.use("crowddj_theme_guest", "dark");</script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" type="image/svg+xml" href="/assets/cuelistr-icon.svg">
@@ -64,30 +63,7 @@
         .vc-btn-primary { background: var(--spotify-green); color: #000; }
         .vc-note { margin-top: 16px; font-size: 0.78rem; color: var(--text-muted); }
 
-        /* ---- Light theme (html[data-theme="light"], set by theme.js) ---- */
-        html[data-theme="light"] {
-            --spotify-green: #16a34a;
-            --spotify-black: #f3f4f6;
-            --panel-bg: #ffffff;
-            --card-bg: #eceff3;
-            --red-action: #d1122a;
-            --text: #111318;
-            --text-muted: #5b6472;
-            --border: #dfe3e8;
-            --border-strong: #c8ced6;
-            --hover-bg: #e3e7ec;
-            --overlay-soft: rgba(0,0,0,0.06);
-            --stage-bg: #f3f4f6;
-            --inset-bg: #ffffff;
-            --text-soft: #374151;
-        }
 
-        /* ---- Theme picker (sidebar) ---- */
-        .theme-picker { padding: 14px 20px 6px; }
-        .theme-picker-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); font-weight: 700; margin-bottom: 8px; }
-        .theme-seg { display: flex; background: var(--card-bg); border: 1px solid var(--border-strong); border-radius: 8px; overflow: hidden; }
-        .theme-seg button { flex: 1; background: none; border: none; color: var(--text-muted); padding: 9px 4px; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
-        .theme-seg button.is-active { background: var(--text); color: var(--panel-bg); }
 
         /* ---- Basic mode: guests only search + request ---- */
         body.basic-mode #connect-spotify-btn,
@@ -1080,14 +1056,6 @@
             <svg viewBox="0 0 24 24"><path d="M10.09 15.59 11.5 17l5-5-5-5-1.41 1.41L12.67 11H3v2h9.67zM19 3H5c-1.1 0-2 .9-2 2v4h2V5h14v14H5v-4H3v4c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/></svg>
             <span>Leave Venue</span>
         </button>
-        <div class="theme-picker">
-            <div class="theme-picker-label">Appearance</div>
-            <div class="theme-seg" id="guest-theme-seg" role="group" aria-label="Appearance">
-                <button type="button" data-mode="auto" onclick="setGuestTheme('auto')">Auto</button>
-                <button type="button" data-mode="light" onclick="setGuestTheme('light')">Light</button>
-                <button type="button" data-mode="dark" onclick="setGuestTheme('dark')">Dark</button>
-            </div>
-        </div>
         <div class="sidebar-footer">
             <div class="spotify-attribution-inline">
                 <span>Powered by</span>
@@ -1295,14 +1263,6 @@
         // global on purpose (same person, same name, wherever they go).
         function creditsStorageKey() { return `userCredits_${EVENT_SLUG}`; }
         const SELECTED_VENUE_KEY = 'crowddj_selected_venue';
-
-        // --- Theme picker (guest-only, remembered in this browser) ---
-        function setGuestTheme(mode) { CrowdTheme.set(mode); markGuestTheme(); }
-        function markGuestTheme() {
-            const cur = CrowdTheme.get();
-            document.querySelectorAll('#guest-theme-seg button').forEach(b => b.classList.toggle('is-active', b.dataset.mode === cur));
-        }
-        markGuestTheme();
 
         // --- Basic / Full mode ---
         // 'basic' (set by the DJ) = search + request only. The server refuses
