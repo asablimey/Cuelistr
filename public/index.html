@@ -1160,7 +1160,7 @@
         </div>
 
         <div class="search-bar-wrapper">
-            <input type="text" id="search-input" class="search-box" placeholder="Search for songs or artists..." oninput="executeSearch()">
+            <input type="text" id="search-input" class="search-box" placeholder="Search for songs or artists..." oninput="executeSearch()" onfocus="onSearchBarTap()" onclick="onSearchBarTap()">
         </div>
 
         <div class="section-title-row">
@@ -1957,10 +1957,13 @@
                 const locationBlocked = outOfGeofenceRange && !venueVerified;
                 const effectivelyOpen = systemRequestsAllowed && !queueIsFull && !locationBlocked && !isBlockedGuest && hasUsername();
                 updateLocationCreditState();
-                if (locationBlocked && !isBlockedGuest) showVenueCodePopup();
-                else if (venueVerified) hideVenueCodePopup();
+                // Out of range only: the search bar stays tappable (read-only) and the
+                // venue-code popup opens when the guest taps it - never on its own.
+                const locationOnlyBlock = locationBlocked && !isBlockedGuest && hasUsername() && systemRequestsAllowed && !queueIsFull;
+                if (venueVerified) hideVenueCodePopup();
                 if (!effectivelyOpen) {
-                    searchInput.disabled = true;
+                    searchInput.disabled = !locationOnlyBlock;
+                    searchInput.readOnly = locationOnlyBlock;
                     searchInput.value = "";
                     searchInput.placeholder = !hasUsername()
                         ? "Enter your name above to request songs..."
@@ -1974,6 +1977,7 @@
                     document.getElementById('list-title').innerText = "Up Next";
                     renderQueue(data.queue);
                 } else {
+                    searchInput.readOnly = false;
                     if (searchInput.disabled) {
                         searchInput.disabled = false;
                         searchInput.placeholder = "Search for songs or artists...";
@@ -2286,6 +2290,15 @@
         }
 
         // ---- Venue code popup ----
+        // Only opens when a guest who is out of range actually taps the search bar.
+        function onSearchBarTap() {
+            const input = document.getElementById('search-input');
+            if (!input || !input.readOnly) return;
+            if (outOfGeofenceRange && !venueVerified && !isBlockedGuest) {
+                input.blur();
+                showVenueCodePopup(true);
+            }
+        }
         function showVenueCodePopup(force) {
             if (venueVerified) return;
             if (!force && venueCodePopupDismissed) return;
