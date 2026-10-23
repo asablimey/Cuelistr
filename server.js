@@ -2404,6 +2404,8 @@ function musicSchedulerActiveIsKaraoke(event, now = new Date()) {
 // next tick just re-observes whatever's currently playing and starts
 // waiting on that instead).
 const schedulerBoundaryWatch = new Map();
+// How close to the end of the playing song the scheduled playlist switch happens.
+const SCHEDULER_SWITCH_LEAD_MS = 3000;
 
 function clearSchedulerBoundaryWatch(slug) {
     schedulerBoundaryWatch.delete(slug);
@@ -2522,6 +2524,23 @@ async function tickMusicScheduler(event) {
     // for the next poll.
     const watchedTrackId = schedulerBoundaryWatch.get(event.slug);
     const currentTrackId = event.cachedNowPlaying.trackId;
+    // Switch when the current song is "almost over": estimate the time left from
+    // the last poll (progress + time since that poll) and hand off once it's within
+    // SCHEDULER_SWITCH_LEAD_MS. The pending switch is polled every second, so this
+    // lands right at the end of the song instead of a song later. The trackId-change
+    // check below stays as the backstop if the estimate is ever wrong (no duration,
+    // a skip, crossfade etc.).
+    {
+        const np = event.cachedNowPlaying;
+        if (np.durationMs && typeof np.progressMs === 'number' && np.progressCapturedAt) {
+            const remainingMs = np.durationMs - (np.progressMs + (Date.now() - np.progressCapturedAt));
+            if (remainingMs <= SCHEDULER_SWITCH_LEAD_MS) {
+                clearSchedulerBoundaryWatch(event.slug);
+                await fireScheduledSwitch(event);
+                return;
+            }
+        }
+    }
     if (watchedTrackId === undefined) {
         schedulerBoundaryWatch.set(event.slug, currentTrackId);
         return;
