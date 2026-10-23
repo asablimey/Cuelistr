@@ -1,12 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <script src="/theme.js"></script>
-    <script>CrowdTheme.use("cuelistr_theme_site");</script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="/layout.css">
-    <link rel="stylesheet" href="/theme.css">
     <link rel="icon" type="image/svg+xml" href="/assets/cuelistr-icon.svg">
     <link rel="icon" type="image/png" href="/assets/favicon.png">
     <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
@@ -23,7 +20,7 @@
         html { overflow-x: hidden; }
         body {
             background-color: var(--spotify-black);
-            color: var(--text);
+            color: white;
             font-family: -apple-system, BlinkMacSystemFont, sans-serif;
             margin: 0;
             padding: var(--page-pad, 25px);
@@ -40,15 +37,15 @@
             z-index: 9999; padding: 20px;
         }
         .lock-container {
-            background-color: var(--panel-bg); border: 1px solid var(--border);
+            background-color: var(--panel-bg); border: 1px solid #282828;
             padding: 40px; border-radius: 16px; text-align: center;
             box-shadow: 0 8px 24px rgba(0,0,0,0.5); max-width: 340px; width: 100%;
         }
         .lock-container h2 { margin: 0 0 8px; font-size: 1.5rem; }
-        .lock-container p { color: var(--text-muted); font-size: 0.85rem; margin: 0 0 20px; line-height: 1.4; }
+        .lock-container p { color: #a7a7a7; font-size: 0.85rem; margin: 0 0 20px; line-height: 1.4; }
         .lock-input {
-            width: 100%; background-color: var(--card-bg); border: 1px solid var(--border-strong);
-            padding: 12px; color: var(--text); border-radius: 8px; font-size: 1rem;
+            width: 100%; background-color: var(--card-bg); border: 1px solid #333;
+            padding: 12px; color: white; border-radius: 8px; font-size: 1rem;
             outline: none; text-align: center; margin-bottom: 15px;
         }
         .lock-input:focus { border-color: var(--spotify-green); }
@@ -66,42 +63,42 @@
         #events-list { display: grid; gap: var(--page-gap, 14px); grid-template-columns: repeat(auto-fill, minmax(min(100%, 460px), 1fr)); align-items: start; }
         #events-list .event-card { margin-bottom: 0; }
         #events-list .empty-state { grid-column: 1 / -1; }
-        .header { display: flex; justify-content: space-between; align-items: center; gap: 15px; flex-wrap: wrap; border-bottom: 1px solid var(--border); padding-bottom: 20px; margin-bottom: 20px; }
+        .header { display: flex; justify-content: space-between; align-items: center; gap: 15px; flex-wrap: wrap; border-bottom: 1px solid #282828; padding-bottom: 20px; margin-bottom: 20px; }
         h1 { margin: 0; font-size: var(--h1-size, 1.8rem); font-weight: 800; letter-spacing: -0.5px; }
-        .subtitle { color: var(--text-muted); font-size: 0.85rem; margin-top: 4px; }
+        .subtitle { color: #a7a7a7; font-size: 0.85rem; margin-top: 4px; }
         .refresh-btn {
-            background: var(--card-bg); border: 1px solid var(--border-strong); color: var(--text);
+            background: var(--card-bg); border: 1px solid #333; color: white;
             padding: 10px 18px; border-radius: 8px; cursor: pointer; font-size: 0.9rem; font-weight: 600;
         }
-        .refresh-btn:hover { border-color: var(--text-ghost); }
+        .refresh-btn:hover { border-color: #555; }
 
         .event-card {
-            background: var(--panel-bg); border: 1px solid var(--border); border-radius: 12px;
+            background: var(--panel-bg); border: 1px solid #282828; border-radius: 12px;
             padding: 18px 20px; margin-bottom: 14px; display: flex; justify-content: space-between;
             align-items: center; gap: 16px; flex-wrap: wrap;
         }
         .event-info { min-width: 0; flex: 1; }
         .event-name { font-size: 1.05rem; font-weight: 700; }
-        .event-meta { color: var(--text-muted); font-size: 0.8rem; margin-top: 4px; line-height: 1.5; }
+        .event-meta { color: #a7a7a7; font-size: 0.8rem; margin-top: 4px; line-height: 1.5; }
         .event-meta code { background: var(--card-bg); padding: 2px 6px; border-radius: 4px; font-size: 0.78rem; }
         .badge {
             display: inline-block; font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
             letter-spacing: 0.4px; padding: 2px 8px; border-radius: 20px; margin-left: 6px;
         }
         .badge.open { background: rgba(29,185,84,0.18); color: var(--spotify-green); }
-        .badge.closed { background: var(--overlay-soft); color: var(--text-muted); }
+        .badge.closed { background: rgba(255,255,255,0.08); color: #a7a7a7; }
 
         .card-actions { display: flex; gap: 8px; flex-wrap: wrap; }
         .btn { border: none; border-radius: 8px; padding: 10px 16px; font-size: 0.85rem; font-weight: 700; cursor: pointer; white-space: nowrap; }
-        .btn-admin { background: var(--card-bg); border: 1px solid var(--border-strong); color: var(--text); }
-        .btn-admin:hover { border-color: var(--text-ghost); }
+        .btn-admin { background: var(--card-bg); border: 1px solid #333; color: white; }
+        .btn-admin:hover { border-color: #555; }
         .btn-close { background: var(--red-action); color: white; }
         .btn-close:hover { filter: brightness(1.1); }
         .btn-close:disabled { opacity: 0.5; cursor: default; }
 
-        .empty-state { text-align: center; color: var(--text-muted); padding: 60px 20px; font-size: 0.95rem; }
+        .empty-state { text-align: center; color: #a7a7a7; padding: 60px 20px; font-size: 0.95rem; }
         .account-recovery-panel {
-            background: var(--panel-bg); border: 1px solid var(--border); border-radius: 12px;
+            background: var(--panel-bg); border: 1px solid #282828; border-radius: 12px;
             padding: 20px; margin-top: 24px;
         }
         .account-recovery-panel h2 { margin: 0 0 8px 0; font-size: 1.05rem; }
@@ -110,7 +107,7 @@
         .account-recovery-row button { flex-shrink: 0; }
         .toast {
             position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
-            background: var(--card-bg); border: 1px solid var(--border-strong); color: var(--text);
+            background: var(--card-bg); border: 1px solid #333; color: white;
             padding: 12px 20px; border-radius: 8px; font-size: 0.9rem; opacity: 0;
             transition: opacity 0.2s ease; pointer-events: none; z-index: 10000;
         }
@@ -118,55 +115,36 @@
         .toast.error { border-color: var(--red-action); }
 
         /* ---- Curated playlists tabs ---- */
-        .cp-add { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px; margin-bottom: 14px; background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; }
-        .cp-add input, .cp-row input { background: var(--panel-bg); border: 1px solid var(--border-strong); color: var(--text); border-radius: 8px; padding: 9px 11px; font-size: 0.88rem; outline: none; min-width: 0; }
+        .cp-add { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px; margin-bottom: 14px; background: var(--card-bg); border: 1px solid #2a2a2a; border-radius: 12px; }
+        .cp-add input, .cp-row input { background: var(--panel-bg); border: 1px solid #333; color: white; border-radius: 8px; padding: 9px 11px; font-size: 0.88rem; outline: none; min-width: 0; }
         .cp-add input:focus, .cp-row input:focus { border-color: var(--spotify-green); }
         .cp-add .cp-url { flex: 2 1 280px; }
         .cp-add .cp-name { flex: 1 1 160px; }
         .cp-add .cp-desc { flex: 2 1 220px; }
-        .cp-list { border: 1px solid var(--border); border-radius: 12px; background: var(--panel-bg); overflow: hidden; }
-        .cp-row { display: flex; gap: 8px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+        .cp-list { border: 1px solid #282828; border-radius: 12px; background: var(--panel-bg); overflow: hidden; }
+        .cp-row { display: flex; gap: 8px; align-items: center; padding: 10px 12px; border-bottom: 1px solid #282828; }
         .cp-row:last-child { border-bottom: none; }
         .cp-row .cp-label { flex: 1 1 200px; font-weight: 700; }
         .cp-row .cp-descr { flex: 2 1 260px; }
         .cp-row a { color: var(--spotify-green); font-size: 0.8rem; white-space: nowrap; }
-        .cp-empty { padding: 26px 16px; color: var(--text-muted); font-size: 0.9rem; text-align: center; }
-        .cp-del { color: var(--danger-text); }
+        .cp-empty { padding: 26px 16px; color: #a7a7a7; font-size: 0.9rem; text-align: center; }
+        .cp-del { color: #ff6b6b; }
         @media (max-width: 720px) { .cp-row { flex-wrap: wrap; } }
-
-        /* ---- Premade visuals tab ---- */
-        .pv-drop { display: block; text-align: center; padding: 22px 16px; margin-bottom: 16px; background: var(--card-bg); border: 2px dashed var(--border-strong); border-radius: 14px; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
-        .pv-drop:hover, .pv-drop.over { border-color: var(--spotify-green); background: rgba(29,185,84,0.06); }
-        .pv-drop-title { font-weight: 800; font-size: 1rem; }
-        .pv-drop-sub { color: var(--text-muted); font-size: 0.85rem; margin-top: 4px; }
-        .pv-progress { margin-top: 8px; font-size: 0.8rem; color: var(--spotify-green); }
-        .pv-progress:empty { display: none; }
-        .pv-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
-        .pv-card { background: var(--panel-bg); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; }
-        .pv-thumb { position: relative; display: block; aspect-ratio: 16 / 10; background: #000; }
-        .pv-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
-        .pv-tag { position: absolute; left: 8px; top: 8px; background: rgba(0,0,0,0.7); color: #ffffff; font-size: 0.65rem; font-weight: 800; letter-spacing: 0.4px; text-transform: uppercase; padding: 3px 7px; border-radius: 20px; }
-        .pv-meta { display: flex; gap: 6px; align-items: center; padding: 8px; }
-        .pv-meta input { flex: 1 1 auto; min-width: 0; background: var(--card-bg); border: 1px solid var(--border-strong); color: var(--text); border-radius: 8px; padding: 7px 9px; font-size: 0.85rem; outline: none; }
-        .pv-meta input:focus { border-color: var(--spotify-green); }
-        .pv-meta button { flex-shrink: 0; background: none; border: 1px solid var(--border-strong); color: var(--danger-text); border-radius: 8px; padding: 7px 10px; font-size: 0.8rem; font-weight: 700; cursor: pointer; }
-        .pv-meta button:hover { border-color: #ff6b6b; }
-        .pv-empty { grid-column: 1 / -1; padding: 26px 16px; color: var(--text-muted); font-size: 0.9rem; text-align: center; background: var(--panel-bg); border: 1px solid var(--border); border-radius: 12px; }
 
         /* ---- Tabs + Videos catalog ---- */
         .tabs { display: flex; gap: 8px; margin-bottom: 20px; }
         .tabs { display: flex; gap: 8px; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; scrollbar-width: none; }
         .tabs::-webkit-scrollbar { display: none; }
-        .tab-btn { flex-shrink: 0; white-space: nowrap; word-break: normal; background: var(--card-bg); border: 1px solid var(--border-strong); color: var(--text-muted); padding: 9px 18px; border-radius: 50px; font-weight: 700; font-size: 0.9rem; cursor: pointer; }
-        .tab-btn.active { background: var(--text); color: var(--panel-bg); border-color: var(--text); }
+        .tab-btn { flex-shrink: 0; white-space: nowrap; word-break: normal; background: var(--card-bg); border: 1px solid #333; color: #a7a7a7; padding: 9px 18px; border-radius: 50px; font-weight: 700; font-size: 0.9rem; cursor: pointer; }
+        .tab-btn.active { background: white; color: black; border-color: white; }
         .vc-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
-        .vc-toolbar input[type=text], .vc-toolbar select { background: var(--card-bg); border: 1px solid var(--border-strong); color: var(--text); border-radius: 8px; padding: 9px 12px; font-size: 0.88rem; outline: none; }
+        .vc-toolbar input[type=text], .vc-toolbar select { background: var(--card-bg); border: 1px solid #333; color: white; border-radius: 8px; padding: 9px 12px; font-size: 0.88rem; outline: none; }
         .vc-toolbar input[type=text]:focus, .vc-toolbar select:focus { border-color: var(--spotify-green); }
         #vc-search { width: 220px; }
         .vc-spacer { flex: 1; }
-        .vc-status { font-size: 0.8rem; color: var(--text-muted); min-width: 110px; text-align: right; }
+        .vc-status { font-size: 0.8rem; color: #a7a7a7; min-width: 110px; text-align: right; }
         .vc-status.err { color: var(--red-action); }
-        .vc-help { color: var(--text-muted); font-size: 0.78rem; margin: 0 0 12px; line-height: 1.5; }
+        .vc-help { color: #a7a7a7; font-size: 0.78rem; margin: 0 0 12px; line-height: 1.5; }
         .vc-wrap { overflow-x: auto; border: 1px solid #282828; border-radius: 12px; background: var(--panel-bg); }
         table.vc { border-collapse: collapse; width: 100%; min-width: 1180px; font-size: 0.85rem; }
         table.vc th { text-align: left; padding: 10px 8px; color: #a7a7a7; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.4px; border-bottom: 1px solid #282828; white-space: nowrap; cursor: pointer; user-select: none; position: sticky; top: 0; background: var(--panel-bg); }
@@ -188,10 +166,10 @@
         .tick.on { opacity: 1; }
         tr.flash td { background: rgba(29,185,84,0.16); }
         tr.panel td { padding: 12px 14px; background: #141414; }
-        .panel-title { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 8px; }
+        .panel-title { font-size: 0.8rem; color: #a7a7a7; margin-bottom: 8px; }
         .panel-list { display: flex; flex-direction: column; gap: 4px; max-height: 260px; overflow-y: auto; }
         .panel-item { display: flex; justify-content: space-between; gap: 12px; align-items: center; background: var(--card-bg); border-radius: 8px; padding: 8px 10px; font-size: 0.82rem; }
-        .panel-item .meta { color: var(--text-muted); font-size: 0.75rem; }
+        .panel-item .meta { color: #a7a7a7; font-size: 0.75rem; }
         .panel-item button { flex-shrink: 0; }
         .pv-box { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-start; }
         .pv-frame { width: 400px; max-width: 100%; aspect-ratio: 16/9; background: black; border-radius: 8px; overflow: hidden; }
@@ -208,8 +186,8 @@
         .pv-hint { font-size: 0.72rem; color: #5f6368; line-height: 1.45; margin-top: 4px; }
         .vc-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 10001; display: none; align-items: center; justify-content: center; padding: 20px; }
         .vc-modal.show { display: flex; }
-        .vc-modal-card { background: var(--panel-bg); border: 1px solid var(--border-strong); border-radius: 14px; padding: 22px; width: 100%; max-width: 760px; }
-        .vc-modal-card textarea { width: 100%; height: 220px; background: var(--card-bg); border: 1px solid var(--border-strong); color: var(--text); border-radius: 8px; padding: 10px; font-family: ui-monospace, Menlo, monospace; font-size: 0.8rem; outline: none; }
+        .vc-modal-card { background: var(--panel-bg); border: 1px solid #333; border-radius: 14px; padding: 22px; width: 100%; max-width: 760px; }
+        .vc-modal-card textarea { width: 100%; height: 220px; background: var(--card-bg); border: 1px solid #333; color: white; border-radius: 8px; padding: 10px; font-family: ui-monospace, Menlo, monospace; font-size: 0.8rem; outline: none; }
         .toast .undo { margin-left: 12px; color: var(--spotify-green); font-weight: 700; cursor: pointer; pointer-events: auto; }
         .toast.show.has-action { pointer-events: auto; }
 
@@ -246,17 +224,17 @@
         tr.panel .vc-toolbar input[type=text] { background: #fff; color: #202124; border: 1px solid #dadce0; }
 
         /* ---- Cleaner header / toolbar / help above the grid ---- */
-        .vc-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; padding: 10px 12px; margin-bottom: 12px; background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; }
+        .vc-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; padding: 10px 12px; margin-bottom: 12px; background: var(--card-bg); border: 1px solid #2a2a2a; border-radius: 12px; }
         .vc-group { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-        .vc-group + .vc-group { padding-left: 18px; border-left: 1px solid var(--border-strong); }
-        .vc-bar input[type=text], .vc-bar select { background: var(--panel-bg); border: 1px solid var(--border-strong); color: var(--text); border-radius: 8px; padding: 8px 10px; font-size: 0.85rem; outline: none; }
+        .vc-group + .vc-group { padding-left: 18px; border-left: 1px solid #333; }
+        .vc-bar input[type=text], .vc-bar select { background: var(--panel-bg); border: 1px solid #333; color: white; border-radius: 8px; padding: 8px 10px; font-size: 0.85rem; outline: none; }
         .vc-bar input[type=text]:focus, .vc-bar select:focus { border-color: var(--spotify-green); }
         .vc-bar #vc-np-event { width: 170px; text-overflow: ellipsis; }
         .vc-bar .vc-dir { padding: 8px 11px; min-width: 38px; }
-        .vc-helpbox { margin: 0 0 12px; color: var(--text-muted); font-size: 0.8rem; }
-        .vc-helpbox summary { cursor: pointer; font-weight: 700; color: var(--text-soft); width: fit-content; }
+        .vc-helpbox { margin: 0 0 12px; color: #a7a7a7; font-size: 0.8rem; }
+        .vc-helpbox summary { cursor: pointer; font-weight: 700; color: #cfcfcf; width: fit-content; }
         .vc-helpbox ul { margin: 8px 0 0; padding-left: 20px; line-height: 1.6; }
-        .vc-helpbox b { color: var(--text); }
+        .vc-helpbox b { color: #e0e0e0; }
 
         /* ---- Cleaner preview / start-time panel ---- */
         .pv-ctl { display: flex; flex-direction: column; gap: 12px; }
@@ -309,7 +287,6 @@
             <button class="tab-btn" id="tabbtn-videos" onclick="switchTab('videos')">Videos</button>
             <button class="tab-btn" id="tabbtn-playlists" onclick="switchTab('playlists')">Playlists</button>
             <button class="tab-btn" id="tabbtn-karaoke" onclick="switchTab('karaoke')">Karaoke</button>
-            <button class="tab-btn" id="tabbtn-visuals" onclick="switchTab('visuals')">Visuals</button>
         </div>
         <div id="tab-events">
         <div class="header">
@@ -333,23 +310,6 @@
 
         <div id="tab-playlists" style="display:none"></div>
         <div id="tab-karaoke" style="display:none"></div>
-
-        <div id="tab-visuals" style="display:none">
-            <div class="header">
-                <div>
-                    <h1>Visuals</h1>
-                    <div class="subtitle"><b>One library for ALL events.</b> Photos and videos uploaded here appear under <b>Premade Visuals</b> in the Ambient Visuals tab of every event's scheduler, and venues can't delete them. <span id="pv-count"></span></div>
-                </div>
-                <button class="refresh-btn" onclick="pvLoad()">↻ Reload</button>
-            </div>
-            <label class="pv-drop" id="pv-drop">
-                <input type="file" id="pv-file" accept="image/*,video/*" multiple style="display:none" onchange="pvPicked(this.files); this.value = ''">
-                <div class="pv-drop-title">+ Upload visuals</div>
-                <div class="pv-drop-sub">Click to choose photos or videos, or drop them here. Several at once is fine.</div>
-                <div class="pv-progress" id="pv-progress"></div>
-            </label>
-            <div class="pv-grid" id="pv-grid"></div>
-        </div>
 
         <div id="tab-videos" style="display:none">
             <div class="header">
@@ -636,14 +596,13 @@
         let vcToastTimer = null;
 
         function switchTab(tab) {
-            ['events', 'videos', 'playlists', 'karaoke', 'visuals'].forEach(t => {
+            ['events', 'videos', 'playlists', 'karaoke'].forEach(t => {
                 document.getElementById('tab-' + t).style.display = tab === t ? 'block' : 'none';
                 document.getElementById('tabbtn-' + t).classList.toggle('active', tab === t);
             });
             document.getElementById('dashboard').classList.toggle('wide', tab === 'videos');
             if (tab === 'videos' && !vcLoaded) vcLoad();
             if ((tab === 'playlists' || tab === 'karaoke') && !cpLoaded) cpLoad();
-            if (tab === 'visuals' && !pvLoaded) pvLoad();
         }
 
         async function vcApi(method, path, body) {
@@ -1670,112 +1629,6 @@
             await cpLoad();
         }
         cpBuildShell();
-
-        /* ===================== Visuals tab (premade Ambient Visuals) ===================== */
-        // Files go straight from this browser to Cloudinary (the same unsigned upload preset
-        // the scheduler uses); only the resulting URL is saved on the server, via
-        // /api/master/curated-visuals. Every event's scheduler then lists them as "Premade Visuals".
-        const PV_CLOUD_NAME = 'zqywiwqr';
-        const PV_UPLOAD_PRESET = 'dylhzuki';
-        let pvRows = [];
-        let pvLoaded = false;
-        let pvUploading = false;
-
-        // Small preview: Cloudinary makes a cropped thumbnail on the fly. For a video it returns a JPG of the first frame.
-        function pvThumb(row) {
-            const u = String(row.url || '');
-            if (u.indexOf('/upload/') === -1) return u;
-            if (row.type === 'video') {
-                return u.replace('/upload/', '/upload/so_0,w_360,h_225,c_fill,f_jpg,q_auto/').replace(/\.[A-Za-z0-9]+(\?.*)?$/, '.jpg');
-            }
-            return u.replace('/upload/', '/upload/w_360,h_225,c_fill,f_auto,q_auto/');
-        }
-        async function pvApi(method, path, body) {
-            try {
-                const res = await fetch('/api/master/curated-visuals' + path, {
-                    method,
-                    headers: Object.assign({ 'x-admin-password': masterPassword }, body ? { 'Content-Type': 'application/json' } : {}),
-                    body: body ? JSON.stringify(body) : undefined
-                });
-                let data = {};
-                try { data = await res.json(); } catch (e) { /* non-JSON error body */ }
-                return { ok: res.ok, data };
-            } catch (e) {
-                return { ok: false, data: { error: 'Could not reach the server.' } };
-            }
-        }
-        function pvRender() {
-            document.getElementById('pv-count').textContent = pvRows.length ? `${pvRows.length} ${pvRows.length === 1 ? 'visual' : 'visuals'}.` : '';
-            const grid = document.getElementById('pv-grid');
-            if (!pvRows.length) { grid.innerHTML = '<div class="pv-empty">No premade visuals yet. Upload some above.</div>'; return; }
-            grid.innerHTML = pvRows.map(r => `
-                <div class="pv-card">
-                    <a class="pv-thumb" href="${cpEsc(r.url)}" target="_blank" rel="noopener" title="Open full size">
-                        <img src="${cpEsc(pvThumb(r))}" alt="" loading="lazy">
-                        <span class="pv-tag">${r.type === 'video' ? 'Video' : 'Photo'}</span>
-                    </a>
-                    <div class="pv-meta">
-                        <input type="text" value="${cpEsc(r.label)}" maxlength="60" title="Name shown in schedulers" onchange="pvRename('${cpEsc(r.id)}', this.value)">
-                        <button onclick="pvDelete('${cpEsc(r.id)}')">Delete</button>
-                    </div>
-                </div>`).join('');
-        }
-        async function pvLoad() {
-            const r = await pvApi('GET', '');
-            if (!r.ok) { showToast(r.data.error || 'Could not load visuals.', 'error'); return; }
-            pvRows = r.data.visuals || [];
-            pvLoaded = true;
-            pvRender();
-        }
-        async function pvUploadOne(file) {
-            const isVideo = file.type.startsWith('video/');
-            if (!isVideo && !file.type.startsWith('image/')) throw new Error('Only photos and videos can be uploaded.');
-            const form = new FormData();
-            form.append('file', file);
-            form.append('upload_preset', PV_UPLOAD_PRESET);
-            const cloudRes = await fetch(`https://api.cloudinary.com/v1_1/${PV_CLOUD_NAME}/auto/upload`, { method: 'POST', body: form });
-            const cloud = await cloudRes.json();
-            if (!cloudRes.ok || !cloud.secure_url) throw new Error((cloud.error && cloud.error.message) || 'Cloudinary upload failed');
-            const label = file.name.replace(/\.[^.]+$/, '').slice(0, 60);
-            const r = await pvApi('POST', '', { url: cloud.secure_url, type: isVideo ? 'video' : 'photo', label });
-            if (!r.ok) throw new Error(r.data.error || 'Could not save the upload.');
-        }
-        async function pvPicked(fileList) {
-            const files = Array.from(fileList || []);
-            if (!files.length || pvUploading) return;
-            pvUploading = true;
-            const prog = document.getElementById('pv-progress');
-            let done = 0, failed = 0;
-            for (const file of files) {
-                prog.textContent = `Uploading ${done + failed + 1} of ${files.length}: ${file.name}`;
-                try { await pvUploadOne(file); done++; }
-                catch (e) { failed++; showToast(`${file.name}: ${e.message}`, 'error'); }
-            }
-            prog.textContent = '';
-            pvUploading = false;
-            if (done) showToast(`Uploaded ${done} ${done === 1 ? 'visual' : 'visuals'}.`);
-            await pvLoad();
-        }
-        async function pvRename(id, label) {
-            const r = await pvApi('POST', '', { id, label });
-            if (!r.ok) showToast(r.data.error || 'Could not rename that.', 'error');
-            await pvLoad();
-        }
-        async function pvDelete(id) {
-            const row = pvRows.find(x => x.id === id);
-            if (!row || !confirm(`Delete "${row.label}"? It disappears from every event's Premade Visuals list. Blocks that already use it keep working.`)) return;
-            const r = await pvApi('DELETE', '/' + encodeURIComponent(id));
-            if (!r.ok) { showToast(r.data.error || 'Could not delete.', 'error'); return; }
-            showToast('Deleted.');
-            await pvLoad();
-        }
-        (function () {
-            const drop = document.getElementById('pv-drop');
-            if (!drop) return;
-            ['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
-            ['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
-            drop.addEventListener('drop', e => { if (e.dataTransfer && e.dataTransfer.files) pvPicked(e.dataTransfer.files); });
-        })();
     </script>
 
     <script>
