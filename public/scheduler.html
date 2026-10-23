@@ -251,10 +251,15 @@
         .media-chip:active { cursor: grabbing; }
         .media-chip.uploading { opacity: 0.5; cursor: default; }
         .media-thumb {
-            width: 28px; height: 28px; border-radius: 5px; flex-shrink: 0; object-fit: cover;
+            width: 44px; height: 44px; border-radius: 6px; flex-shrink: 0; object-fit: cover;
             background: var(--inset-bg); display: flex; align-items: center; justify-content: center; font-size: 0.7rem;
         }
         .media-type-icon { font-size: 0.9rem; }
+        .media-thumb-wrap { position: relative; width: 44px; height: 44px; flex-shrink: 0; }
+        .media-thumb-wrap .media-thumb { width: 44px; height: 44px; }
+        .media-thumb-play { position: absolute; right: 2px; bottom: 2px; width: 14px; height: 14px; border-radius: 50%; background: rgba(0,0,0,0.65); color: #fff; font-size: 0.5rem; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+        .media-chip.premade { cursor: pointer; }
+        .avm-side-sub { color: var(--text-dim); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.4px; padding: 8px 8px 2px; }
         .thumb-tag { font-size: 0.5rem; font-weight: 700; letter-spacing: 0.3px; color: var(--text-dim); }
         .media-chip .chip-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .upload-btn-row { margin-top: 4px; }
@@ -508,7 +513,7 @@
         }
         .avm-side-item:hover { background: var(--card-bg); }
         .avm-side-icon { width: 18px; text-align: center; flex-shrink: 0; color: var(--text-dim); }
-        .avm-side-thumb { width: 22px; height: 22px; border-radius: 4px; object-fit: cover; flex-shrink: 0; background: var(--inset-bg); }
+        .avm-side-thumb { width: 32px; height: 32px; border-radius: 5px; object-fit: cover; flex-shrink: 0; background: var(--inset-bg); }
         .avm-side-item.disabled { opacity: 0.35; cursor: default; }
         .avm-side-item.disabled:hover { background: none; }
         .avm-library-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1325,6 +1330,9 @@
         let curatedOpen = false;     // library shows the curated catalogue instead of "my playlists"
         let curatedPlaylists = [];   // [{ id, label, uri, type: 'crowddj'|'karaoke', description? }] - premade, read-only here
         let curatedLoaded = false;
+        let premadeOpen = false;      // Ambient Visuals library shows the master's premade visuals instead of this event's own files
+        let premadeVisuals = [];      // [{ id, label, url, type: 'photo'|'video' }] - uploaded on the Master page, read-only here
+        let premadeLoaded = false;
         // Curated playlists are saved into the event's own playlists list (the
         // server only accepts rule.playlistId values that exist there), under
         // this reserved id prefix. That prefix is how the scheduler keeps them
@@ -1545,6 +1553,7 @@
                     autosaveStart();
                     renderAll();
                     loadCuratedPlaylists();
+                    loadPremadeVisuals();
                     refreshStatus();
                     if (!statusPollStarted) { statusPollStarted = true; setInterval(refreshStatus, 10000); }
                     document.getElementById('lock-screen').style.visibility = 'visible';
@@ -1872,8 +1881,67 @@
             if (!ensureCuratedInPlaylists(curatedId)) { e.preventDefault(); return; }
             e.dataTransfer.setData('text/plain', 'playlist:' + CURATED_PREFIX + curatedId);
         }
+
+        // Small preview image for a library file. Cloudinary crops/resizes on the fly,
+        // and for a video returns a JPG of its first frame - so videos get a real preview too.
+        function mediaThumbUrl(m) {
+            const u = String((m && m.url) || '');
+            if (u.indexOf('/upload/') === -1) return u;
+            if (m.type === 'video') {
+                return u.replace('/upload/', '/upload/so_0,w_120,h_120,c_fill,f_jpg,q_auto/').replace(/\.[A-Za-z0-9]+(\?.*)?$/, '.jpg');
+            }
+            return u.replace('/upload/', '/upload/w_120,h_120,c_fill,f_auto,q_auto/');
+        }
+        function mediaThumbHtml(m, cls) {
+            const img = `<img class="${cls}" src="${escapeHtml(mediaThumbUrl(m))}" alt="" loading="lazy">`;
+            if (m.type !== 'video') return img;
+            return `<span class="media-thumb-wrap">${img}<span class="media-thumb-play">&#9654;</span></span>`;
+        }
+
+        // Premade visuals: the master's shared library (Visuals tab on /master). Picking one copies it
+        // into this event's own ambient files (once), then it behaves like any file the venue uploaded.
+        async function loadPremadeVisuals() {
+            try {
+                const res = await fetch(eventUrl('/api/admin/curated-visuals'), { headers: adminHeaders() });
+                const data = res.ok ? await res.json() : null;
+                premadeVisuals = (data && Array.isArray(data.visuals)) ? data.visuals : [];
+                premadeLoaded = true;
+            } catch (e) { premadeVisuals = []; }
+            if (libraryTab === 'ambient') renderPlaylists();
+            renderAvmLibraryList();
+        }
+        async function importPremadeVisual(premadeId) {
+            const existing = ambientMedia.find(m => m.premadeId === premadeId);
+            if (existing) return existing;
+            try {
+                const res = await fetch(eventUrl('/api/admin/ambient-media'), {
+                    method: 'POST',
+                    headers: adminHeaders(),
+                    body: JSON.stringify({ premadeId })
+                });
+                const data = await res.json();
+                if (!res.ok || !data.success) throw new Error(data.error || 'Could not add that visual.');
+                if (!ambientMedia.some(m => m.id === data.item.id)) ambientMedia.push(data.item);
+                renderPlaylists();
+                renderAvmLibraryList();
+                return data.item;
+            } catch (e) {
+                showToast(e.message, 'error');
+                return null;
+            }
+        }
+        async function addPremadeVisual(premadeId) {
+            const item = await importPremadeVisual(premadeId);
+            if (item) addFromLibrary('media', item.id);
+        }
+        async function addPremadeToModalBlock(premadeId) {
+            const item = await importPremadeVisual(premadeId);
+            if (item) addExistingMediaToModalBlock(item.id);
+        }
+
         function toggleCurated() {
-            curatedOpen = !curatedOpen;
+            if (libraryTab === 'ambient') premadeOpen = !premadeOpen;
+            else curatedOpen = !curatedOpen;
             document.getElementById('add-playlist-form').classList.remove('open');
             renderPlaylists();
         }
@@ -1891,9 +1959,12 @@
             const addBtn = document.getElementById('lib-add-btn');
             const isMusicTab = libraryTab === 'crowddj' || libraryTab === 'karaoke';
             const curBtn = document.getElementById('lib-curated-btn');
-            curBtn.style.display = isMusicTab ? '' : 'none';
-            curBtn.classList.toggle('cur-on', isMusicTab && curatedOpen);
-            curBtn.innerHTML = curatedOpen ? '&larr; My Playlists' : 'Curated Playlists';
+            const isAmbientTab = libraryTab === 'ambient';
+            curBtn.style.display = (isMusicTab || isAmbientTab) ? '' : 'none';
+            curBtn.classList.toggle('cur-on', (isMusicTab && curatedOpen) || (isAmbientTab && premadeOpen));
+            curBtn.innerHTML = isAmbientTab
+                ? (premadeOpen ? '&larr; My Visuals' : 'Premade Visuals')
+                : (curatedOpen ? '&larr; My Playlists' : 'Curated Playlists');
             addBtn.textContent = libraryTab === 'ambient' ? '+ Add Visual' : libraryTab === 'musicvideo' ? '+ Add Block' : '+ Add Playlist';
         }
         function setLibraryTab(t) {
@@ -1903,6 +1974,7 @@
         }
         function onLibraryAdd() {
             if (libraryTab === 'ambient') {
+                if (premadeOpen) { premadeOpen = false; renderPlaylists(); }
                 // Same two entry points the old form had: a fresh block, or import from file.
                 const choice = confirm('OK = create a new visual block.\nCancel = import from a file instead.');
                 return choice ? startNewAmbientBlock() : importVisualsAsNewBlock();
@@ -1938,19 +2010,26 @@
                     </div>
                 `));
                 if (!rows.length) rows.push(`<div class="lib-empty">No ${escapeHtml(LANE_TYPES[libraryTab].label)} playlists yet. Use <strong>+ Add</strong>, or browse <strong>Curated Playlists</strong>, then drag one onto the timeline.</div>`);
+            } else if (libraryTab === 'ambient' && premadeOpen) {
+                premadeVisuals.forEach(v => rows.push(`
+                    <div class="media-chip premade" onclick="addPremadeVisual('${escapeHtml(v.id)}')" title="Tap to add to the day shown. It's copied into this event's visuals the first time.">
+                        ${mediaThumbHtml(v, 'media-thumb')}
+                        <span class="chip-label">${escapeHtml(v.label)}</span>
+                        <span class="chip-type">${v.type === 'video' ? 'Video' : 'Photo'}</span>
+                    </div>
+                `));
+                if (!rows.length) rows.push(`<div class="lib-empty">${premadeLoaded ? 'No premade visuals have been added yet.' : 'Loading premade visuals...'}</div>`);
             } else if (libraryTab === 'ambient') {
                 ambientMedia.forEach(m => rows.push(`
                     <div class="media-chip" draggable="true" data-media-id="${escapeHtml(m.id)}"
                          ondragstart="onMediaChipDragStart(event, '${escapeHtml(m.id)}')" onclick="addFromLibrary('media', '${escapeHtml(m.id)}')" title="Tap to add to the day shown, or drag onto the timeline">
-                        ${m.type === 'video'
-                            ? `<span class="media-thumb media-type-icon"><span class="thumb-tag">VID</span></span>`
-                            : `<img class="media-thumb" src="${escapeHtml(m.url)}" alt="">`}
+                        ${mediaThumbHtml(m, 'media-thumb')}
                         <span class="chip-label">${escapeHtml(m.filename)}</span>
                         <span class="chip-type">${m.type === 'video' ? 'Video' : 'Photo'}</span>
                         <button class="chip-remove" onclick="event.stopPropagation(); removeAmbientMedia('${escapeHtml(m.id)}')" title="Remove">&times;</button>
                     </div>
                 `));
-                if (!rows.length) rows.push(`<div class="lib-empty">No visuals yet. Use <strong>+ Add Visual</strong> to create a block or import one, then drag files onto the timeline.</div>`);
+                if (!rows.length) rows.push(`<div class="lib-empty">No visuals yet. Use <strong>+ Add Visual</strong> to create a block or import one, or browse <strong>Premade Visuals</strong>, then drag files onto the timeline.</div>`);
             } else {
                 rows.push(`<div class="lib-empty">Music Video blocks play a video for whatever song is on. They aren't dragged in: use <strong>+ Add Block</strong>, pick the days and times, and it lands on the timeline.</div>`);
             }
@@ -3074,18 +3153,22 @@
         function renderAvmLibraryList() {
             const list = document.getElementById('avm-library-list');
             if (!list) return;
-            if (ambientMedia.length === 0) {
-                list.innerHTML = '<div class="avm-empty-hint-small">Nothing uploaded yet</div>';
-                return;
-            }
-            list.innerHTML = ambientMedia.map(m => `
+            const own = ambientMedia.length === 0
+                ? '<div class="avm-empty-hint-small">Nothing uploaded yet</div>'
+                : ambientMedia.map(m => `
                 <button type="button" class="avm-side-item" onclick="addExistingMediaToModalBlock('${escapeHtml(m.id)}')" title="${escapeHtml(m.filename)}">
-                    ${m.type === 'video'
-                        ? `<span class="avm-side-thumb" style="display:flex;align-items:center;justify-content:center;"><span class="thumb-tag">VID</span></span>`
-                        : `<img class="avm-side-thumb" src="${escapeHtml(m.url)}" alt="">`}
+                    <img class="avm-side-thumb" src="${escapeHtml(mediaThumbUrl(m))}" alt="" loading="lazy">
                     <span class="avm-library-label">${escapeHtml(m.filename)}</span>
                 </button>
             `).join('');
+            const premade = premadeVisuals.length === 0 ? '' : `
+                <div class="avm-side-sub">Premade</div>
+                ${premadeVisuals.map(v => `
+                <button type="button" class="avm-side-item" onclick="addPremadeToModalBlock('${escapeHtml(v.id)}')" title="${escapeHtml(v.label)}">
+                    <img class="avm-side-thumb" src="${escapeHtml(mediaThumbUrl(v))}" alt="" loading="lazy">
+                    <span class="avm-library-label">${escapeHtml(v.label)}</span>
+                </button>`).join('')}`;
+            list.innerHTML = own + premade;
         }
 
         function addExistingMediaToModalBlock(mediaId) {
