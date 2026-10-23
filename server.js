@@ -6671,5 +6671,14 @@ app.listen(PORT, async () => {
     } catch (e) {
         console.error('[SERVER] NSFWJS model failed to load - moderation checks will report "not flagged" (i.e. moderation is effectively OFF) until this is fixed. Run `node scripts/fetch-nsfw-model.js` and redeploy. Error:', e.message);
     }
+    // Bring every event with the Music Scheduler on back into memory, so its
+    // playlist switches keep firing after a restart/redeploy even if nobody has
+    // opened one of its pages yet.
+    try {
+        const n = await events.preloadSchedulerEvents();
+        console.log(`[SERVER] Preloaded ${n} event(s) with the Music Scheduler enabled.`);
+    } catch (err) {
+        console.error('[SERVER] Failed to preload scheduler events:', err.message);
+    }
     await getSpotifyToken();
 });
