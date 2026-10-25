@@ -1968,25 +1968,25 @@
                     const ready = ambientMedia.find(m => m.curatedId === c.id && m.curatedStamp === curatedStamp(c, qrUrl));
                     rows.push(`
                     <div class="media-chip curated${busy ? ' busy' : ''}" style="--lane-color:${LANE_TYPES.ambient.color}" ${ready ? `draggable="true" ondragstart="onMediaChipDragStart(event, '${escapeHtml(ready.id)}')"` : ''}
-                         onclick="addCuratedVisual('${escapeHtml(c.id)}')" title="${ready ? 'Tap to add to the day shown, or drag onto the timeline.' : (c.qr ? 'Tap to add - this event\'s QR code is placed on it automatically.' : 'Tap to add to the day shown.')}">
+                         onclick="addCuratedVisual('${escapeHtml(c.id)}')">
                         <span class="vis-thumb tall">${curatedPreviewSrc(c) ? `<img src="${escapeHtml(curatedPreviewSrc(c))}" alt="" onerror="this.remove()">` : ''}</span>
                         <span class="chip-text"><span class="chip-label">${escapeHtml(c.label)}</span>${c.description ? `<span class="chip-desc">${escapeHtml(c.description)}</span>` : ''}</span>
                         ${busy ? '<span class="chip-pill">Preparing...</span>' : (c.qr ? `<span class="chip-pill good">QR</span>` : '')}
-                        ${c.qr && !busy ? `<button type="button" class="chip-action" onclick="event.stopPropagation(); downloadCuratedPrint('${escapeHtml(c.id)}')" title="Download a full-size copy with this event's QR code, for printing">Print</button>` : ''}
+                        ${c.qr && !busy ? `<button type="button" class="chip-action" onclick="event.stopPropagation(); downloadCuratedPrint('${escapeHtml(c.id)}')">Print</button>` : ''}
                     </div>`);
                 });
                 if (!rows.length) rows.push(`<div class="lib-empty">${curatedVisLoaded ? 'No curated visuals available yet.' : 'Loading curated visuals...'}</div>`);
             } else if (libraryTab === 'ambient') {
                 ambientMedia.forEach(m => rows.push(`
                     <div class="media-chip" draggable="true" data-media-id="${escapeHtml(m.id)}"
-                         ondragstart="onMediaChipDragStart(event, '${escapeHtml(m.id)}')" onclick="addFromLibrary('media', '${escapeHtml(m.id)}')" title="Tap to add to the day shown, or drag onto the timeline">
+                         ondragstart="onMediaChipDragStart(event, '${escapeHtml(m.id)}')" onclick="addFromLibrary('media', '${escapeHtml(m.id)}')">
                         ${mediaThumbHtml(m)}
                         <span class="chip-label">${escapeHtml(m.filename)}</span>
                         <span class="chip-type">${m.type === 'video' ? 'Video' : 'Photo'}</span>
                         <button class="chip-remove" onclick="event.stopPropagation(); removeAmbientMedia('${escapeHtml(m.id)}')" title="Remove">&times;</button>
                     </div>
                 `));
-                if (!rows.length) rows.push(`<div class="lib-empty">No visuals yet. Use <strong>+ Add Visual</strong> to create a block or import one, or browse <strong>Curated Visuals</strong>, then drag files onto the timeline.</div>`);
+                if (!rows.length) rows.push(`<div class="lib-empty">No visuals yet. Use <strong>+ Add Visual</strong> to create a block or import one, then drag files onto the timeline.</div>`);
             } else {
                 rows.push(`<div class="lib-empty">Music Video blocks play a video for whatever song is on. They aren't dragged in: use <strong>+ Add Block</strong>, pick the days and times, and it lands on the timeline.</div>`);
             }
