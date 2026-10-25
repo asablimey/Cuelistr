@@ -3706,6 +3706,108 @@ app.get('/e/:slug/api/admin/curated-playlists', async (req, res) => {
     }
 });
 
+// --- Master: curated visuals (Visuals tab on /master) ---------------------
+// Server-wide, like curated playlists: the master uploads a poster/visual once
+// and it shows up under "Curated Visuals" in every event's scheduler (read via
+// GET /e/:slug/api/admin/curated-visuals below). One Redis hash, field = row id.
+//   row = { id, label, url (Cloudinary), description,
+//           qr: null | { x, y, w, h }, createdAt, updatedAt }
+// `qr` is the white placeholder square on a poster, as fractions of the image
+// (x, w of its width; y, h of its height) so it survives any resize. The
+// scheduler stamps the event's own QR code into that square when a venue picks
+// the visual. A visual with qr:null is just added as-is.
+// The image bytes go straight from the browser to Cloudinary (see
+// isCloudinaryUrl) - this server only ever stores the URL and the box.
+const CURATED_VISUALS_KEY = 'curated-visuals:rows';
+const CURATED_VISUALS_MAX = 200;
+
+async function curatedVisualsList() {
+    const flat = await events.redis(['HGETALL', CURATED_VISUALS_KEY]);
+    const rows = [];
+    const take = (v) => { try { const r = JSON.parse(v); if (r && r.id && r.url) rows.push(r); } catch (e) { /* skip a corrupt row */ } };
+    if (Array.isArray(flat)) { for (let i = 0; i + 1 < flat.length; i += 2) take(flat[i + 1]); }
+    else if (flat && typeof flat === 'object') { Object.values(flat).forEach(take); }
+    rows.sort((a, b) => String(a.label || '').localeCompare(String(b.label || ''), undefined, { sensitivity: 'base' }));
+    return rows;
+}
+
+// Returns a clean { x, y, w, h } or null. Anything that isn't a sensible box
+// inside the image is treated as "no QR slot".
+function cleanCuratedQr(q) {
+    if (!q || typeof q !== 'object') return null;
+    const x = Number(q.x), y = Number(q.y), w = Number(q.w), h = Number(q.h);
+    if (![x, y, w, h].every(Number.isFinite)) return null;
+    if (x < 0 || y < 0 || w < 0.02 || h < 0.02 || w > 1 || h > 1) return null;
+    if (x + w > 1.001 || y + h > 1.001) return null;
+    const r = (n) => Math.round(n * 1e6) / 1e6;
+    return { x: r(x), y: r(y), w: r(w), h: r(h) };
+}
+
+const curatedVisualsApi = express.Router();
+app.use('/api/master/curated-visuals', catalogAuthLimiter, requireMaster, curatedVisualsApi);
+
+curatedVisualsApi.get('/', async (req, res) => {
+    try { res.json({ visuals: await curatedVisualsList() }); }
+    catch (e) { res.status(500).json({ error: 'Could not load curated visuals: ' + e.message }); }
+});
+
+// Create (no id) or update (id). Body: { id?, url (create only), label?, description?, qr? }.
+// On update, `qr` is only touched when the key is present (null clears it).
+curatedVisualsApi.post('/', async (req, res) => {
+    try {
+        const body = req.body || {};
+        const all = await curatedVisualsList();
+        const existing = body.id ? all.find(r => r.id === String(body.id)) : null;
+        if (body.id && !existing) return res.status(404).json({ error: 'That visual no longer exists.' });
+
+        let url = existing ? existing.url : '';
+        if (!existing) {
+            if (!isCloudinaryUrl(body.url)) return res.status(400).json({ error: 'That upload URL is not recognized.' });
+            if (all.length >= CURATED_VISUALS_MAX) return res.status(400).json({ error: `Limit of ${CURATED_VISUALS_MAX} curated visuals reached.` });
+            url = body.url;
+        }
+
+        let label = typeof body.label === 'string' ? body.label.trim().slice(0, 60) : (existing ? existing.label : '');
+        if (!label) label = existing ? existing.label : 'Untitled visual';
+        const description = typeof body.description === 'string' ? body.description.trim().slice(0, 120) : (existing ? (existing.description || '') : '');
+        const qr = Object.prototype.hasOwnProperty.call(body, 'qr') ? cleanCuratedQr(body.qr) : (existing ? (existing.qr || null) : null);
+
+        const now = Date.now();
+        const row = {
+            id: existing ? existing.id : crypto.randomBytes(6).toString('hex'),
+            label, url, description, qr,
+            createdAt: existing ? (existing.createdAt || now) : now,
+            updatedAt: now
+        };
+        await events.redis(['HSET', CURATED_VISUALS_KEY, row.id, JSON.stringify(row)]);
+        res.json({ success: true, visual: row, created: !existing });
+    } catch (e) {
+        res.status(500).json({ error: 'Could not save: ' + e.message });
+    }
+});
+
+curatedVisualsApi.delete('/:id', async (req, res) => {
+    try {
+        const n = await events.redis(['HDEL', CURATED_VISUALS_KEY, String(req.params.id)]);
+        res.json({ success: true, removed: Number(n) > 0 });
+    } catch (e) {
+        res.status(500).json({ error: 'Could not delete: ' + e.message });
+    }
+});
+
+// What each event's scheduler reads. Behind the normal per-event admin auth.
+app.get('/e/:slug/api/admin/curated-visuals', async (req, res) => {
+    try {
+        const rows = await curatedVisualsList();
+        res.json({ visuals: rows.map(r => ({
+            id: r.id, label: r.label, url: r.url, description: r.description || '',
+            qr: r.qr || null, updatedAt: r.updatedAt || 0
+        })) });
+    } catch (e) {
+        res.status(500).json({ error: 'Could not load curated visuals.' });
+    }
+});
+
 // Is this YouTube video playable in the embedded player? (used by the grid)
 catalogApi.get('/check-video', async (req, res) => {
     const id = String(req.query.id || '');
@@ -4991,7 +5093,7 @@ function isCloudinaryUrl(url) {
 
 app.post('/e/:slug/api/admin/ambient-media', (req, res) => {
     const event = req.event;
-    const { url, filename, type } = req.body || {};
+    const { url, filename, type, curatedId, curatedStamp } = req.body || {};
     if (!isCloudinaryUrl(url)) {
         return res.status(400).json({ error: 'That upload URL is not recognized.' });
     }
@@ -5006,6 +5108,14 @@ app.post('/e/:slug/api/admin/ambient-media', (req, res) => {
         ? filename.trim().slice(0, 120)
         : (type === 'video' ? 'Untitled video' : 'Untitled photo');
     const item = { id: crypto.randomUUID(), url, filename: safeFilename, type, createdAt: Date.now() };
+    // A copy made from a Curated Visual (poster with this event's QR stamped
+    // in) remembers where it came from, so picking the same one again reuses
+    // it instead of uploading a duplicate. curatedStamp changes when the
+    // curated visual or the event's QR link changes, which marks it stale.
+    if (typeof curatedId === 'string' && /^[a-f0-9]{12}$/.test(curatedId)) {
+        item.curatedId = curatedId;
+        item.curatedStamp = typeof curatedStamp === 'string' ? curatedStamp.slice(0, 200) : '';
+    }
     event.ambientMedia.push(item);
     events.scheduleSave(event.slug);
     res.json({ success: true, item });
