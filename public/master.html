@@ -77,7 +77,7 @@
             padding: 18px 20px; margin-bottom: 14px; display: flex; justify-content: space-between;
             align-items: center; gap: 16px; flex-wrap: wrap;
         }
-        .event-info { min-width: 0; flex: 1; }
+        .event-info { min-width: 0; flex: 1 1 220px; }
         .event-name { font-size: 1.05rem; font-weight: 700; }
         .event-meta { color: #a7a7a7; font-size: 0.8rem; margin-top: 4px; line-height: 1.5; }
         .event-meta code { background: var(--card-bg); padding: 2px 6px; border-radius: 4px; font-size: 0.78rem; }
@@ -1824,12 +1824,12 @@
                 <div class="header">
                     <div>
                         <h1>Visuals</h1>
-                        <div class="subtitle"><b>One list for ALL events.</b> Visuals added here appear under <b>Curated Visuals</b> in every event's scheduler. If an image has a plain white square, each event's own QR code is placed into it automatically. <span id="cv-count"></span></div>
+                        <div class="subtitle"><span id="cv-count"></span></div>
                     </div>
                     <button class="refresh-btn" onclick="cvLoad()">↻ Reload</button>
                 </div>
                 <div class="cv-drop" id="cv-drop">
-                    <div class="cv-hint">Drop images here, or choose files. Posters should have a pure white (#FFFFFF) square where the QR code goes - it is detected automatically and left blank here. Each event's QR code is only added inside that event's scheduler.</div>
+                    <div class="cv-hint">Drop images here</div>
                     <input type="file" id="cv-file" accept="image/*" multiple style="display:none" onchange="cvHandleFiles(this.files); this.value='';">
                     <button class="btn btn-admin" onclick="document.getElementById('cv-file').click()">+ Upload visuals</button>
                 </div>
@@ -1844,13 +1844,13 @@
         function cvRender() {
             document.getElementById('cv-count').textContent = cvRows.length ? `${cvRows.length} ${cvRows.length === 1 ? 'visual' : 'visuals'}.` : '';
             const grid = document.getElementById('cv-grid');
-            if (!cvRows.length) { grid.innerHTML = '<div class="cp-empty" style="grid-column:1/-1">No visuals yet. Upload some above.</div>'; return; }
+            if (!cvRows.length) { grid.innerHTML = '<div class="cp-empty" style="grid-column:1/-1">No visuals yet.</div>'; return; }
             grid.innerHTML = cvRows.map(r => {
                 const q = r.qr;
                 return `<div class="cv-card">
                     <div class="cv-thumb"><img src="${cvEsc(cvThumb(r.url))}" alt="" loading="lazy"></div>
                     <span class="cv-badge ${q ? 'on' : 'off'}">${q ? 'QR square found' : 'Plain visual (no QR)'}</span>
-                    <input type="text" value="${cvEsc(r.label)}" maxlength="60" title="Name shown in schedulers" onchange="cvEdit('${cvEsc(r.id)}', { label: this.value })">
+                    <input type="text" value="${cvEsc(r.label)}" maxlength="60" onchange="cvEdit('${cvEsc(r.id)}', { label: this.value })">
                     <input type="text" value="${cvEsc(r.description || '')}" maxlength="120" placeholder="Description (optional)" onchange="cvEdit('${cvEsc(r.id)}', { description: this.value })">
                     <button class="btn btn-admin cv-del" onclick="cvDelete('${cvEsc(r.id)}')">Delete</button>
                 </div>`;
