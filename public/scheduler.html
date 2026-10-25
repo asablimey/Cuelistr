@@ -2159,7 +2159,7 @@
 
         // Draws the poster, then fills its white square with this event's QR code.
         // The code is sized in whole pixels per square (never blurry), centred, and
-        // keeps the standard 4-square blank border, all inside the white square.
+        // keeps a slim 2-square white border, all inside the white square.
         // maxDim shrinks the picture so its longest side is at most that many pixels
         // (null = original size, used for printing).
         async function renderPosterBlob(cur, qrUrl, maxDim, srcUrl) {
@@ -2180,7 +2180,7 @@
             const right = Math.ceil((q.x + q.w) * W), bottom = Math.ceil((q.y + q.h) * H);
             const boxW = right - left, boxH = bottom - top;
             const { n, isDark } = qrMatrix(qrUrl);
-            const QUIET = 4;
+            const QUIET = 2;
             const mod = Math.floor(Math.min(boxW, boxH) / (n + QUIET * 2));
             if (mod < 2) throw new Error('The QR square is too small to hold this event\'s code.');
             const ox = left + Math.floor((boxW - mod * n) / 2);
