@@ -131,6 +131,24 @@
         .cp-del { color: #ff6b6b; }
         @media (max-width: 720px) { .cp-row { flex-wrap: wrap; } }
 
+        /* Visuals tab (curated posters / visuals) */
+        .cv-drop { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 14px; margin-bottom: 14px; background: var(--card-bg); border: 1px dashed #3a3a3a; border-radius: 12px; }
+        .cv-drop.over { border-color: var(--spotify-green); }
+        .cv-drop .cv-hint { flex: 1 1 260px; color: #a7a7a7; font-size: 0.85rem; }
+        .cv-progress { margin-bottom: 14px; font-size: 0.85rem; color: #a7a7a7; display: none; }
+        .cv-progress.show { display: block; }
+        .cv-progress .err { color: #ff6b6b; }
+        .cv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+        .cv-card { background: var(--panel-bg); border: 1px solid #282828; border-radius: 12px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+        .cv-thumb { position: relative; width: 100%; background: #000; border-radius: 8px; overflow: hidden; line-height: 0; }
+        .cv-thumb img { width: 100%; height: auto; display: block; }
+        .cv-badge { font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 50px; align-self: flex-start; }
+        .cv-badge.on { background: rgba(29,185,84,0.18); color: var(--spotify-green); }
+        .cv-badge.off { background: #2a2a2a; color: #a7a7a7; }
+        .cv-card input { background: var(--card-bg); border: 1px solid #333; color: white; border-radius: 8px; padding: 8px 10px; font-size: 0.85rem; outline: none; min-width: 0; width: 100%; }
+        .cv-card input:focus { border-color: var(--spotify-green); }
+        .cv-card .cv-del { color: #ff6b6b; }
+
         /* ---- Tabs + Videos catalog ---- */
         .tabs { display: flex; gap: 8px; margin-bottom: 20px; }
         .tabs { display: flex; gap: 8px; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; scrollbar-width: none; }
@@ -287,6 +305,7 @@
             <button class="tab-btn" id="tabbtn-videos" onclick="switchTab('videos')">Videos</button>
             <button class="tab-btn" id="tabbtn-playlists" onclick="switchTab('playlists')">Playlists</button>
             <button class="tab-btn" id="tabbtn-karaoke" onclick="switchTab('karaoke')">Karaoke</button>
+            <button class="tab-btn" id="tabbtn-visuals" onclick="switchTab('visuals')">Visuals</button>
         </div>
         <div id="tab-events">
         <div class="header">
@@ -310,6 +329,7 @@
 
         <div id="tab-playlists" style="display:none"></div>
         <div id="tab-karaoke" style="display:none"></div>
+        <div id="tab-visuals" style="display:none"></div>
 
         <div id="tab-videos" style="display:none">
             <div class="header">
@@ -596,13 +616,14 @@
         let vcToastTimer = null;
 
         function switchTab(tab) {
-            ['events', 'videos', 'playlists', 'karaoke'].forEach(t => {
+            ['events', 'videos', 'playlists', 'karaoke', 'visuals'].forEach(t => {
                 document.getElementById('tab-' + t).style.display = tab === t ? 'block' : 'none';
                 document.getElementById('tabbtn-' + t).classList.toggle('active', tab === t);
             });
             document.getElementById('dashboard').classList.toggle('wide', tab === 'videos');
             if (tab === 'videos' && !vcLoaded) vcLoad();
             if ((tab === 'playlists' || tab === 'karaoke') && !cpLoaded) cpLoad();
+            if (tab === 'visuals' && !cvLoaded) cvLoad();
         }
 
         async function vcApi(method, path, body) {
@@ -1629,6 +1650,234 @@
             await cpLoad();
         }
         cpBuildShell();
+    </script>
+
+    <script>
+        /* ===================== Visuals tab (curated posters / visuals) ===================== */
+        // Upload a poster once and it shows up under "Curated Visuals" in every event's
+        // scheduler. If the image has a plain white square (the QR placeholder), it is
+        // found automatically here, and each event's own QR code is stamped into it
+        // when a venue picks the visual. Images without a white square are added as-is.
+        //
+        // Files go straight from this browser to Cloudinary (same unsigned preset the
+        // scheduler uses); the server only stores the link and the square's position.
+        const CV_CLOUD_NAME = 'zqywiwqr';
+        const CV_UPLOAD_PRESET = 'dylhzuki';
+        let cvRows = [];
+        let cvLoaded = false;
+
+        function cvEsc(v) { return cpEsc(v); }
+        async function cvApi(method, path, body) {
+            try {
+                const res = await fetch('/api/master/curated-visuals' + path, {
+                    method,
+                    headers: Object.assign({ 'x-admin-password': masterPassword }, body ? { 'Content-Type': 'application/json' } : {}),
+                    body: body ? JSON.stringify(body) : undefined
+                });
+                let data = {};
+                try { data = await res.json(); } catch (e) { /* non-JSON error body */ }
+                return { ok: res.ok, data };
+            } catch (e) {
+                return { ok: false, data: { error: 'Could not reach the server.' } };
+            }
+        }
+
+        // Small copy for the grid so a dozen full-size posters don't all download.
+        function cvThumb(url) {
+            return String(url).replace('/image/upload/', '/image/upload/w_400,c_limit,q_auto,f_auto/');
+        }
+
+        /* ---- Finding the white QR square ----
+         * Stage 1 looks at a shrunken copy: pure-white pixels, grouped into blobs, and the
+         * biggest blob that is square and solid wins (letters are never solid squares).
+         * Stage 2 re-measures that spot at full resolution so the edges are exact. */
+        const CV_WHITE = 250; // r, g and b all at least this = "white"
+
+        function cvCoarseSquare(px, w, h) {
+            const white = new Uint8Array(w * h);
+            for (let i = 0, j = 0; i < white.length; i++, j += 4) {
+                if (px[j + 3] > 250 && px[j] >= CV_WHITE && px[j + 1] >= CV_WHITE && px[j + 2] >= CV_WHITE) white[i] = 1;
+            }
+            const seen = new Uint8Array(w * h);
+            const stack = new Int32Array(w * h);
+            const minSide = Math.max(8, Math.round(Math.min(w, h) * 0.08));
+            let best = null;
+            for (let start = 0; start < white.length; start++) {
+                if (!white[start] || seen[start]) continue;
+                let sp = 0, count = 0, x0 = w, y0 = h, x1 = -1, y1 = -1;
+                stack[sp++] = start; seen[start] = 1;
+                while (sp > 0) {
+                    const p = stack[--sp];
+                    const x = p % w, y = (p - x) / w;
+                    count++;
+                    if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+                    if (x > 0 && white[p - 1] && !seen[p - 1]) { seen[p - 1] = 1; stack[sp++] = p - 1; }
+                    if (x < w - 1 && white[p + 1] && !seen[p + 1]) { seen[p + 1] = 1; stack[sp++] = p + 1; }
+                    if (y > 0 && white[p - w] && !seen[p - w]) { seen[p - w] = 1; stack[sp++] = p - w; }
+                    if (y < h - 1 && white[p + w] && !seen[p + w]) { seen[p + w] = 1; stack[sp++] = p + w; }
+                }
+                const bw = x1 - x0 + 1, bh = y1 - y0 + 1;
+                if (bw < minSide || bh < minSide) continue;
+                const ratio = bw / bh;
+                if (ratio < 0.93 || ratio > 1.07) continue;       // must be square
+                if (count / (bw * bh) < 0.97) continue;           // and solid
+                if (!best || count > best.count) best = { x: x0, y: y0, w: bw, h: bh, count };
+            }
+            return best;
+        }
+
+        // img: a loaded, CORS-clean <img>. Returns { x, y, w, h } as fractions of the image, or null.
+        function cvDetectSlot(img) {
+            const W = img.naturalWidth, H = img.naturalHeight;
+            if (!W || !H) return null;
+            const s = Math.min(1, 900 / Math.max(W, H));
+            const cw = Math.max(1, Math.round(W * s)), ch = Math.max(1, Math.round(H * s));
+            const c = document.createElement('canvas');
+            c.width = cw; c.height = ch;
+            const cx = c.getContext('2d', { willReadFrequently: true });
+            cx.drawImage(img, 0, 0, cw, ch);
+            const box = cvCoarseSquare(cx.getImageData(0, 0, cw, ch).data, cw, ch);
+            if (!box) return null;
+
+            // Stage 2: crop a little more than the coarse box out of the full-size image.
+            const pad = Math.ceil(3 / s) + 2;
+            const fx0 = Math.max(0, Math.floor(box.x / s) - pad), fy0 = Math.max(0, Math.floor(box.y / s) - pad);
+            const fx1 = Math.min(W, Math.ceil((box.x + box.w) / s) + pad), fy1 = Math.min(H, Math.ceil((box.y + box.h) / s) + pad);
+            const rw = fx1 - fx0, rh = fy1 - fy0;
+            const c2 = document.createElement('canvas');
+            c2.width = rw; c2.height = rh;
+            const cx2 = c2.getContext('2d', { willReadFrequently: true });
+            cx2.drawImage(img, fx0, fy0, rw, rh, 0, 0, rw, rh);
+            const d = cx2.getImageData(0, 0, rw, rh).data;
+            const rowWhite = new Int32Array(rh), colWhite = new Int32Array(rw);
+            for (let y = 0; y < rh; y++) {
+                for (let x = 0; x < rw; x++) {
+                    const j = (y * rw + x) * 4;
+                    if (d[j] >= CV_WHITE && d[j + 1] >= CV_WHITE && d[j + 2] >= CV_WHITE) { rowWhite[y]++; colWhite[x]++; }
+                }
+            }
+            const needW = Math.round((box.w / s) * 0.9), needH = Math.round((box.h / s) * 0.9);
+            let top = -1, bottom = -1, left = -1, right = -1;
+            for (let y = 0; y < rh; y++) if (rowWhite[y] >= needW) { if (top < 0) top = y; bottom = y; }
+            for (let x = 0; x < rw; x++) if (colWhite[x] >= needH) { if (left < 0) left = x; right = x; }
+            if (top < 0 || left < 0) return null;
+            const pw = right - left + 1, ph = bottom - top + 1;
+            if (Math.abs(pw - ph) > Math.max(2, pw * 0.02)) return null; // not a square after all
+            return { x: (fx0 + left) / W, y: (fy0 + top) / H, w: pw / W, h: ph / H };
+        }
+
+        function cvLoadCorsImage(url) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+                img.onload = () => resolve(img);
+                img.onerror = () => reject(new Error('Could not read the uploaded image back to find the QR square.'));
+                img.src = url;
+            });
+        }
+
+        async function cvUploadToCloudinary(file) {
+            const form = new FormData();
+            form.append('file', file);
+            form.append('upload_preset', CV_UPLOAD_PRESET);
+            const res = await fetch(`https://api.cloudinary.com/v1_1/${CV_CLOUD_NAME}/image/upload`, { method: 'POST', body: form });
+            const data = await res.json();
+            if (!res.ok || !data.secure_url) throw new Error((data.error && data.error.message) || 'Cloudinary upload failed');
+            return data.secure_url;
+        }
+
+        function cvProgress(lines) {
+            const el = document.getElementById('cv-progress');
+            if (!el) return;
+            el.classList.toggle('show', lines.length > 0);
+            el.innerHTML = lines.join('<br>');
+        }
+
+        async function cvHandleFiles(fileList) {
+            const files = Array.from(fileList || []).filter(f => f.type && f.type.startsWith('image/'));
+            if (!files.length) { showToast('Choose one or more image files.', 'error'); return; }
+            const lines = [];
+            const note = (t, isErr) => { lines.push(isErr ? `<span class="err">${cvEsc(t)}</span>` : cvEsc(t)); cvProgress(lines); };
+            let added = 0;
+            for (const file of files) {
+                const name = file.name.replace(/\.[^.]+$/, '').slice(0, 60) || 'Untitled visual';
+                try {
+                    note(`Uploading ${file.name}...`);
+                    const url = await cvUploadToCloudinary(file);
+                    // Measure the image as Cloudinary serves it, so the saved square matches what the scheduler will load.
+                    const img = await cvLoadCorsImage(url);
+                    const qr = cvDetectSlot(img);
+                    const r = await cvApi('POST', '', { url, label: name, qr });
+                    if (!r.ok) throw new Error(r.data.error || 'Could not save it.');
+                    added++;
+                    note(`${file.name}: ${qr ? 'QR square found' : 'no white square found (will be added as a plain visual)'}.`);
+                } catch (e) {
+                    note(`${file.name}: ${e.message}`, true);
+                }
+            }
+            if (added) showToast(`Added ${added} ${added === 1 ? 'visual' : 'visuals'}.`);
+            await cvLoad();
+        }
+
+        function cvBuildShell() {
+            document.getElementById('tab-visuals').innerHTML = `
+                <div class="header">
+                    <div>
+                        <h1>Visuals</h1>
+                        <div class="subtitle"><b>One list for ALL events.</b> Visuals added here appear under <b>Curated Visuals</b> in every event's scheduler. If an image has a plain white square, each event's own QR code is placed into it automatically. <span id="cv-count"></span></div>
+                    </div>
+                    <button class="refresh-btn" onclick="cvLoad()">↻ Reload</button>
+                </div>
+                <div class="cv-drop" id="cv-drop">
+                    <div class="cv-hint">Drop images here, or choose files. Posters should have a pure white (#FFFFFF) square where the QR code goes - it is detected automatically and left blank here. Each event's QR code is only added inside that event's scheduler.</div>
+                    <input type="file" id="cv-file" accept="image/*" multiple style="display:none" onchange="cvHandleFiles(this.files); this.value='';">
+                    <button class="btn btn-admin" onclick="document.getElementById('cv-file').click()">+ Upload visuals</button>
+                </div>
+                <div class="cv-progress" id="cv-progress"></div>
+                <div class="cv-grid" id="cv-grid"></div>`;
+            const drop = document.getElementById('cv-drop');
+            ['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+            ['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+            drop.addEventListener('drop', e => cvHandleFiles(e.dataTransfer.files));
+        }
+
+        function cvRender() {
+            document.getElementById('cv-count').textContent = cvRows.length ? `${cvRows.length} ${cvRows.length === 1 ? 'visual' : 'visuals'}.` : '';
+            const grid = document.getElementById('cv-grid');
+            if (!cvRows.length) { grid.innerHTML = '<div class="cp-empty" style="grid-column:1/-1">No visuals yet. Upload some above.</div>'; return; }
+            grid.innerHTML = cvRows.map(r => {
+                const q = r.qr;
+                return `<div class="cv-card">
+                    <div class="cv-thumb"><img src="${cvEsc(cvThumb(r.url))}" alt="" loading="lazy"></div>
+                    <span class="cv-badge ${q ? 'on' : 'off'}">${q ? 'QR square found' : 'Plain visual (no QR)'}</span>
+                    <input type="text" value="${cvEsc(r.label)}" maxlength="60" title="Name shown in schedulers" onchange="cvEdit('${cvEsc(r.id)}', { label: this.value })">
+                    <input type="text" value="${cvEsc(r.description || '')}" maxlength="120" placeholder="Description (optional)" onchange="cvEdit('${cvEsc(r.id)}', { description: this.value })">
+                    <button class="btn btn-admin cv-del" onclick="cvDelete('${cvEsc(r.id)}')">Delete</button>
+                </div>`;
+            }).join('');
+        }
+
+        async function cvLoad() {
+            const r = await cvApi('GET', '');
+            if (!r.ok) { showToast(r.data.error || 'Could not load visuals.', 'error'); return; }
+            cvRows = r.data.visuals || [];
+            cvLoaded = true;
+            cvRender();
+        }
+        async function cvEdit(id, patch) {
+            const r = await cvApi('POST', '', Object.assign({ id }, patch));
+            if (!r.ok) showToast(r.data.error || 'Could not save that change.', 'error');
+            await cvLoad();
+        }
+        async function cvDelete(id) {
+            const row = cvRows.find(x => x.id === id);
+            if (!row || !confirm(`Delete "${row.label}"? It disappears from every event's Curated Visuals list. Copies already added to an event's library keep working.`)) return;
+            const r = await cvApi('DELETE', '/' + encodeURIComponent(id));
+            if (!r.ok) { showToast(r.data.error || 'Could not delete.', 'error'); return; }
+            showToast('Deleted.');
+            await cvLoad();
+        }
+        cvBuildShell();
     </script>
 
     <script>
