@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
     <script src="/theme.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script>(function(){var s=location.pathname.split("/")[2]||"";CrowdTheme.use("crowddj_theme_admin_"+s);CrowdTheme.follow("admin",s);})();</script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -852,6 +853,17 @@
         .chip-text { flex:1; min-width:0; display:flex; flex-direction:column; gap:1px; }
         .chip-desc { font-size:0.7rem; color:var(--text-dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
         .playlist-chip.curated { border-color:var(--lane-color, var(--border-strong)); }
+        /* Visual previews in the library (photos, videos, curated posters) */
+        .vis-thumb { position:relative; width:46px; height:46px; border-radius:5px; flex-shrink:0; overflow:hidden; background:#000; display:block; }
+        .vis-thumb.tall { width:64px; height:90px; }
+        .vis-thumb img { width:100%; height:100%; object-fit:contain; display:block; }
+        .vis-thumb .thumb-tag { position:absolute; right:2px; bottom:2px; background:rgba(0,0,0,0.65); color:#fff; border-radius:3px; padding:0 3px; font-size:0.5rem; }
+        .media-chip.curated { border-color:var(--lane-color, var(--border-strong)); }
+        .media-chip.curated.busy { opacity:0.6; cursor:progress; }
+        .chip-pill { flex-shrink:0; font-size:0.62rem; font-weight:700; border-radius:50px; padding:1px 7px; background:var(--inset-bg); color:var(--text-dim); }
+        .chip-pill.good { color:var(--spotify-green); }
+        .chip-action { flex-shrink:0; background:none; border:1px solid var(--border-strong); color:var(--text-dim); border-radius:6px; font-size:0.68rem; padding:2px 7px; cursor:pointer; }
+        .chip-action:hover { color:var(--text); border-color:var(--text-dim); }
         .save-state { font-size:0.8rem; color:var(--text-dim); white-space:nowrap; min-width:110px; text-align:right; }
         .save-state.error { color:var(--red-action); }
         .btn.cur-on { background:var(--text); color:var(--spotify-black); }
@@ -1325,6 +1337,10 @@
         let curatedOpen = false;     // library shows the curated catalogue instead of "my playlists"
         let curatedPlaylists = [];   // [{ id, label, uri, type: 'crowddj'|'karaoke', description? }] - premade, read-only here
         let curatedLoaded = false;
+        let curatedVisOpen = false;  // ambient tab shows Curated Visuals instead of "my visuals"
+        let curatedVisuals = [];     // [{ id, label, url, description, qr: null|{x,y,w,h}, updatedAt }] - premade, read-only here
+        let curatedVisLoaded = false;
+        const curatedVisBusy = new Set(); // curated visual ids being prepared right now
         // Curated playlists are saved into the event's own playlists list (the
         // server only accepts rule.playlistId values that exist there), under
         // this reserved id prefix. That prefix is how the scheduler keeps them
@@ -1545,6 +1561,7 @@
                     autosaveStart();
                     renderAll();
                     loadCuratedPlaylists();
+                    loadCuratedVisuals();
                     refreshStatus();
                     if (!statusPollStarted) { statusPollStarted = true; setInterval(refreshStatus, 10000); }
                     document.getElementById('lock-screen').style.visibility = 'visible';
@@ -1873,7 +1890,8 @@
             e.dataTransfer.setData('text/plain', 'playlist:' + CURATED_PREFIX + curatedId);
         }
         function toggleCurated() {
-            curatedOpen = !curatedOpen;
+            if (libraryTab === 'ambient') curatedVisOpen = !curatedVisOpen;
+            else curatedOpen = !curatedOpen;
             document.getElementById('add-playlist-form').classList.remove('open');
             renderPlaylists();
         }
@@ -1891,9 +1909,13 @@
             const addBtn = document.getElementById('lib-add-btn');
             const isMusicTab = libraryTab === 'crowddj' || libraryTab === 'karaoke';
             const curBtn = document.getElementById('lib-curated-btn');
-            curBtn.style.display = isMusicTab ? '' : 'none';
-            curBtn.classList.toggle('cur-on', isMusicTab && curatedOpen);
-            curBtn.innerHTML = curatedOpen ? '&larr; My Playlists' : 'Curated Playlists';
+            const isAmbientTab = libraryTab === 'ambient';
+            const curOn = isAmbientTab ? curatedVisOpen : curatedOpen;
+            curBtn.style.display = (isMusicTab || isAmbientTab) ? '' : 'none';
+            curBtn.classList.toggle('cur-on', (isMusicTab || isAmbientTab) && curOn);
+            curBtn.innerHTML = curOn
+                ? (isAmbientTab ? '&larr; My Visuals' : '&larr; My Playlists')
+                : (isAmbientTab ? 'Curated Visuals' : 'Curated Playlists');
             addBtn.textContent = libraryTab === 'ambient' ? '+ Add Visual' : libraryTab === 'musicvideo' ? '+ Add Block' : '+ Add Playlist';
         }
         function setLibraryTab(t) {
@@ -1903,6 +1925,7 @@
         }
         function onLibraryAdd() {
             if (libraryTab === 'ambient') {
+                if (curatedVisOpen) { curatedVisOpen = false; renderPlaylists(); }
                 // Same two entry points the old form had: a fresh block, or import from file.
                 const choice = confirm('OK = create a new visual block.\nCancel = import from a file instead.');
                 return choice ? startNewAmbientBlock() : importVisualsAsNewBlock();
@@ -1938,19 +1961,32 @@
                     </div>
                 `));
                 if (!rows.length) rows.push(`<div class="lib-empty">No ${escapeHtml(LANE_TYPES[libraryTab].label)} playlists yet. Use <strong>+ Add</strong>, or browse <strong>Curated Playlists</strong>, then drag one onto the timeline.</div>`);
+            } else if (libraryTab === 'ambient' && curatedVisOpen) {
+                const qrUrl = guestQrUrl();
+                curatedVisuals.forEach(c => {
+                    const busy = curatedVisBusy.has(c.id);
+                    const ready = ambientMedia.find(m => m.curatedId === c.id && m.curatedStamp === curatedStamp(c, qrUrl));
+                    rows.push(`
+                    <div class="media-chip curated${busy ? ' busy' : ''}" style="--lane-color:${LANE_TYPES.ambient.color}" ${ready ? `draggable="true" ondragstart="onMediaChipDragStart(event, '${escapeHtml(ready.id)}')"` : ''}
+                         onclick="addCuratedVisual('${escapeHtml(c.id)}')" title="${ready ? 'Tap to add to the day shown, or drag onto the timeline.' : (c.qr ? 'Tap to add - this event\'s QR code is placed on it automatically.' : 'Tap to add to the day shown.')}">
+                        <span class="vis-thumb tall">${curatedPreviewSrc(c) ? `<img src="${escapeHtml(curatedPreviewSrc(c))}" alt="" onerror="this.remove()">` : ''}</span>
+                        <span class="chip-text"><span class="chip-label">${escapeHtml(c.label)}</span>${c.description ? `<span class="chip-desc">${escapeHtml(c.description)}</span>` : ''}</span>
+                        ${busy ? '<span class="chip-pill">Preparing...</span>' : (c.qr ? `<span class="chip-pill good">QR</span>` : '')}
+                        ${c.qr && !busy ? `<button type="button" class="chip-action" onclick="event.stopPropagation(); downloadCuratedPrint('${escapeHtml(c.id)}')" title="Download a full-size copy with this event's QR code, for printing">Print</button>` : ''}
+                    </div>`);
+                });
+                if (!rows.length) rows.push(`<div class="lib-empty">${curatedVisLoaded ? 'No curated visuals available yet.' : 'Loading curated visuals...'}</div>`);
             } else if (libraryTab === 'ambient') {
                 ambientMedia.forEach(m => rows.push(`
                     <div class="media-chip" draggable="true" data-media-id="${escapeHtml(m.id)}"
                          ondragstart="onMediaChipDragStart(event, '${escapeHtml(m.id)}')" onclick="addFromLibrary('media', '${escapeHtml(m.id)}')" title="Tap to add to the day shown, or drag onto the timeline">
-                        ${m.type === 'video'
-                            ? `<span class="media-thumb media-type-icon"><span class="thumb-tag">VID</span></span>`
-                            : `<img class="media-thumb" src="${escapeHtml(m.url)}" alt="">`}
+                        ${mediaThumbHtml(m)}
                         <span class="chip-label">${escapeHtml(m.filename)}</span>
                         <span class="chip-type">${m.type === 'video' ? 'Video' : 'Photo'}</span>
                         <button class="chip-remove" onclick="event.stopPropagation(); removeAmbientMedia('${escapeHtml(m.id)}')" title="Remove">&times;</button>
                     </div>
                 `));
-                if (!rows.length) rows.push(`<div class="lib-empty">No visuals yet. Use <strong>+ Add Visual</strong> to create a block or import one, then drag files onto the timeline.</div>`);
+                if (!rows.length) rows.push(`<div class="lib-empty">No visuals yet. Use <strong>+ Add Visual</strong> to create a block or import one, or browse <strong>Curated Visuals</strong>, then drag files onto the timeline.</div>`);
             } else {
                 rows.push(`<div class="lib-empty">Music Video blocks play a video for whatever song is on. They aren't dragged in: use <strong>+ Add Block</strong>, pick the days and times, and it lands on the timeline.</div>`);
             }
@@ -2019,6 +2055,222 @@
         }
         function onMediaChipDragStart(e, mediaId) {
             e.dataTransfer.setData('text/plain', 'media:' + mediaId);
+        }
+
+        // ---------- Previews + Curated Visuals ----------
+        // Small preview URL for a Cloudinary file (a few KB instead of a full poster).
+        // Anything that isn't Cloudinary is shown as-is.
+        function cloudThumb(url, kind) {
+            const u = String(url || '');
+            if (!/^https:\/\/res\.cloudinary\.com\//.test(u)) return u;
+            if (kind === 'video') {
+                return u.replace('/video/upload/', '/video/upload/so_0,w_160,h_160,c_limit,q_auto/').replace(/\.[a-z0-9]+(\?.*)?$/i, '.jpg');
+            }
+            return u.replace('/image/upload/', '/image/upload/w_160,h_160,c_limit,q_auto,f_auto/');
+        }
+        function mediaThumbHtml(m) {
+            const isVid = m.type === 'video';
+            return `<span class="vis-thumb"><img src="${escapeHtml(cloudThumb(m.url, isVid ? 'video' : 'image'))}" alt="" loading="lazy" onerror="this.remove()">${isVid ? '<span class="thumb-tag">VID</span>' : ''}</span>`;
+        }
+
+        // The link every event's QR code points at - same one the admin page shows.
+        function guestQrUrl() { return `${location.origin}/e/${EVENT_SLUG}`; }
+        // Changes when the curated visual is edited or (for QR posters) the event link changes,
+        // which is what tells us a copy already in the library is out of date.
+        function curatedStamp(c, qrUrl) { return `${c.updatedAt || 0}|${c.qr ? qrUrl : ''}`; }
+
+        async function loadCuratedVisuals() {
+            try {
+                const res = await fetch(eventUrl('/api/admin/curated-visuals'), { headers: adminHeaders() });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const d = await res.json();
+                const list = Array.isArray(d) ? d : (d && d.visuals);
+                const num = v => typeof v === 'number' && Number.isFinite(v);
+                curatedVisuals = (Array.isArray(list) ? list : [])
+                    .filter(c => c && typeof c.id === 'string' && c.id && typeof c.url === 'string' && c.url)
+                    .map(c => ({
+                        id: c.id, label: typeof c.label === 'string' && c.label ? c.label : 'Untitled visual', url: c.url,
+                        description: typeof c.description === 'string' ? c.description : '',
+                        qr: c.qr && num(c.qr.x) && num(c.qr.y) && num(c.qr.w) && num(c.qr.h) ? { x: c.qr.x, y: c.qr.y, w: c.qr.w, h: c.qr.h } : null,
+                        updatedAt: num(c.updatedAt) ? c.updatedAt : 0
+                    }));
+            } catch (e) { curatedVisuals = []; }
+            curatedVisLoaded = true;
+            renderPlaylists();
+            buildCuratedPreviews();
+        }
+
+        // Each curated poster is shown with THIS event's QR code already in it, drawn
+        // here in the browser from a smaller copy of the poster (nothing is uploaded
+        // until a poster is actually added). Rebuilt only when the poster or link changes.
+        const curatedPreviews = {}; // id -> { stamp, url } (url '' = could not be drawn)
+        let curatedPreviewRun = 0;
+        async function buildCuratedPreviews() {
+            const run = ++curatedPreviewRun;
+            const qrUrl = guestQrUrl();
+            const todo = curatedVisuals.filter(c => c.qr && !(curatedPreviews[c.id] && curatedPreviews[c.id].stamp === curatedStamp(c, qrUrl)));
+            let next = 0;
+            const worker = async () => {
+                while (next < todo.length && run === curatedPreviewRun) {
+                    const c = todo[next++];
+                    const stamp = curatedStamp(c, qrUrl);
+                    let url = '';
+                    try {
+                        const small = c.url.replace('/image/upload/', '/image/upload/w_800,c_limit,q_auto/');
+                        url = URL.createObjectURL(await renderPosterBlob(c, qrUrl, 800, small));
+                    } catch (e) { /* falls back to the plain thumbnail */ }
+                    if (run !== curatedPreviewRun) { if (url) URL.revokeObjectURL(url); return; }
+                    if (curatedPreviews[c.id] && curatedPreviews[c.id].url) URL.revokeObjectURL(curatedPreviews[c.id].url);
+                    curatedPreviews[c.id] = { stamp, url };
+                    renderPlaylists();
+                }
+            };
+            await Promise.all([worker(), worker(), worker()]);
+        }
+        function curatedPreviewSrc(c) {
+            if (!c.qr) return cloudThumb(c.url, 'image');
+            const p = curatedPreviews[c.id];
+            if (!p) return '';                       // still being drawn
+            return p.url || cloudThumb(c.url, 'image');
+        }
+
+        // QR code as a grid of squares, via the same qrcodejs library the admin page uses.
+        function qrMatrix(text) {
+            if (typeof QRCode === 'undefined') throw new Error('The QR code library did not load. Check your connection and reload the page.');
+            const holder = document.createElement('div');
+            const q = new QRCode(holder, { text, width: 128, height: 128, correctLevel: QRCode.CorrectLevel.M });
+            const m = q._oQRCode;
+            if (!m || typeof m.isDark !== 'function' || typeof m.getModuleCount !== 'function') throw new Error('Could not build the QR code.');
+            return { n: m.getModuleCount(), isDark: (r, c) => m.isDark(r, c) };
+        }
+
+        async function fetchPosterImage(url, fresh) {
+            const res = await fetch(url, { mode: 'cors', cache: fresh ? 'reload' : 'default' });
+            if (!res.ok) throw new Error('Could not load the poster image.');
+            const blob = await res.blob();
+            if (window.createImageBitmap) return createImageBitmap(blob);
+            return new Promise((resolve, reject) => {
+                const im = new Image();
+                im.onload = () => resolve(im);
+                im.onerror = () => reject(new Error('Could not read the poster image.'));
+                im.src = URL.createObjectURL(blob);
+            });
+        }
+
+        // Draws the poster, then fills its white square with this event's QR code.
+        // The code is sized in whole pixels per square (never blurry), centred, and
+        // keeps the standard 4-square blank border, all inside the white square.
+        // maxDim shrinks the picture so its longest side is at most that many pixels
+        // (null = original size, used for printing).
+        async function renderPosterBlob(cur, qrUrl, maxDim, srcUrl) {
+            const src = await fetchPosterImage(srcUrl || cur.url, !srcUrl);
+            const W0 = src.naturalWidth || src.width, H0 = src.naturalHeight || src.height;
+            if (!W0 || !H0) throw new Error('The poster image is empty.');
+            const k = maxDim ? Math.min(1, maxDim / Math.max(W0, H0)) : 1;
+            const W = Math.round(W0 * k), H = Math.round(H0 * k);
+            const canvas = document.createElement('canvas');
+            canvas.width = W; canvas.height = H;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(src, 0, 0, W, H);
+            if (src.close) src.close();
+
+            const q = cur.qr;
+            const bleed = k < 1 ? 1 : 0; // covers the soft edge a shrunk image has around the square
+            const left = Math.floor(q.x * W), top = Math.floor(q.y * H);
+            const right = Math.ceil((q.x + q.w) * W), bottom = Math.ceil((q.y + q.h) * H);
+            const boxW = right - left, boxH = bottom - top;
+            const { n, isDark } = qrMatrix(qrUrl);
+            const QUIET = 4;
+            const mod = Math.floor(Math.min(boxW, boxH) / (n + QUIET * 2));
+            if (mod < 2) throw new Error('The QR square is too small to hold this event\'s code.');
+            const ox = left + Math.floor((boxW - mod * n) / 2);
+            const oy = top + Math.floor((boxH - mod * n) / 2);
+
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(left - bleed, top - bleed, boxW + bleed * 2, boxH + bleed * 2);
+            ctx.fillStyle = '#000000';
+            for (let r = 0; r < n; r++) {
+                for (let c = 0; c < n; c++) {
+                    if (isDark(r, c)) ctx.fillRect(ox + c * mod, oy + r * mod, mod, mod);
+                }
+            }
+            return new Promise((resolve, reject) => {
+                canvas.toBlob(b => b ? resolve(b) : reject(new Error('Could not create the poster image (it may be too large for this device).')), 'image/png');
+            });
+        }
+
+        async function uploadBlobToCloudinary(blob, filename) {
+            const form = new FormData();
+            form.append('file', blob, filename);
+            form.append('upload_preset', CLOUD_UPLOAD_PRESET);
+            const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, { method: 'POST', body: form });
+            const data = await res.json();
+            if (!res.ok || !data.secure_url) throw new Error((data.error && data.error.message) || 'Cloudinary upload failed');
+            return data.secure_url;
+        }
+
+        // Makes this event's own library copy of a curated visual: a QR poster is
+        // rendered and uploaded; a plain visual just points at the original file.
+        async function makeCuratedLibraryItem(cur, qrUrl, stamp) {
+            let url = cur.url;
+            if (cur.qr) {
+                const blob = await renderPosterBlob(cur, qrUrl, 2400);
+                url = await uploadBlobToCloudinary(blob, (cur.label || 'poster').replace(/[^\w\- ]+/g, '').trim() + '.png');
+            }
+            const res = await fetch(eventUrl('/api/admin/ambient-media'), {
+                method: 'POST',
+                headers: adminHeaders(),
+                body: JSON.stringify({ url, filename: cur.label, type: 'photo', curatedId: cur.id, curatedStamp: stamp })
+            });
+            const data = await res.json();
+            if (!res.ok || !data.success) throw new Error(data.error || 'Could not save the visual.');
+            ambientMedia.push(data.item);
+            return data.item;
+        }
+
+        async function addCuratedVisual(id) {
+            const cur = curatedVisuals.find(c => c.id === id);
+            if (!cur || curatedVisBusy.has(id)) return;
+            const qrUrl = guestQrUrl();
+            const stamp = curatedStamp(cur, qrUrl);
+            let item = ambientMedia.find(m => m.curatedId === id && m.curatedStamp === stamp);
+            if (!item) {
+                curatedVisBusy.add(id);
+                renderPlaylists();
+                try {
+                    item = await makeCuratedLibraryItem(cur, qrUrl, stamp);
+                } catch (e) {
+                    curatedVisBusy.delete(id);
+                    renderPlaylists();
+                    return showToast(e.message || 'Could not prepare that visual.', 'error');
+                }
+                curatedVisBusy.delete(id);
+                renderAvmLibraryList();
+                renderPlaylists();
+            }
+            addFromLibrary('media', item.id);
+        }
+
+        // Full-size copy with this event's QR code in it, saved to the computer for printing.
+        async function downloadCuratedPrint(id) {
+            const cur = curatedVisuals.find(c => c.id === id);
+            if (!cur || !cur.qr || curatedVisBusy.has(id)) return;
+            curatedVisBusy.add(id);
+            renderPlaylists();
+            try {
+                const blob = await renderPosterBlob(cur, guestQrUrl(), null);
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = `${(cur.label || 'poster').replace(/[^\w\- ]+/g, '').trim() || 'poster'} - ${EVENT_SLUG}.png`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+            } catch (e) {
+                showToast(e.message || 'Could not make the print version.', 'error');
+            }
+            curatedVisBusy.delete(id);
+            renderPlaylists();
         }
 
         // Uploads straight to Cloudinary from the browser (the file bytes
@@ -3080,9 +3332,7 @@
             }
             list.innerHTML = ambientMedia.map(m => `
                 <button type="button" class="avm-side-item" onclick="addExistingMediaToModalBlock('${escapeHtml(m.id)}')" title="${escapeHtml(m.filename)}">
-                    ${m.type === 'video'
-                        ? `<span class="avm-side-thumb" style="display:flex;align-items:center;justify-content:center;"><span class="thumb-tag">VID</span></span>`
-                        : `<img class="avm-side-thumb" src="${escapeHtml(m.url)}" alt="">`}
+                    <img class="avm-side-thumb" src="${escapeHtml(cloudThumb(m.url, m.type === 'video' ? 'video' : 'image'))}" alt="" onerror="this.style.visibility='hidden'">
                     <span class="avm-library-label">${escapeHtml(m.filename)}</span>
                 </button>
             `).join('');
