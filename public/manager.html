@@ -1008,6 +1008,9 @@ button.switch { border: none; padding: 0; }
 .field-row .input-group { flex: 1 1 0; }
 .field-row .save-config-btn { flex: none; }
 .cfg-block { margin-top: 14px; }
+.chip-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.chip { background: var(--card-bg); border: 1px solid var(--border-strong); color: var(--text-muted); padding: 9px 16px; border-radius: 999px; font-size: 0.9rem; font-weight: 700; cursor: pointer; }
+.chip.is-selected { background: var(--text); color: var(--panel-bg); border-color: var(--text); }
 .settings-card .utility-btn { width: 100%; }
 .sub-label { font-size: .72rem; text-transform: uppercase; letter-spacing: .5px; color: var(--text-muted); font-weight: 700; margin: 18px 0 0; }
 
@@ -1129,6 +1132,7 @@ body.has-player { overflow: hidden; }
         </div>
         <button type="button" id="nav-play" class="sidebar-nav-item active-tab" onclick="go('play')">Playback and live queue</button>
         <button type="button" id="nav-set" class="sidebar-nav-item" onclick="go('set')">Settings</button>
+        <button type="button" id="nav-mus" class="sidebar-nav-item" onclick="go('mus')">Music</button>
         <button type="button" id="nav-blk" class="sidebar-nav-item" onclick="go('blk')">Blocked</button>
         <button type="button" id="nav-dsp" class="sidebar-nav-item" onclick="go('dsp')">Display Controls</button>
         <button type="button" id="nav-acc" class="sidebar-nav-item" onclick="go('acc')">Account + events</button>
@@ -1206,12 +1210,6 @@ body.has-player { overflow: hidden; }
             </div>
 
             <div class="settings-card">
-                <div class="settings-section-label">Explicit Songs</div>
-                <p class="settings-card-hint" style="margin-top:0;">Off hides explicit tracks from guests.</p>
-                <div class="row-set"><div><div class="rl">Explicit allowed</div></div><button type="button" class="switch" id="sw-explicit" role="switch" aria-checked="false" aria-label="Explicit allowed" onclick="toggleSwitch('explicit')"></button></div>
-            </div>
-
-            <div class="settings-card">
                 <div class="settings-section-label">Location</div>
                 <p class="settings-card-hint" style="margin-top:0;">When on, guests must be within the check-in distance of the pinned venue location to request a song. Turn it off to let anyone request from anywhere.</p>
                 <div class="row-set"><div><div class="rl">Location lock</div></div><button type="button" class="switch" id="sw-loclock" role="switch" aria-checked="false" aria-label="Location lock" onclick="toggleSwitch('loclock')"></button></div>
@@ -1258,6 +1256,56 @@ body.has-player { overflow: hidden; }
                 </div>
                 <p style="color:#a7a7a7;font-size:.8rem;margin:8px 0 0;">Permanently deletes this event and everything in it - queue, history, settings, Spotify connection. This can't be undone, and the URL becomes free for anyone to reuse.</p>
             </div>
+        </div>
+    </div>
+
+    <!-- ============ MUSIC ============ -->
+    <div class="page" id="page-mus">
+        <div class="panel">
+            <h2>Music</h2>
+
+            <div class="settings-card">
+                <div class="settings-section-label">What Guests Can Request</div>
+                <p class="settings-card-hint" style="margin-top:0;">Songs that break a rule are hidden from guest search and refused if someone tries to request them anyway. Switch a rule off to allow that kind of song.</p>
+                <div class="row-set"><div><div class="rl">Explicit allowed</div></div><button type="button" class="switch" id="sw-explicit" role="switch" aria-checked="false" aria-label="Explicit allowed" onclick="toggleSwitch('explicit')"></button></div>
+                <div class="row-set"><div><div class="rl">Remixes allowed</div></div><button type="button" class="switch" id="sw-remix" role="switch" aria-checked="false" aria-label="Remixes allowed" onclick="toggleSwitch('remix')"></button></div>
+                <div class="row-set"><div><div class="rl">Live versions allowed</div></div><button type="button" class="switch" id="sw-live" role="switch" aria-checked="false" aria-label="Live versions allowed" onclick="toggleSwitch('live')"></button></div>
+                <div class="row-set full-only"><div><div class="rl">Radio edits only</div></div><button type="button" class="switch" id="sw-radio" role="switch" aria-checked="false" aria-label="Radio edits only" onclick="toggleSwitch('radio')"></button></div>
+                <p class="settings-card-hint" style="margin:10px 0 0;">
+                    <strong>Remixes</strong> covers titles marked Remix, Sped Up, Slowed, Nightcore, Bootleg or Mashup.
+                    <strong>Live versions</strong> covers titles marked Live, Live at..., Live From... or Unplugged.
+                    <strong>Radio edits only</strong> hides extended, club, dub, instrumental and other long mixes, and keeps radio edits and normal versions.
+                    These work from the song's title, so a song with no label in its title can still slip through.
+                </p>
+            </div>
+
+            <div class="settings-card full-only">
+                <div class="settings-section-label">Decades (Theme Nights)</div>
+                <p class="settings-card-hint" style="margin-top:0;">Pick any decades to limit guests to songs released in those decades. Leave none picked to allow every decade.</p>
+                <div class="chip-row" id="decade-chips"></div>
+            </div>
+
+            <div class="settings-card full-only">
+                <div class="settings-section-label">Queue Limit</div>
+                <p class="settings-card-hint" style="margin-top:0;">When on, requests close automatically once the queue reaches the limit, and reopen as songs play.</p>
+                <div class="row-set"><div><div class="rl">Queue limit on</div></div><button type="button" class="switch" id="sw-qcap" role="switch" aria-checked="false" aria-label="Queue limit on" onclick="toggleSwitch('qcap')"></button></div>
+                <div class="field-row">
+                    <div class="input-group"><label>Max Songs In Queue</label><input type="number" id="input-max-queue" min="1" style="width:100%;"></div>
+                    <button class="save-config-btn" onclick="saveMaxQueue()">Update</button>
+                </div>
+                <div class="queue-cap-status-text" id="queue-cap-status-text"></div>
+            </div>
+
+            <div class="settings-card full-only">
+                <div class="settings-section-label">Repeat Gap</div>
+                <p class="settings-card-hint" style="margin-top:0;">How many other songs have to play or leave the queue before the same song can be requested again. 0 turns the rule off.</p>
+                <div class="field-row">
+                    <div class="input-group"><label>Songs Between Repeats</label><input type="number" id="input-repeat-gap" min="0" max="500" style="width:100%;"></div>
+                    <button class="save-config-btn" onclick="saveRepeatGap()">Update</button>
+                </div>
+            </div>
+
+            <p class="settings-card-hint" style="margin:4px 4px 0;">Blocking whole genres, specific songs or artists is on the Blocked page.</p>
         </div>
     </div>
 
@@ -1449,7 +1497,7 @@ body.has-player { overflow: hidden; }
         const svg = k => `<svg viewBox="0 0 24 24"><path d="${ICON[k]}"/></svg>`;
 
         // ---- Sidebar + views ----
-        const VIEWS = ['play', 'set', 'blk', 'dsp', 'acc'];
+        const VIEWS = ['play', 'set', 'mus', 'blk', 'dsp', 'acc'];
         let currentView = 'play';
         let managerBasicMode = false;
         function openSidebar() { $('sidebar-backdrop').classList.add('is-visible'); $('sidebar-panel').classList.add('is-visible'); }
@@ -1614,6 +1662,10 @@ body.has-player { overflow: hidden; }
         const swLock = {};       // optimistic hold so a poll in flight doesn't flip it back
         const SWITCHES = {
             requests: { el: 'sw-requests', path: '/api/admin/toggle',                          body: v => ({ allow: v }) },
+            remix:    { el: 'sw-remix',    path: '/api/admin/toggle-remixes',        body: v => ({ blockRemixes: !v }) },   // on = remixes allowed
+            live:     { el: 'sw-live',     path: '/api/admin/toggle-live-versions',  body: v => ({ blockLive: !v }) },       // on = live versions allowed
+            radio:    { el: 'sw-radio',    path: '/api/admin/toggle-radio-edits',    body: v => ({ radioEditsOnly: v }) },
+            qcap:     { el: 'sw-qcap',     path: '/api/admin/toggle-queue-cap',      body: v => ({ enabled: v }) },
             explicit: { el: 'sw-explicit', path: '/api/admin/toggle-explicit',                 body: v => ({ blockExplicit: !v }) }, // on = explicit allowed
             loclock:  { el: 'sw-loclock',  path: '/api/admin/toggle-location-lock',            body: v => ({ enabled: v }) },
             kreq:     { el: 'sw-kreq',     path: '/api/admin/kiosk/toggle',                    body: v => ({ allow: v }) },
@@ -1682,6 +1734,43 @@ body.has-player { overflow: hidden; }
                 showToast(mode === 'basic' ? 'Basic mode on.' : 'Full mode on.', 'success');
             } catch (e) { showToast('Could not reach the server.', 'error'); }
         }
+
+        // ---- Music tab ----
+        const DECADE_OPTIONS = [1960, 1970, 1980, 1990, 2000, 2010, 2020];
+        let selectedDecades = [];
+        let decadeLockUntil = 0;
+        function renderDecadeChips() {
+            $('decade-chips').innerHTML = DECADE_OPTIONS.map(d =>
+                `<button type="button" class="chip ${selectedDecades.includes(d) ? 'is-selected' : ''}" onclick="toggleDecade(${d})">${d}s</button>`).join('');
+        }
+        async function toggleDecade(decade) {
+            if (!isAuthorized) return;
+            selectedDecades = selectedDecades.includes(decade) ? selectedDecades.filter(d => d !== decade) : [...selectedDecades, decade];
+            decadeLockUntil = Date.now() + 3000;
+            renderDecadeChips();
+            try {
+                const res = await adminPost('/api/admin/config', { decadeFilter: selectedDecades });
+                if (!res.ok) { decadeLockUntil = 0; showToast('Could not save the decades.', 'error'); }
+            } catch (e) { decadeLockUntil = 0; showToast('Could not reach the server.', 'error'); }
+            updateDashboard();
+        }
+        async function saveMaxQueue() {
+            if (!isAuthorized) return;
+            const n = parseInt($('input-max-queue').value, 10);
+            if (!Number.isInteger(n) || n < 1) return showToast('Enter a queue limit of 1 or more.', 'error');
+            const res = await adminPost('/api/admin/config', { maxQueueLength: n });
+            if (res.ok) showToast('Queue limit updated.', 'success'); else showToast('Could not update the queue limit.', 'error');
+            updateDashboard();
+        }
+        async function saveRepeatGap() {
+            if (!isAuthorized) return;
+            const n = parseInt($('input-repeat-gap').value, 10);
+            if (!Number.isInteger(n) || n < 0 || n > 500) return showToast('Enter a number from 0 to 500.', 'error');
+            const res = await adminPost('/api/admin/config', { songRepeatGap: n });
+            if (res.ok) showToast(n === 0 ? 'Repeat gap turned off.' : 'Repeat gap updated.', 'success'); else showToast('Could not update the repeat gap.', 'error');
+            updateDashboard();
+        }
+        renderDecadeChips();
 
         // ---- Settings saves ----
         async function saveEventDetails() {
@@ -2263,6 +2352,16 @@ body.has-player { overflow: hidden; }
 
                 setSwitchFromServer('requests', !!data.requestsAllowed);
                 setSwitchFromServer('explicit', !data.explicitBlockActive);
+                setSwitchFromServer('remix', !data.remixBlockActive);
+                setSwitchFromServer('live', !data.liveBlockActive);
+                setSwitchFromServer('radio', !!data.radioEditsOnly);
+                setSwitchFromServer('qcap', !!data.queueCapEnabled);
+                setIfIdle('input-max-queue', data.maxQueueLength);
+                setIfIdle('input-repeat-gap', data.songRepeatGap);
+                $('queue-cap-status-text').textContent = data.queueCapEnabled
+                    ? `Current queue: ${(data.queue || []).length} / ${data.maxQueueLength}${data.queueFull ? ' - FULL, requests auto-closed until it drains' : ''}`
+                    : 'Queue limit is off - guests can keep adding songs.';
+                if (Date.now() >= decadeLockUntil) { selectedDecades = data.decadeFilter || []; renderDecadeChips(); }
                 setSwitchFromServer('loclock', data.locationLockEnabled !== false);
 
                 if (data.kiosk) {
