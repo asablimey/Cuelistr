@@ -15,6 +15,11 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Manager">
     <style>
+        /* No blue tap/click highlight on buttons (keyboard focus rings are kept for accessibility) */
+        * { -webkit-tap-highlight-color: transparent; }
+        button, [role="button"], [role="switch"], select, summary, label.toggle, .btn, .pill-btn, .toggle-btn, .utility-btn, .primary-btn { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+        button:focus:not(:focus-visible), [role="button"]:focus:not(:focus-visible), [role="switch"]:focus:not(:focus-visible) { outline: none; }
+
 
         :root {
             --spotify-green: #1DB954;
@@ -1290,6 +1295,7 @@ body.has-player { overflow: hidden; }
             <div class="settings-card">
                 <div class="settings-section-label">Music Videos</div>
                 <div class="row-set"><div><div class="rl">Music videos</div></div><button type="button" class="switch" id="sw-vmv" role="switch" aria-checked="false" aria-label="Music videos" onclick="toggleSwitch('vmv')"></button></div>
+                <div class="row-set"><div><div class="rl">Prefer Visualisers/Lyric Vids</div></div><button type="button" class="switch" id="sw-vviz" role="switch" aria-checked="false" aria-label="Prefer Visualisers/Lyric Vids" onclick="toggleSwitch('vviz')"></button></div>
                 <div class="row-set"><div><div class="rl">Subtitles</div></div><button type="button" class="switch" id="sw-vsub" role="switch" aria-checked="false" aria-label="Subtitles" onclick="toggleSwitch('vsub')"></button></div>
                 <div class="row-set"><div><div class="rl">Family mode</div></div><button type="button" class="switch" id="sw-vfam" role="switch" aria-checked="false" aria-label="Family mode" onclick="toggleSwitch('vfam')"></button></div>
             </div>
@@ -1614,6 +1620,7 @@ body.has-player { overflow: hidden; }
             vmuteall: { el: 'sw-vmuteall', path: '/api/admin/visuals/toggle-mute-all',         body: v => ({ enabled: v }) },
             vqueue:   { el: 'sw-vqueue',   path: '/api/admin/visuals/toggle-show-queue',       body: v => ({ enabled: v }) },
             vmv:      { el: 'sw-vmv',      path: '/api/admin/visuals/toggle-music-videos',     body: v => ({ enabled: v }) },
+            vviz:     { el: 'sw-vviz',     path: '/api/admin/visuals/toggle-prefer-visualizers', body: v => ({ enabled: v }) },
             vsub:     { el: 'sw-vsub',     path: '/api/admin/visuals/toggle-music-video-subtitles', body: v => ({ enabled: v }) },
             vfam:     { el: 'sw-vfam',     path: '/api/admin/visuals/toggle-family-mode',      body: v => ({ enabled: v }) }
         };
@@ -2265,6 +2272,7 @@ body.has-player { overflow: hidden; }
                     setSwitchFromServer('vmuteall', !!data.visuals.muteAll);
                     setSwitchFromServer('vqueue', !!data.visuals.showQueue);
                     setSwitchFromServer('vmv', !!data.visuals.musicVideosEnabled);
+                    setSwitchFromServer('vviz', !!data.visuals.preferVisualizersEnabled);
                     setSwitchFromServer('vsub', !!data.visuals.musicVideoSubtitlesEnabled);
                     setSwitchFromServer('vfam', !!data.visuals.familyModeEnabled);
                 }
