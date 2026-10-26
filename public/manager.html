@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <script src="/theme.js"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <link rel="stylesheet" href="/layout.css">
@@ -33,25 +32,8 @@
             --text-soft: #cccccc;
         }
 
-        /* ---- Light theme (html[data-theme="light"], set by theme.js) ---- */
-        html[data-theme="light"] {
-            --spotify-green: #16a34a;
-            --spotify-black: #f3f4f6;
-            --panel-bg: #ffffff;
-            --card-bg: #eceff3;
-            --red-action: #d1122a;
-            --text: #111318;
-            --text-muted: #5b6472;
-            --border: #dfe3e8;
-            --border-strong: #c8ced6;
-            --hover-bg: #e3e7ec;
-            --overlay-soft: rgba(0,0,0,0.06);
-            --stage-bg: #f3f4f6;
-            --inset-bg: #ffffff;
-            --text-soft: #374151;
-        }
 
-        /* ---- Segmented controls (theme + mode pickers) ---- */
+        /* ---- Segmented controls (mode pickers) ---- */
         .theme-seg { display: inline-flex; background: var(--card-bg); border: 1px solid var(--border-strong); border-radius: 8px; overflow: hidden; }
         .theme-seg button { background: none; border: none; color: var(--text-muted); padding: 10px 18px; font-size: 0.9rem; font-weight: 600; cursor: pointer; }
         .theme-seg button.is-active { background: var(--text); color: var(--panel-bg); }
@@ -1136,7 +1118,7 @@ body.has-player { overflow: hidden; }
             <h1 id="admin-title">Cuelistr</h1>
             <div class="hd-venue" id="admin-venue" style="display:none;"></div>
         </div>
-        <button id="toggle-hints" class="hints-icon-btn hints-on" onclick="toggleHints()" aria-label="Show or hide setting hints">
+        <button id="toggle-hints" class="hints-icon-btn" onclick="toggleHints()" aria-label="Show or hide setting hints">
             <svg viewBox="0 0 24 24"><path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7zm2.85 11.1l-.85.6V15h-4v-2.3l-.85-.6C7.8 11.16 7 9.63 7 9c0-2.76 2.24-5 5-5s5 2.24 5 5c0 .63-.8 2.16-2.15 3.1z"/></svg>
         </button>
     </div>
@@ -1236,7 +1218,7 @@ body.has-player { overflow: hidden; }
                     <button class="utility-btn" onclick="clearSystem('clearHistory', 'Are you sure you want to clear your played history log?')">Clear Played History</button>
                     <button class="utility-btn" onclick="resetAllSettings()">Reset All Settings</button>
                 </div>
-                <p style="color:#a7a7a7;font-size:.8rem;margin:8px 0 0;" class="settings-card-hint">Reset puts credits, queue cap, filters, location lock, kiosk, music video and appearance settings back to their defaults. It keeps the event name, venue, Spotify connection, queue, history, blocked guests and the schedule.</p>
+                <p style="color:#a7a7a7;font-size:.8rem;margin:8px 0 0;" class="settings-card-hint">Reset puts credits, queue cap, filters, location lock, kiosk and music video settings back to their defaults. It keeps the event name, venue, Spotify connection, queue, history, blocked guests and the schedule.</p>
                 <div class="control-bar" style="margin-top:18px;">
                     <button class="utility-btn" style="background:var(--red-action);border-color:var(--red-action);color:#fff;" onclick="closeEvent()">Close This Event</button>
                 </div>
@@ -1689,7 +1671,7 @@ body.has-player { overflow: hidden; }
         }
         async function resetAllSettings() {
             if (!isAuthorized) return;
-            if (!confirm('Reset ALL settings for this event back to their defaults?\n\nThis resets credits, the queue cap, song/decade filters, location lock, request toggles, kiosk settings, music video settings, appearance and the fallback playlist.\n\nIt keeps the event name, venue, Spotify connection, queue, history, blocked guests and the schedule. This can\'t be undone.')) return;
+            if (!confirm('Reset ALL settings for this event back to their defaults?\n\nThis resets credits, the queue cap, song/decade filters, location lock, request toggles, kiosk settings, music video settings and the fallback playlist.\n\nIt keeps the event name, venue, Spotify connection, queue, history, blocked guests and the schedule. This can\'t be undone.')) return;
             try {
                 const res = await adminPost('/api/admin/action', { id: null, action: 'resetSettings' });
                 if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -2383,7 +2365,7 @@ body.has-player { overflow: hidden; }
             restoreAdminSession();
             let savedHints = null;
             try { savedHints = localStorage.getItem('adminHintsOn'); } catch (e) { /* ignore */ }
-            applyHintsVisibility(savedHints === null ? true : savedHints === '1');
+            applyHintsVisibility(savedHints === '1'); // hints are off by default
             refreshAccountFooter();
             pollNowPlaying();
             measurePlayer();
