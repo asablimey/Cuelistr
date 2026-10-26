@@ -3303,7 +3303,7 @@ app.param('slug', async (req, res, next, slug) => {
 
 
 // =====================================================================
-// Basic / Full site mode + themes
+// Basic / Full site mode
 // =====================================================================
 // 'basic': guests can only search and request; the DJ can see the queue and
 // play it. Everything else (kiosk, visuals, scheduler, blocklists, stats,
@@ -3311,17 +3311,11 @@ app.param('slug', async (req, res, next, slug) => {
 // reached by hand-typing a URL. 'full' is the normal site. Saved settings
 // aren't erased when switching to Basic - they're just not reachable, and
 // come straight back on switching to Full.
-const THEME_VALUES = ['auto', 'light', 'dark'];
 function isBasicMode(event) { return !!(event && event.systemConfigs && event.systemConfigs.siteMode === 'basic'); }
-function getThemes(event) {
-    const t = (event.systemConfigs && event.systemConfigs.themes) || {};
-    const pick = k => (THEME_VALUES.includes(t[k]) ? t[k] : 'auto');
-    return { admin: pick('admin'), kiosk: pick('kiosk'), visuals: pick('visuals') };
-}
 
 // Paths (relative to /e/:slug) still available in Basic mode.
 const BASIC_ALLOWED_PUBLIC = /^\/(?:$|data$|api\/(?:public-config|site-config|search|request|set-username|now-playing|verify-code|show-code)$)/;
-const BASIC_ALLOWED_ADMIN = /^\/(?:session|session-end|data|config|toggle|toggle-explicit|toggle-location-lock|toggle-spotify-auto-queue|action|reorder|site-mode|theme|spotify-login-ticket|spotify-disconnect|playback\/(?:play|pause|next|previous|volume|seek|play-track))$/;
+const BASIC_ALLOWED_ADMIN = /^\/(?:session|session-end|data|config|toggle|toggle-explicit|toggle-location-lock|toggle-spotify-auto-queue|action|reorder|site-mode|spotify-login-ticket|spotify-disconnect|playback\/(?:play|pause|next|previous|volume|seek|play-track))$/;
 const BASIC_ALLOWED_PAGES = /^\/(?:(?:admin(?:\/spotify-login)?|manager))?\/?$/;
 
 function basicBlockedPage(res) {
@@ -3348,11 +3342,11 @@ app.use('/e/:slug', async (req, res, next) => {
     } catch (err) { next(err); }
 });
 
-// Public: mode + themes, so every page can pick its look and layout before
+// Public: mode, so every page can pick its layout before
 // (or as) it paints. No secrets in here.
 app.get('/e/:slug/api/site-config', (req, res) => {
     res.set('Cache-Control', 'no-store');
-    res.json({ siteMode: isBasicMode(req.event) ? 'basic' : 'full', themes: getThemes(req.event) });
+    res.json({ siteMode: isBasicMode(req.event) ? 'basic' : 'full' });
 });
 
 app.get('/e/:slug', voterIdentityMiddleware, (req, res) => {
@@ -4574,7 +4568,6 @@ app.get('/e/:slug/api/admin/data', (req, res) => {
         screenKey: venueScreenKey(event.slug),
         codeDisplaySeconds: Math.round(codeDisplayMs(event) / 1000),
         siteMode: isBasicMode(event) ? 'basic' : 'full',
-        themes: getThemes(event),
         maxCredits: event.systemConfigs.maxCredits,
         countdownLength: event.systemConfigs.countdownLength,
         requestsAllowed: event.systemConfigs.requestsAllowed,
@@ -5265,19 +5258,6 @@ app.post('/e/:slug/api/admin/site-mode', (req, res) => {
     req.event.systemConfigs.siteMode = mode;
     events.scheduleSave(req.event.slug);
     res.json({ success: true, siteMode: mode });
-});
-
-// Which screen ('admin' | 'kiosk' | 'visuals') gets which look.
-app.post('/e/:slug/api/admin/theme', (req, res) => {
-    const { screen, theme } = req.body || {};
-    if (!['admin', 'kiosk', 'visuals'].includes(screen) || !THEME_VALUES.includes(theme)) {
-        return res.status(400).json({ error: 'Invalid screen or theme.' });
-    }
-    const sc = req.event.systemConfigs;
-    if (!sc.themes || typeof sc.themes !== 'object') sc.themes = { admin: 'auto', kiosk: 'auto', visuals: 'auto' };
-    sc.themes[screen] = theme;
-    events.scheduleSave(req.event.slug);
-    res.json({ success: true, themes: getThemes(req.event) });
 });
 
 app.post('/e/:slug/api/admin/toggle', (req, res) => {
