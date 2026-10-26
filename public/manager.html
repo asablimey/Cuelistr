@@ -1082,6 +1082,13 @@ body.has-player #queue-list { flex: 1; min-height: 0; overflow-y: auto; overscro
 .player.vol-mode .player-bar i { position: relative; }
 .player.vol-mode .player-bar i::after { content: ""; position: absolute; right: -6px; top: 50%; width: 12px; height: 12px; margin-top: -6px; border-radius: 50%; background: var(--spotify-green); }
 
+/* Top bar stays put on every page, including ones that scroll */
+body { padding-top: 0; }
+body > .header { position: sticky; top: 0; z-index: 300; background: var(--spotify-black); margin-bottom: 0; padding-top: calc(var(--page-pad, 12px) + env(safe-area-inset-top, 0px)); }
+.page { padding-top: 14px; }
+body { overflow-x: clip; overflow-y: visible; }
+body.has-player { overflow: hidden; }
+
     </style>
 </head>
 <body>
