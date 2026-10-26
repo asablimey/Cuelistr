@@ -1075,6 +1075,13 @@ body.has-player #page-play.active { display: flex; flex-direction: column; flex:
 body.has-player .mix-strip { flex: none; }
 body.has-player #queue-list { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding-bottom: calc(var(--player-h, 190px) + 8px); }
 
+/* Volume mode */
+.player-top .pc { flex: none; margin-right: -8px; }
+.player.vol-mode .player-bar { position: relative; touch-action: none; cursor: pointer; }
+.player.vol-mode .player-bar::before { content: ""; position: absolute; left: 0; right: 0; top: -14px; bottom: -14px; }
+.player.vol-mode .player-bar i { position: relative; }
+.player.vol-mode .player-bar i::after { content: ""; position: absolute; right: -6px; top: 50%; width: 12px; height: 12px; margin-top: -6px; border-radius: 50%; background: var(--spotify-green); }
+
     </style>
 </head>
 <body>
@@ -1295,8 +1302,9 @@ body.has-player #queue-list { flex: 1; min-height: 0; overflow-y: auto; overscro
                 <p class="song-title" id="pl-title" style="margin:0;">Nothing playing</p>
                 <p class="song-artist" id="pl-artist"></p>
             </div>
+            <button type="button" class="pc" id="pl-vol" aria-label="Volume" onclick="toggleVolumeMode()"></button>
         </div>
-        <div class="player-bar"><i id="pl-fill"></i></div>
+        <div class="player-bar" id="pl-bar"><i id="pl-fill"></i></div>
         <div class="player-times"><span id="pl-t1">0:00</span><span id="pl-t2">0:00</span></div>
         <div class="player-ctrl">
             <button type="button" class="pc full-only" id="pl-shuffle" aria-label="Shuffle" onclick="togglePlaybackShuffle()"></button>
@@ -1397,6 +1405,7 @@ body.has-player #queue-list { flex: 1; min-height: 0; overflow-y: auto; overscro
             next: 'M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z',
             shuffle: 'M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z',
             loop: 'M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z',
+            vol: 'M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z',
             x: 'M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z',
             ok: 'M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z'
         };
@@ -2191,7 +2200,7 @@ body.has-player #queue-list { flex: 1; min-height: 0; overflow-y: auto; overscro
         let lastTrackId = null;
         let mixUntil = 0;
         const MIX_WINDOW_MS = 11000;    // assumed crossfade length, same figure visuals.html uses
-        const optimisticLocks = { isPlaying: null, shuffleState: null, repeatState: null };
+        const optimisticLocks = { isPlaying: null, shuffleState: null, repeatState: null, volume: null };
         function setOptimisticLock(key, value) { optimisticLocks[key] = { value, until: Date.now() + 3000 }; }
         function optimisticValue(key, serverValue) {
             const lock = optimisticLocks[key];
@@ -2252,7 +2261,49 @@ body.has-player #queue-list { flex: 1; min-height: 0; overflow-y: auto; overscro
             strip.className = 'mix-strip' + (cls ? ' ' + cls : '');
             text.textContent = label;
         }
+        // Volume mode: the speaker button turns green and the progress bar becomes a volume bar
+        let volMode = false, volDrag = null;
+        function toggleVolumeMode() {
+            volMode = !volMode;
+            $('pl-vol').classList.toggle('on', volMode);
+            $('player').classList.toggle('vol-mode', volMode);
+            volDrag = null;
+            renderProgress();
+        }
+        function volFromEvent(e) {
+            const r = $('pl-bar').getBoundingClientRect();
+            return Math.round(Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * 100);
+        }
+        (function () {
+            const bar = $('pl-bar');
+            bar.addEventListener('pointerdown', e => {
+                if (!volMode || !isAuthorized) return;
+                e.preventDefault();
+                try { bar.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+                volDrag = volFromEvent(e);
+                renderProgress();
+            });
+            bar.addEventListener('pointermove', e => { if (volDrag !== null) { volDrag = volFromEvent(e); renderProgress(); } });
+            const end = e => {
+                if (volDrag === null) return;
+                const v = e.type === 'pointercancel' ? volDrag : volFromEvent(e);
+                volDrag = null;
+                setOptimisticLock('volume', v);
+                renderProgress();
+                playbackCommand('volume', { volumePercent: v });
+            };
+            bar.addEventListener('pointerup', end);
+            bar.addEventListener('pointercancel', end);
+        })();
         function renderProgress() {
+            if (volMode) {
+                const vol = volDrag !== null ? volDrag : optimisticValue('volume', nowPlaying && nowPlaying.volumePercent != null ? nowPlaying.volumePercent : 0);
+                $('pl-fill').style.width = vol + '%';
+                $('pl-t1').textContent = 'Volume';
+                $('pl-t2').textContent = vol + '%';
+                renderStrip();
+                return;
+            }
             if (!nowPlaying || !nowPlaying.durationMs) {
                 $('pl-fill').style.width = '0%'; $('pl-t1').textContent = '0:00'; $('pl-t2').textContent = '0:00';
                 renderStrip();
@@ -2316,6 +2367,7 @@ body.has-player #queue-list { flex: 1; min-height: 0; overflow-y: auto; overscro
         $('pl-playpause').innerHTML = svg('play');
         $('pl-skip').innerHTML = svg('next');
         $('pl-loop').innerHTML = svg('loop');
+        $('pl-vol').innerHTML = svg('vol');
         document.body.classList.add('has-player');
         measurePlayer();
 
