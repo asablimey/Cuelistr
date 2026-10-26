@@ -72,7 +72,8 @@
         /* Shared page frame (see layout.css): header + every tab panel sit in
            the same centred column, so no tab is ever skinnier or wider than
            another. */
-        body > .header, body > .tab-content { max-width: var(--page-max, 1400px); margin-left: auto; margin-right: auto; }
+        /* Admin uses the whole screen width (laptops had empty bands either side); only the gutter (--page-pad) is kept. */
+        body > .header, body > .tab-content { max-width: none; width: 100%; margin-left: 0; margin-right: 0; }
 
         #admin-lock-screen {
             position: fixed;
@@ -375,7 +376,7 @@
         .sidebar-backdrop.is-visible { display: block; }
         .sidebar-panel {
             position: fixed; top: 0; left: 0; bottom: 0;
-            width: min(280px, 84vw);
+            width: min(320px, 88vw);
             background: var(--panel-bg);
             border-right: 1px solid var(--border);
             z-index: 951;
@@ -388,7 +389,9 @@
         .sidebar-panel.is-visible { transform: translateX(0); }
 
         /* --- Account: sidebar My Events + login popup --- */
-        .sidebar-my-events { display: flex; flex-direction: column; gap: 6px; max-height: clamp(220px, 38vh, 340px); overflow-y: auto; padding-right: 2px; }
+        .sidebar-my-events { display: flex; flex-direction: column; gap: 6px; flex: 1 1 auto; min-height: 120px; max-height: none; overflow-y: auto; padding-right: 2px; }
+        #sidebar-my-events-wrap { flex: 1 1 auto; min-height: 0; flex-direction: column; }
+        #sidebar-my-events-wrap[style*="block"] { display: flex !important; }
         .sidebar-my-events-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); font-weight: 700; margin-top: 4px; }
         .sidebar-event-link {
             display: block; text-decoration: none; color: var(--text); background: var(--card-bg);
@@ -443,7 +446,7 @@
         .sidebar-venue-code .vc-bar { height: 3px; background: var(--border-strong); border-radius: 2px; margin-top: 8px; overflow: hidden; }
         .sidebar-venue-code .vc-bar > div { height: 100%; background: var(--spotify-green); width: 100%; transition: width 1s linear; }
         .sidebar-account-footer {
-            margin-top: auto; padding: 16px 20px; border-top: 1px solid var(--border);
+            margin-top: auto; flex: 1 1 auto; min-height: 280px; padding: 16px 20px; border-top: 1px solid var(--border);
             display: flex; flex-direction: column; gap: 8px; font-size: 0.85rem; flex-shrink: 0;
         }
         .sidebar-account-status { color: var(--text-muted); }
@@ -3606,8 +3609,8 @@ async function verifyPassword() {
             document.getElementById('password-input').focus();
             restoreAdminSession();
             const savedHints = localStorage.getItem('adminHintsOn');
-            // Default to hints visible if nothing saved yet.
-            applyHintsVisibility(savedHints === null ? true : savedHints === '1');
+            // Hints are off by default; the lightbulb turns them on.
+            applyHintsVisibility(savedHints === '1');
             refreshAccountFooter();
         };
 
