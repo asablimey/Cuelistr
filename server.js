@@ -3412,6 +3412,12 @@ async function requireAdminAuth(req, res, next) {
         if (sess) adminSessions.delete(token);
         return res.status(401).json({ error: 'Session expired.', sessionExpired: true });
     }
+    // Logged in (account cookie) as the account that owns this event: no event password needed.
+    // This is what lets the slugless /manager hand out a session after you pick an event.
+    const acctUser = getSessionUsername(req);
+    if (acctUser && req.event.ownerUsername && String(acctUser).toLowerCase() === String(req.event.ownerUsername).toLowerCase()) {
+        return next();
+    }
     const provided = req.headers['x-admin-password'];
     if (verifyMasterPassword(provided)) {
         return next();
@@ -6800,8 +6806,17 @@ app.post('/e/:slug/api/music-video/sync-failed', publicReadLimiter, (req, res) =
 
 // Bare, un-slugged paths from old bookmarks/muscle memory - point people at
 // the new event-creation flow instead of silently 404ing.
-app.get(['/admin', '/kiosk'], (req, res) => {
+app.get('/admin', (req, res) => {
     res.redirect('/new');
+});
+
+// Slugless pages, so each can be installed once as an Android app. Both read which
+// event to use from this device (localStorage) - see kiosk.html / manager.html.
+app.get('/kiosk', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'kiosk.html'));
+});
+app.get('/manager', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'manager.html'));
 });
 
 // Event creation now lives at its own explicit path - the bare root is the
