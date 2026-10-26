@@ -1208,7 +1208,6 @@ body.has-player { overflow: hidden; }
                     <div class="input-group" style="flex:1 1 120px;"><label>Kiosk Regen Timer (Secs)</label><input type="number" id="input-kiosk-countdown" min="5" style="width:100%;"></div>
                 </div>
                 <div class="control-bar" style="margin-bottom:12px;"><button class="save-config-btn" onclick="saveKioskConfig()">Update Kiosk Rules</button></div>
-                <div class="control-bar"><button type="button" class="utility-btn" style="color:var(--text);" onclick="openKioskPage()">Open Kiosk Page</button></div>
             </div>
 
             <div class="settings-card danger-zone">
@@ -1257,7 +1256,6 @@ body.has-player { overflow: hidden; }
                 <div class="row-set"><div><div class="rl">Mute visuals</div></div><button type="button" class="switch" id="sw-vmute" role="switch" aria-checked="false" aria-label="Mute visuals" onclick="toggleSwitch('vmute')"></button></div>
                 <div class="row-set"><div><div class="rl">Mute all</div></div><button type="button" class="switch" id="sw-vmuteall" role="switch" aria-checked="false" aria-label="Mute all" onclick="toggleSwitch('vmuteall')"></button></div>
                 <div class="row-set"><div><div class="rl">Show queue</div></div><button type="button" class="switch" id="sw-vqueue" role="switch" aria-checked="false" aria-label="Show queue" onclick="toggleSwitch('vqueue')"></button></div>
-                <div class="control-bar" style="margin-top:6px;"><button type="button" class="utility-btn" style="color:var(--text);" onclick="openVisualsPage()">Open Visuals Display</button></div>
             </div>
             <div class="settings-card">
                 <div class="settings-section-label">Music Videos</div>
@@ -1654,12 +1652,6 @@ body.has-player { overflow: hidden; }
             updateDashboard();
         }
         let venueScreenKey = '';
-        function openKioskPage() {
-            window.open(eventUrl('/kiosk') + (venueScreenKey ? '?screen=' + encodeURIComponent(venueScreenKey) : ''), '_blank', 'noopener');
-        }
-        function openVisualsPage() {
-            window.open(eventUrl('/visuals') + (venueScreenKey ? '?screen=' + encodeURIComponent(venueScreenKey) : ''), '_blank', 'noopener');
-        }
 
         // ---- Danger zone (same as admin.html) ----
         async function clearSystem(actionType, message) {
