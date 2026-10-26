@@ -1,8 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <script src="/theme.js"></script>
-    <script>CrowdTheme.use("crowddj_theme_admin_" + (location.pathname.split("/")[2] || ""));</script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="/layout.css">
@@ -35,23 +33,6 @@
             --text-soft: #cccccc;
         }
 
-        /* ---- Light theme (html[data-theme="light"], set by theme.js) ---- */
-        html[data-theme="light"] {
-            --spotify-green: #16a34a;
-            --spotify-black: #f3f4f6;
-            --panel-bg: #ffffff;
-            --card-bg: #eceff3;
-            --red-action: #d1122a;
-            --text: #111318;
-            --text-muted: #5b6472;
-            --border: #dfe3e8;
-            --border-strong: #c8ced6;
-            --hover-bg: #e3e7ec;
-            --overlay-soft: rgba(0,0,0,0.06);
-            --stage-bg: #f3f4f6;
-            --inset-bg: #ffffff;
-            --text-soft: #374151;
-        }
 
         /* ---- Segmented controls (theme + mode pickers) ---- */
         .theme-seg { display: inline-flex; background: var(--card-bg); border: 1px solid var(--border-strong); border-radius: 8px; overflow: hidden; }
@@ -1157,16 +1138,6 @@
                         </div>
 
                         <div class="settings-card">
-                            <div class="settings-section-label">Admin Appearance</div>
-                            <div class="theme-seg" id="theme-seg-admin" role="group" aria-label="Admin appearance">
-                                <button type="button" data-mode="auto" onclick="setScreenTheme('admin','auto')">Auto</button>
-                                <button type="button" data-mode="light" onclick="setScreenTheme('admin','light')">Light</button>
-                                <button type="button" data-mode="dark" onclick="setScreenTheme('admin','dark')">Dark</button>
-                            </div>
-                            <p class="settings-card-hint" style="margin-top: 14px; margin-bottom: 0;">Auto follows this device's own light/dark setting.</p>
-                        </div>
-
-                        <div class="settings-card">
                             <div class="settings-section-label">Guest QR Code</div>
                             <div class="qr-card-body">
                                 <div id="guest-qr-code" class="qr-code-box"></div>
@@ -1262,11 +1233,6 @@
                             </div>
                         </div>
 
-                        <div class="settings-card full-only">
-                            <div class="settings-section-label">Blocked Guests</div>
-                            <p class="settings-card-hint" style="margin-top: 0;">Block a guest's device from the Stats tab's "Recent Requests" list. A blocked guest can't request or vote for the rest of this event.</p>
-                            <div id="blocked-guests-list" class="stat-box-body"></div>
-                        </div>
                     </div>
 
                     <div id="settings-category-music" class="settings-category-panel">
@@ -1366,16 +1332,6 @@
 
                     <div id="settings-category-kiosk" class="settings-category-panel">
                         <div class="settings-card">
-                            <div class="settings-section-label">Kiosk Appearance</div>
-                            <div class="theme-seg" id="theme-seg-kiosk" role="group" aria-label="Kiosk Appearance">
-                                <button type="button" data-mode="auto" onclick="setScreenTheme('kiosk','auto')">Auto</button>
-                                <button type="button" data-mode="light" onclick="setScreenTheme('kiosk','light')">Light</button>
-                                <button type="button" data-mode="dark" onclick="setScreenTheme('kiosk','dark')">Dark</button>
-                            </div>
-                            <p class="settings-card-hint" style="margin-top: 14px; margin-bottom: 0;">Applies to the kiosk page within a few seconds. Auto follows the kiosk device's own light/dark setting.</p>
-                        </div>
-
-                        <div class="settings-card">
                             <div class="settings-section-label">Kiosk Page (kiosk.html)</div>
                             <p class="settings-card-hint" style="margin-top: 0;">
                                 Independent settings for an admin-attended kiosk device - separate on/off and credit rules from regular guests. Each physical kiosk still gets its own credit bank, same as any guest's phone.
@@ -1405,16 +1361,6 @@
                     </div>
 
                     <div id="settings-category-visuals" class="settings-category-panel">
-                        <div class="settings-card">
-                            <div class="settings-section-label">Visuals Appearance</div>
-                            <div class="theme-seg" id="theme-seg-visuals" role="group" aria-label="Visuals Appearance">
-                                <button type="button" data-mode="auto" onclick="setScreenTheme('visuals','auto')">Auto</button>
-                                <button type="button" data-mode="light" onclick="setScreenTheme('visuals','light')">Light</button>
-                                <button type="button" data-mode="dark" onclick="setScreenTheme('visuals','dark')">Dark</button>
-                            </div>
-                            <p class="settings-card-hint" style="margin-top: 14px; margin-bottom: 0;">Applies to the visuals display within a few seconds. Auto follows the display device's own light/dark setting.</p>
-                        </div>
-
                         <div class="settings-card">
                             <div class="settings-section-label">Visuals Display (visuals.html)</div>
                             <p class="settings-card-hint" style="margin-top: 0;">
@@ -1526,20 +1472,13 @@
                                 catch most bad matches on their own, but they're not perfect. <strong>Family Mode</strong>
                                 flips the default: with it on, a song's video plays ONLY if a human has already approved
                                 that exact video below - nothing plays automatically no matter what the automated checks
-                                concluded. The denylist below applies regardless of Family Mode and blocks a song's video
+                                concluded. The denylist (in the Blocked tab) applies regardless of Family Mode and blocks a song's video
                                 everywhere, for every event on this platform.
                             </p>
                             <div class="control-bar">
                                 <button id="toggle-family-mode" class="toggle-btn closed-status" onclick="toggleFamilyMode()">Family Mode: OFF</button>
                             </div>
 
-                            <div class="settings-section-label" style="margin-top: 20px;">Denylist (blocked everywhere)</div>
-                            <div class="input-group">
-                                <label>Search for a song to block</label>
-                                <input type="text" id="denylist-search-input" placeholder="Search for a song or artist" oninput="onDenylistSearchInput()">
-                            </div>
-                            <div id="denylist-search-results"></div>
-                            <div id="denylist-rows" class="family-list-rows"></div>
 
                             <div class="settings-section-label" style="margin-top: 20px;">Allowlist (approved for Family Mode)</div>
                             <p class="settings-card-hint" style="margin-top: 0;">
@@ -1561,7 +1500,7 @@
                             <div class="control-bar" style="margin-top: 10px;">
                                 <button class="utility-btn" onclick="resetAllSettings()">Reset All Settings</button>
                             </div>
-                            <p style="color: #a7a7a7; font-size: 0.8rem; margin: 8px 0 0 0;">Puts credits, queue cap, filters, location lock, kiosk, music video and appearance settings back to their defaults. Keeps the event name, venue, Spotify connection, queue, history, blocked guests, and the schedule.</p>
+                            <p style="color: #a7a7a7; font-size: 0.8rem; margin: 8px 0 0 0;">Puts credits, queue cap, filters, location lock, kiosk and music video settings back to their defaults. Keeps the event name, venue, Spotify connection, queue, history, blocked guests, and the schedule.</p>
                             <div class="control-bar" style="margin-top: 18px;">
                                 <button class="utility-btn" style="background: var(--red-action, #e91429); border-color: var(--red-action, #e91429); color: white;" onclick="closeEvent()">Close This Event</button>
                             </div>
@@ -1637,6 +1576,17 @@
                 <p class="settings-card-hint" style="margin-top: 0;">Every guest who's requested a song tonight. Blocking stops their device from requesting or voting for the rest of this event.</p>
                 <input type="text" id="blocked-guest-filter-input" placeholder="Filter by name" oninput="renderBlockedTabGuests()" style="width: 100%; margin-bottom: 12px;">
                 <div id="blocklist-guests-list"></div>
+            </div>
+
+            <div class="settings-card full-only">
+                <div class="settings-section-label">Blocked Music Videos (Denylist)</div>
+                <p class="settings-card-hint" style="margin-top: 0;">Blocks a song's music video everywhere, for every event on this platform, regardless of Family Mode.</p>
+                            <div class="input-group">
+                                <label>Search for a song to block</label>
+                                <input type="text" id="denylist-search-input" placeholder="Search for a song or artist" oninput="onDenylistSearchInput()">
+                            </div>
+                            <div id="denylist-search-results"></div>
+                            <div id="denylist-rows" class="family-list-rows"></div>
             </div>
 
             <div class="settings-card">
@@ -2759,17 +2709,10 @@ async function verifyPassword() {
             handleEl.addEventListener('pointercancel', onUp);
         }
 
-        // ---- Site mode (Basic / Full) + themes ----
+        // ---- Site mode (Basic / Full) ----
         let adminBasicMode = false;
-        let lastThemes = { admin: 'auto', kiosk: 'auto', visuals: 'auto' };
         function markSeg(id, mode) {
             document.querySelectorAll('#' + id + ' button').forEach(b => b.classList.toggle('is-active', b.dataset.mode === mode));
-        }
-        function applyThemesFromData(themes) {
-            if (!themes) return;
-            lastThemes = themes;
-            CrowdTheme.set(themes.admin || 'auto');
-            ['admin', 'kiosk', 'visuals'].forEach(k => markSeg('theme-seg-' + k, themes[k] || 'auto'));
         }
         function applyAdminMode(mode) {
             const basic = mode === 'basic';
@@ -2798,18 +2741,6 @@ async function verifyPassword() {
                 showToast(mode === 'basic' ? 'Basic mode on.' : 'Full mode on.', 'success');
             } catch (e) { showToast('Could not reach the server.', 'error'); }
         }
-        async function setScreenTheme(screen, mode) {
-            try {
-                const res = await fetch(eventUrl('/api/admin/theme'), {
-                    method: 'POST', headers: adminHeaders({ 'Content-Type': 'application/json' }),
-                    body: JSON.stringify({ screen, theme: mode })
-                });
-                if (!res.ok) { showToast('Could not change the appearance.', 'error'); return; }
-                lastThemes[screen] = mode;
-                applyThemesFromData(lastThemes);
-            } catch (e) { showToast('Could not reach the server.', 'error'); }
-        }
-
         async function updateDashboard() {
             if (!isAuthorized) return; 
             
@@ -2818,7 +2749,6 @@ async function verifyPassword() {
                 if (!res.ok) return;
                 const data = await res.json();
                 applyAdminMode(data.siteMode);
-                applyThemesFromData(data.themes);
                 // Page title: "Cuelistr · <event name>". An event with no real name just shows "Cuelistr".
                 {
                     const evName = (data.eventName || '').trim();
