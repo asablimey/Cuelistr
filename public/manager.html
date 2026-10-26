@@ -1,0 +1,2330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script src="/theme.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <link rel="stylesheet" href="/layout.css">
+    <link rel="icon" type="image/svg+xml" href="/assets/cuelistr-icon.svg">
+    <link rel="icon" type="image/png" href="/assets/favicon.png">
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+    <title>Cuelistr Manager</title>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Manager">
+    <style>
+
+        :root {
+            --spotify-green: #1DB954;
+            --spotify-black: #121212;
+            --panel-bg: #181818;
+            --card-bg: #242424;
+            --blue-action: #007aff;
+            --red-action: #e91429;
+        
+            --text: #ffffff;
+            --text-muted: #a7a7a7;
+            --border: #282828;
+            --border-strong: #333333;
+            --hover-bg: #2c2c2c;
+            --overlay-soft: rgba(255,255,255,0.08);
+            --stage-bg: #000000;
+            --inset-bg: #1c1c1c;
+            --text-soft: #cccccc;
+        }
+
+        /* ---- Light theme (html[data-theme="light"], set by theme.js) ---- */
+        html[data-theme="light"] {
+            --spotify-green: #16a34a;
+            --spotify-black: #f3f4f6;
+            --panel-bg: #ffffff;
+            --card-bg: #eceff3;
+            --red-action: #d1122a;
+            --text: #111318;
+            --text-muted: #5b6472;
+            --border: #dfe3e8;
+            --border-strong: #c8ced6;
+            --hover-bg: #e3e7ec;
+            --overlay-soft: rgba(0,0,0,0.06);
+            --stage-bg: #f3f4f6;
+            --inset-bg: #ffffff;
+            --text-soft: #374151;
+        }
+
+        /* ---- Segmented controls (theme + mode pickers) ---- */
+        .theme-seg { display: inline-flex; background: var(--card-bg); border: 1px solid var(--border-strong); border-radius: 8px; overflow: hidden; }
+        .theme-seg button { background: none; border: none; color: var(--text-muted); padding: 10px 18px; font-size: 0.9rem; font-weight: 600; cursor: pointer; }
+        .theme-seg button.is-active { background: var(--text); color: var(--panel-bg); }
+        .mode-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+
+        /* ---- Basic mode: only queue, playback and a few essentials ---- */
+        body.basic-mode .full-only,
+        body.basic-mode #sidebar-nav-history,
+        body.basic-mode #sidebar-nav-stats,
+        body.basic-mode #sidebar-nav-blocked,
+        body.basic-mode #sidebar-nav-scheduler,
+        body.basic-mode #settings-nav-kiosk,
+        body.basic-mode #settings-nav-visuals,
+        body.basic-mode #toggle-radio-edits,
+        body.basic-mode #toggle-guest-spotify { display: none !important; }
+
+
+        html { overflow-x: hidden; }
+        body { 
+            background-color: var(--spotify-black); 
+            color: var(--text); 
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif; 
+            padding: var(--page-pad, 20px); 
+            margin: 0; 
+            box-sizing: border-box;
+            overflow-x: hidden;
+            /* Safety net: any text that isn't explicitly truncated (song
+               titles, usernames, etc.) wraps onto a new line instead of
+               pushing its box wider than the screen. */
+            overflow-wrap: break-word;
+            word-break: break-word;
+        }
+        * { box-sizing: border-box; }
+
+        /* Shared page frame (see layout.css): header + every tab panel sit in
+           the same centred column, so no tab is ever skinnier or wider than
+           another. */
+        body > .header, body > .tab-content { max-width: var(--page-max, 1400px); margin-left: auto; margin-right: auto; }
+
+        #admin-lock-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: var(--spotify-black);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            overflow-y: auto;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .lock-container {
+            background-color: var(--panel-bg);
+            border: 1px solid var(--border);
+            padding: 40px;
+            border-radius: 16px;
+            text-align: center;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+            max-width: 320px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .lock-container h2 {
+            margin-top: 0;
+            color: var(--text);
+            font-size: 1.6rem;
+            margin-bottom: 20px;
+        }
+
+        .lock-input {
+            width: 100%;
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-strong);
+            padding: 12px;
+            color: var(--text);
+            border-radius: 8px;
+            font-size: 1rem;
+            box-sizing: border-box;
+            outline: none;
+            text-align: center;
+            margin-bottom: 15px;
+        }
+        .lock-input:focus { border-color: var(--spotify-green); }
+
+        .lock-btn {
+            background-color: var(--spotify-green);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 50px;
+            font-weight: 700;
+            cursor: pointer;
+            width: 100%;
+            font-size: 1rem;
+        }
+        .lock-btn:hover { filter: brightness(1.1); }
+        .lock-error { color: var(--red-action); font-size: 0.85rem; margin-top: 10px; display: none; }
+
+        /* A long event name shortens with an ellipsis instead of pushing the header buttons off-screen. */
+        .header h1 { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .header { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            border-bottom: 1px solid var(--border); 
+            padding-bottom: 14px; 
+            margin-bottom: 14px; 
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        h1 { margin: 0; font-size: var(--h1-size, 1.8rem); font-weight: 800; letter-spacing: -0.5px; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+        .config-dashboard {
+            display: flex;
+            gap: 20px;
+            align-items: flex-end;
+            flex-wrap: wrap;
+            box-sizing: border-box;
+        }
+
+        .event-name-box {
+            box-sizing: border-box;
+        }
+
+        .input-group { display: flex; flex-direction: column; gap: 8px; box-sizing: border-box; max-width: 100%; }
+        .input-group label { font-size: 0.85rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700; letter-spacing: 0.5px; }
+        .input-group input { 
+            background-color: var(--card-bg); 
+            border: 1px solid var(--border-strong); 
+            padding: 10px 14px; 
+            color: var(--text); 
+            border-radius: 6px; 
+            font-size: 1rem; 
+            width: 140px;
+            font-weight: bold;
+            box-sizing: border-box;
+        }
+
+        .join-row { display: flex; gap: 10px; flex-wrap: wrap; }
+        .join-row input[type="text"] {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-strong);
+            padding: 10px 14px;
+            color: var(--text);
+            border-radius: 6px;
+            font-size: 0.95rem;
+            flex: 1 1 200px;
+            min-width: 0;
+            box-sizing: border-box;
+        }
+        .settings-card-hint { color: var(--text-muted); font-size: 0.82rem; line-height: 1.4; }
+        .search-result-row {
+            display: flex; align-items: center; gap: 12px;
+            padding: 8px 0; border-bottom: 1px solid var(--border);
+        }
+        .search-result-row:last-child { border-bottom: none; }
+        .search-result-row img { width: 40px; height: 40px; border-radius: 6px; object-fit: cover; flex-shrink: 0; }
+        .search-result-text { flex: 1; min-width: 0; }
+        .search-result-title { font-weight: 700; font-size: 0.92rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .search-result-artist { font-size: 0.8rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .btn-add-track { background-color: var(--spotify-green); color: white; border: none; border-radius: 8px; padding: 8px 14px; font-size: 0.8rem; font-weight: 700; cursor: pointer; flex-shrink: 0; }
+        .btn-add-track:hover { filter: brightness(1.1); }
+        .btn-add-track:disabled { opacity: 0.6; cursor: default; }
+
+        .save-config-btn {
+            background-color: var(--text);
+            color: var(--panel-bg);
+            border: none;
+            padding: 11px 22px;
+            border-radius: 6px;
+            font-weight: 700;
+            cursor: pointer;
+            font-size: 0.95rem;
+            transition: all 0.15s ease;
+        }
+        .save-config-btn:hover { background-color: var(--spotify-green); color: white; }
+
+        .control-bar { display: flex; gap: 15px; flex-wrap: wrap; }
+
+        /* Consistent container for each settings section - replaces the old
+           mix of scattered inline margin-bottoms and same-colour nested
+           boxes with one uniform card pattern (matches .stat-card elsewhere
+           in this file: card-bg against the panel's darker background). */
+        .settings-card {
+            background: var(--card-bg);
+            border: 1px solid var(--hover-bg);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 14px;
+            box-sizing: border-box;
+        }
+        .settings-card:last-child { margin-bottom: 0; }
+        .settings-card .settings-section-label { margin-bottom: 16px; }
+        .settings-card-hint {
+            color: #888;
+            font-size: 0.85rem;
+            margin: 0 0 16px 0;
+            max-width: 600px;
+        }
+        .settings-card.danger-zone { border-color: rgba(233, 20, 41, 0.35); }
+
+        /* Settings tab: sidebar categories instead of one long flat list of
+           cards - was 10 cards in a single scroll before this, no grouping
+           at all. Sidebar swaps which category's cards are shown rather
+           than showing all of them at once. */
+        .settings-layout {
+            display: flex;
+            gap: 24px;
+            align-items: flex-start;
+        }
+        .settings-sidebar {
+            width: 190px;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            position: sticky;
+            top: 20px;
+        }
+        .settings-nav-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            color: var(--text-muted);
+            font-size: 0.95rem;
+            font-weight: 600;
+            background: transparent;
+            border: none;
+            text-align: left;
+            width: 100%;
+            box-sizing: border-box;
+            transition: background-color 0.15s ease, color 0.15s ease;
+        }
+        .settings-nav-item:hover { background: var(--card-bg); color: var(--text); }
+        .settings-nav-item.active-nav { background: var(--spotify-green); color: white; }
+        .settings-nav-item.danger-nav { color: #e97b7b; }
+        .settings-nav-item.danger-nav:hover { background: var(--card-bg); color: #e97b7b; }
+        .settings-nav-item.danger-nav.active-nav { background: var(--red-action); color: white; }
+        .settings-nav-item .nav-icon { font-size: 1rem; flex-shrink: 0; }
+
+        .settings-content { flex: 1; min-width: 0; }
+        .settings-category-panel { display: none; }
+        .settings-category-panel.active-category { display: block; }
+
+        .qr-card-body {
+            display: flex;
+            gap: 24px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .qr-code-box {
+            background: white;
+            border-radius: 10px;
+            padding: 12px;
+            width: 176px;
+            height: 176px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .qr-card-controls { flex: 1 1 420px; min-width: 240px; display: flex; flex-direction: column; gap: 14px; }
+        #guest-url-display { cursor: pointer; width: 100%; padding: 14px 16px; font-size: 1rem; text-overflow: ellipsis; }
+        .qr-card-controls .toggle-btn {
+            padding: 10px 18px;
+            font-size: 0.85rem;
+            box-shadow: none;
+        }
+
+        .toggle-btn { 
+            padding: 14px 32px; font-weight: 700; border-radius: 50px; border: none; cursor: pointer; font-size: 1rem; 
+            transition: all 0.2s ease; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+
+        .fullscreen-icon-btn {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: color 0.2s ease, transform 0.1s ease;
+        }
+        .fullscreen-icon-btn:hover { color: var(--text); }
+        .fullscreen-icon-btn:active { transform: scale(0.95); }
+        .fullscreen-icon-btn svg { width: 24px; height: 24px; fill: currentColor; }
+
+        .hints-icon-btn {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: color 0.2s ease, transform 0.1s ease;
+        }
+        .hints-icon-btn:hover { color: var(--text); }
+        .hints-icon-btn:active { transform: scale(0.95); }
+        .hints-icon-btn svg { width: 22px; height: 22px; fill: currentColor; }
+        .hints-icon-btn.hints-on { color: var(--spotify-green); }
+
+        /* --- Hamburger menu button + left sidebar nav (replaces the old
+           horizontal .tab-bar) --- */
+        .menu-btn {
+            flex-shrink: 0;
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-strong);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            padding: 0;
+        }
+        .menu-btn svg { width: 18px; height: 18px; fill: var(--text); }
+        .menu-btn:hover { border-color: var(--spotify-green); }
+
+        .sidebar-backdrop {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+            z-index: 950; display: none;
+        }
+        .sidebar-backdrop.is-visible { display: block; }
+        .sidebar-panel {
+            position: fixed; top: 0; left: 0; bottom: 0;
+            width: min(280px, 84vw);
+            background: var(--panel-bg);
+            border-right: 1px solid var(--border);
+            z-index: 951;
+            transform: translateX(-100%);
+            transition: transform 0.25s ease;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+        .sidebar-panel.is-visible { transform: translateX(0); }
+
+        /* --- Account: sidebar My Events + login popup --- */
+        .sidebar-my-events { display: flex; flex-direction: column; gap: 6px; max-height: clamp(220px, 38vh, 340px); overflow-y: auto; padding-right: 2px; }
+        .sidebar-my-events-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); font-weight: 700; margin-top: 4px; }
+        .sidebar-event-link {
+            display: block; text-decoration: none; color: var(--text); background: var(--card-bg);
+            border: 1px solid var(--border-strong); border-radius: 8px; padding: 8px 10px; font-size: 0.82rem;
+        }
+        .sidebar-event-link:hover { border-color: #555; }
+        .sidebar-event-link.current { border-color: var(--spotify-green); }
+        .sidebar-event-link .ev-name { font-weight: 700; display: block; }
+        .sidebar-event-link .ev-meta { color: var(--text-muted); font-size: 0.74rem; }
+        .sidebar-account-login {
+            background: var(--spotify-green); border: none; color: #000; border-radius: 6px;
+            padding: 9px; font-size: 0.85rem; font-weight: 700; cursor: pointer;
+        }
+        #account-modal-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 10000;
+            display: none; align-items: center; justify-content: center; padding: 20px; overflow-y: auto;
+        }
+        #account-modal-overlay.open { display: flex; }
+        .acct-modal {
+            background: var(--panel-bg); border: 1px solid var(--border); border-radius: 16px;
+            padding: 28px; width: 100%; max-width: 380px; position: relative; box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+        }
+        .acct-modal h2 { margin: 0 0 16px 0; font-size: 1.3rem; text-align: center; color: var(--text); }
+        .acct-close { position: absolute; top: 10px; right: 12px; background: none; border: none; color: var(--text-muted); font-size: 1.1rem; cursor: pointer; }
+        .acct-tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+        .acct-tab {
+            flex: 1; background: var(--card-bg); border: 1px solid var(--border-strong); color: var(--text-muted);
+            padding: 9px; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 0.85rem;
+        }
+        .acct-tab.active { color: var(--text); border-color: var(--spotify-green); }
+        .acct-form { display: none; }
+        .acct-form.active { display: block; }
+        .acct-field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
+        .acct-field label { font-size: 0.72rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700; letter-spacing: 0.5px; }
+        .acct-field input {
+            background: var(--card-bg); border: 1px solid var(--border-strong); color: var(--text);
+            padding: 11px 12px; border-radius: 6px; font-size: 0.95rem; width: 100%;
+        }
+        .acct-field input:focus { outline: none; border-color: var(--spotify-green); }
+        .acct-submit { width: 100%; background: var(--text); color: var(--spotify-black); border: none; padding: 12px; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 0.95rem; }
+        .acct-submit:disabled { opacity: 0.5; cursor: default; }
+        .acct-link { background: none; border: none; color: var(--spotify-green); font-size: 0.8rem; cursor: pointer; text-decoration: underline; padding: 0; margin: 0 0 12px 0; }
+        .acct-error { color: #e91429; font-size: 0.82rem; margin-top: 10px; display: none; }
+        .acct-ok { color: var(--spotify-green); font-size: 0.82rem; margin-top: 10px; display: none; }
+
+        /* --- Rotating venue code (sidebar) --- */
+        .sidebar-venue-code { margin: 16px 20px 0 20px; padding: 14px; border: 1px solid var(--border-strong); border-radius: 10px; background: var(--card-bg); text-align: center; flex-shrink: 0; }
+        .sidebar-venue-code.asked { border-color: var(--spotify-green); }
+        .sidebar-venue-code .vc-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); font-weight: 700; }
+        .sidebar-venue-code .vc-digits { font-size: 2rem; font-weight: 800; letter-spacing: 0.25em; margin: 6px 0 2px 0; font-variant-numeric: tabular-nums; padding-left: 0.25em; color: var(--text); }
+        .sidebar-venue-code .vc-sub { font-size: 0.74rem; color: var(--text-muted); }
+        .sidebar-venue-code .vc-bar { height: 3px; background: var(--border-strong); border-radius: 2px; margin-top: 8px; overflow: hidden; }
+        .sidebar-venue-code .vc-bar > div { height: 100%; background: var(--spotify-green); width: 100%; transition: width 1s linear; }
+        .sidebar-account-footer {
+            margin-top: auto; padding: 16px 20px; border-top: 1px solid var(--border);
+            display: flex; flex-direction: column; gap: 8px; font-size: 0.85rem; flex-shrink: 0;
+        }
+        .sidebar-account-status { color: var(--text-muted); }
+        .sidebar-account-status strong { color: var(--text); }
+        .sidebar-account-link { color: var(--spotify-green, var(--spotify-green)); text-decoration: none; font-weight: 600; }
+        .sidebar-account-link:hover { text-decoration: underline; }
+        .sidebar-account-logout {
+            background: var(--card-bg, var(--card-bg)); border: 1px solid var(--border-strong); color: var(--text);
+            border-radius: 6px; padding: 8px; font-size: 0.82rem; font-weight: 700; cursor: pointer;
+        }
+        .sidebar-account-logout:hover { border-color: #555; }
+        .sidebar-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 20px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+        }
+        .sidebar-header h3 { margin: 0; font-size: 1.1rem; }
+        .sidebar-close-btn { background: none; border: none; color: var(--text-muted); font-size: 1.3rem; cursor: pointer; padding: 4px 8px; }
+        .sidebar-close-btn:hover { color: var(--text); }
+        .sidebar-nav-item {
+            display: flex; align-items: center;
+            padding: 16px 20px; cursor: pointer; border: none;
+            background: none; color: var(--text-muted); font-size: 1rem; font-weight: 700;
+            font-family: inherit; text-align: left; width: 100%;
+            border-bottom: 1px solid var(--border);
+        }
+        .sidebar-nav-item:hover { background-color: var(--card-bg); color: var(--text); }
+        .sidebar-nav-item.active-tab {
+            color: var(--text);
+            background-color: rgba(29, 185, 84, 0.15);
+            border-left: 3px solid var(--spotify-green);
+            padding-left: 17px;
+        }
+
+        /* When hints are hidden, every settings-card-hint / filter-hint in
+           the document is collapsed. Scoped to body.hints-hidden so other
+           text (labels, statuses) is untouched. */
+        body.hints-hidden .settings-card-hint,
+        body.hints-hidden .filter-hint {
+            display: none;
+        }
+
+        .utility-btn {
+            padding: 12px 24px; font-weight: 700; border-radius: 50px; border: 1px solid var(--border-strong);
+            background-color: var(--card-bg); color: #ff3b30; cursor: pointer; font-size: 0.9rem; transition: all 0.2s ease;
+        }
+        .utility-btn:hover { background-color: var(--red-action); color: white; border-color: transparent; }
+
+        .open-status { background-color: var(--spotify-green); color: white; }
+        .closed-status { background-color: var(--red-action); color: white; }
+
+        /* PLAYBACK TAB */
+        .playback-panel { display: flex; flex-direction: column; align-items: center; gap: 22px; text-align: center; }
+        .playback-artwork {
+            width: 220px; height: 220px; border-radius: 12px; object-fit: cover;
+            background: var(--card-bg); box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+        }
+        .playback-title { font-size: 1.4rem; font-weight: 800; margin: 0; }
+        .playback-artist { font-size: 1rem; color: var(--text-muted); margin: 4px 0 0 0; }
+        .playback-device { font-size: 0.8rem; color: #666; margin: 6px 0 0 0; }
+
+        .playback-progress-wrap { width: 100%; max-width: 460px; display: flex; align-items: center; gap: 10px; }
+        .playback-progress-wrap span { font-size: 0.75rem; color: #888; min-width: 36px; }
+        .playback-progress-wrap input[type="range"] { flex: 1; }
+
+        .playback-transport { display: flex; align-items: center; justify-content: center; gap: 18px; }
+        .playback-icon-btn {
+            background: var(--card-bg); border: 1px solid var(--border-strong); color: var(--text); border-radius: 50%;
+            width: 48px; height: 48px; display: flex; align-items: center; justify-content: center;
+            cursor: pointer; transition: all 0.15s ease;
+        }
+        .playback-icon-btn:hover { border-color: var(--spotify-green); }
+        .playback-icon-btn:active { transform: scale(0.93); }
+        .playback-icon-btn svg { width: 20px; height: 20px; fill: currentColor; }
+        .playback-icon-btn.playback-play-pause { width: 60px; height: 60px; background-color: var(--text); color: var(--panel-bg); }
+        .playback-icon-btn.playback-play-pause:hover { background-color: var(--spotify-green); color: white; }
+        .playback-icon-btn.playback-play-pause svg { width: 26px; height: 26px; }
+        .playback-icon-btn.toggled-on { background-color: var(--spotify-green); border-color: var(--spotify-green); }
+
+        .playback-volume-row { width: 100%; max-width: 460px; display: flex; align-items: center; gap: 12px; }
+        .playback-volume-row svg { width: 20px; height: 20px; fill: var(--text-muted); flex-shrink: 0; }
+        .playback-volume-row input[type="range"] { flex: 1; }
+
+        input[type="range"] {
+            -webkit-appearance: none; appearance: none; height: 4px; border-radius: 2px;
+            background: var(--border-strong); outline: none; cursor: pointer;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none; width: 14px; height: 14px; border-radius: 50%;
+            background: var(--spotify-green); cursor: pointer; border: none;
+        }
+        input[type="range"]::-moz-range-thumb {
+            width: 14px; height: 14px; border-radius: 50%; background: var(--spotify-green); cursor: pointer; border: none;
+        }
+
+        .playback-repeat-row { display: flex; gap: 8px; }
+
+        .playback-disconnected { color: var(--text-muted); padding: 40px 20px; }
+        .playback-disconnected a { color: var(--spotify-green); }
+
+        .playback-upcoming { width: 100%; max-width: 460px; text-align: left; margin-top: 8px; }
+        .playback-upcoming h3 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin: 0 0 10px 0; }
+        .playback-upcoming-row { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--border); }
+        .playback-upcoming-row img { width: 34px; height: 34px; border-radius: 4px; object-fit: cover; flex-shrink: 0; }
+        .playback-upcoming-row .text-block { min-width: 0; }
+        .playback-upcoming-row .up-title { font-size: 0.85rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .playback-upcoming-row .up-artist { font-size: 0.75rem; color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        /* TAB NAVIGATION STYLES (panel visibility only - the buttons that
+           used to live in a horizontal .tab-bar are now sidebar-nav-item
+           entries in the slide-out menu; see the hamburger/sidebar styles
+           above). */
+        .tab-content {
+            display: none; /* Hidden by default */
+            width: 100%;
+        }
+        .tab-content.active-content {
+            display: block; /* Visible when tab is selected */
+        }
+
+        /* was: iframe wrapper for the old embedded Music Scheduler tab.
+           The scheduler now opens as its own browser tab (see
+           openSchedulerTab()), so nothing here sizes an iframe anymore. */
+
+        .panel { 
+            width: 100%;
+            background: var(--panel-bg); 
+            padding: 20px; 
+            border-radius: 16px; 
+            border: 1px solid var(--border); 
+            box-sizing: border-box;
+        }
+
+        .panel h2 { border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-top: 0; margin-bottom: 20px; font-size: 1.4rem; color: var(--spotify-green); font-weight: 700; }
+
+        .settings-section-label {
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            margin-bottom: 12px;
+        }
+
+        .song-row { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            padding: 12px; 
+            background: var(--card-bg); 
+            margin-bottom: 8px; 
+            border-radius: 10px; 
+            border: 1px solid var(--hover-bg); 
+            gap: 15px;
+            box-sizing: border-box;
+            width: 100%;
+        }
+        
+        .song-details { 
+            display: flex; 
+            align-items: center; 
+            gap: 16px; 
+            flex: 1;
+            min-width: 0;
+        }
+        
+        .song-details img { 
+            width: 48px; 
+            height: 48px; 
+            border-radius: 6px; 
+            object-fit: cover; 
+            flex-shrink: 0;
+        }
+        
+        .text-container {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .title-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .song-title { 
+            font-weight: 700; 
+            margin: 0; 
+            font-size: 1.1rem; 
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .explicit-badge {
+            background-color: #7f7f7f;
+            color: var(--spotify-black);
+            font-size: 0.65rem;
+            font-weight: 700;
+            padding: 1px 4px;
+            border-radius: 2px;
+            text-transform: uppercase;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            line-height: 1;
+        }
+        
+        .song-artist { 
+            color: var(--text-muted); 
+            margin: 4px 0 0 0; 
+            font-size: 0.9rem; 
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Requester panel - DJ-only visibility of who added each track */
+        .length-requester-row {
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 10px;
+            margin: 6px 0 0 0;
+        }
+        .length-text {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .requester-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            line-height: 1;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--spotify-green);
+            background-color: rgba(29, 185, 84, 0.12);
+            padding: 4px 9px;
+            border-radius: 20px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 60%;
+            flex-shrink: 0;
+        }
+        .requester-badge svg { width: 12px; height: 12px; fill: var(--spotify-green); flex-shrink: 0; display: block; }
+
+        .admin-vote-block {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-right: 10px;
+        }
+
+        .vote-display-node {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 28px;
+        }
+
+        .vote-display-node svg {
+            width: 18px;
+            height: 18px;
+            stroke-width: 2.5;
+        }
+        .node-up svg { stroke: var(--spotify-green); fill: var(--spotify-green); }
+        .node-down svg { stroke: var(--red-action); fill: var(--red-action); }
+
+        .vote-display-count {
+            font-size: 0.8rem;
+            font-weight: 700;
+            margin-top: 4px;
+            color: var(--text-muted);
+        }
+        .node-up .vote-display-count { color: var(--spotify-green); }
+        .node-down .vote-display-count { color: var(--red-action); }
+
+        .actions { 
+            display: flex; 
+            gap: 10px; 
+            align-items: center;
+            flex-shrink: 0;
+            flex-wrap: wrap; 
+            justify-content: flex-end;
+        }
+        
+        .btn { padding: 10px 14px; font-weight: 700; border: none; border-radius: 8px; cursor: pointer; color: var(--text); font-size: 0.85rem; white-space: nowrap; }
+        .btn:hover { filter: brightness(1.1); }
+        .btn-played { background-color: var(--spotify-green); }
+        .btn-remove { background-color: var(--border-strong); }
+        .btn-remove:hover { background-color: var(--red-action); }
+        .btn-block { background-color: transparent; border: 1px solid var(--red-action); color: var(--red-action); padding: 8px 12px; font-size: 0.78rem; }
+        .btn-block:hover { background-color: var(--red-action); color: white; }
+        .btn-unblock { background-color: transparent; border: 1px solid var(--border-strong); color: var(--text-soft); padding: 8px 12px; font-size: 0.78rem; }
+        .btn-unblock:hover { border-color: var(--spotify-green); color: var(--spotify-green); }
+
+        /* Drag handle that replaces the old "Top" button - borderless, sits
+           flush at the far right of the row, grabs on press. */
+        .drag-handle {
+            background: none;
+            border: none;
+            color: #666;
+            padding: 6px 4px;
+            cursor: grab;
+            display: flex;
+            align-items: center;
+            touch-action: none;
+            flex-shrink: 0;
+        }
+        .drag-handle:hover { color: var(--text-soft); }
+        .drag-handle svg { width: 20px; height: 20px; pointer-events: none; }
+        .song-row.dragging { opacity: 0.5; }
+        .song-row.drag-over-top { border-top: 2px solid var(--spotify-green); }
+        .song-row.drag-over-bottom { border-bottom: 2px solid var(--spotify-green); }
+
+        .history-row { opacity: 0.45; background: var(--inset-bg); border-color: var(--border); }
+        .empty-placeholder { color: #666; font-style: italic; text-align: center; padding: 40px 0; margin: 0; }
+
+        .neutral-status { background-color: var(--border-strong); color: var(--text); }
+
+        .filter-panel {
+            box-sizing: border-box;
+        }
+        .filter-hint { color: var(--text-muted); font-size: 0.85rem; margin: 0 0 14px 0; }
+        .filter-group-label { font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700; letter-spacing: 0.5px; margin-bottom: 10px; }
+        .filter-chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
+        .filter-chip {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-strong);
+            color: var(--text-soft);
+            padding: 8px 16px;
+            border-radius: 50px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.15s ease;
+        }
+        .filter-chip:hover { border-color: var(--spotify-green); }
+        .filter-chip.is-selected {
+            background-color: var(--spotify-green);
+            color: white;
+            border-color: var(--spotify-green);
+        }
+        .queue-cap-status-text { width: 100%; color: var(--text-muted); font-size: 0.85rem; margin-top: 6px; }
+
+        .stat-grid { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
+        .stat-card {
+            flex: 1; min-width: 140px;
+            background: var(--card-bg); border: 1px solid var(--hover-bg); border-radius: 12px;
+            padding: 20px; text-align: center;
+        }
+        .stat-number { font-size: 2.2rem; font-weight: 800; color: var(--spotify-green); }
+        .stat-label { color: var(--text-muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; }
+
+        .stat-box {
+            background: var(--card-bg); border: 1px solid var(--hover-bg); border-radius: 12px;
+            margin-bottom: 14px; overflow: hidden;
+        }
+        .stat-box summary {
+            padding: 16px 20px; cursor: pointer; font-weight: 700; font-size: 1.05rem;
+            list-style: none; display: flex; align-items: center; justify-content: space-between;
+        }
+        .stat-box summary::-webkit-details-marker { display: none; }
+        .stat-box summary::after { content: '▾'; color: var(--text-muted); transition: transform 0.15s ease; }
+        .stat-box[open] summary::after { transform: rotate(180deg); }
+        .stat-box summary:hover { background: rgba(255,255,255,0.03); }
+        .stat-box-body { padding: 0 16px 16px; max-height: 420px; overflow-y: auto; }
+
+        .stat-row {
+            display: flex; align-items: center; gap: 14px; padding: 10px 8px;
+            border-bottom: 1px solid var(--border);
+        }
+        .stat-row:last-child { border-bottom: none; }
+        .stat-row img { width: 40px; height: 40px; border-radius: 6px; object-fit: cover; flex-shrink: 0; }
+        .stat-row-text { flex: 1; min-width: 0; }
+        .stat-row-title { font-weight: 700; font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .stat-row-artist { color: var(--text-muted); font-size: 0.82rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .stat-count { font-weight: 700; font-size: 0.9rem; color: var(--text-muted); flex-shrink: 0; }
+        .stat-count.up { color: var(--spotify-green); }
+        .stat-count.down { color: var(--red-action); }
+
+        .outcome-badge {
+            display: inline-block; font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
+            padding: 2px 7px; border-radius: 4px; margin-top: 3px;
+        }
+        .outcome-badge.played { background: rgba(29,185,84,0.15); color: var(--spotify-green); }
+        .outcome-badge.dropped { background: rgba(233,20,41,0.15); color: var(--red-action); }
+
+        @media (max-width: 720px) {
+            .song-row { flex-direction: column; align-items: flex-start; }
+            .actions { width: 100%; justify-content: flex-start; margin-top: 10px; }
+            .settings-layout { flex-direction: column; }
+            .settings-sidebar {
+                flex-direction: row;
+                width: 100%;
+                position: static;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+                padding-bottom: 10px;
+                margin-bottom: 16px;
+                border-bottom: 1px solid var(--border);
+            }
+            .settings-nav-item { flex-shrink: 0; white-space: nowrap; width: auto; }
+        }
+
+        /* Toast notifications - replace blocking alert() popups */
+        #toast-container {
+            position: fixed; top: max(24px, env(safe-area-inset-top, 24px)); left: 50%; transform: translateX(-50%);
+            z-index: 9999; display: flex; flex-direction: column; gap: 8px;
+            align-items: center; width: 100%; padding: 0 16px; box-sizing: border-box;
+            pointer-events: none;
+        }
+        .toast {
+            background: var(--card-bg); color: var(--text); border: 1px solid var(--border-strong);
+            border-left: 4px solid var(--spotify-green, var(--spotify-green));
+            border-radius: 8px; padding: 12px 18px; font-size: 0.9rem; font-weight: 600;
+            max-width: 420px; box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+            opacity: 0; transform: translateY(-12px); transition: opacity 0.25s ease, transform 0.25s ease;
+        }
+        .toast-error { border-left-color: var(--red-action); }
+        .toast-visible { opacity: 1; transform: translateY(0); }
+    
+        /* --- Now Playing bar (live from Spotify) --- */
+        .now-playing-bar {
+            position: fixed;
+            left: 0; right: 0; bottom: 0;
+            height: 60px;
+            background-color: var(--panel-bg);
+            border-top: 1px solid var(--border);
+            display: none;
+            align-items: center;
+            gap: 10px;
+            padding: 0 10px 0 16px;
+            box-sizing: border-box;
+            z-index: 500;
+            overflow: hidden;
+        }
+        .now-playing-bar.is-visible { display: flex; }
+        .now-playing-progress-track {
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 2px;
+            background-color: var(--overlay-soft);
+        }
+        .now-playing-progress-fill {
+            height: 100%;
+            width: 0%;
+            background-color: var(--spotify-green);
+            /* No CSS transition here on purpose - a transition made the bar
+               visibly animate/slide backwards for a moment every time a new
+               track started (jumping from ~100% down to ~0%). Setting the
+               width directly in JS on every tick keeps it snapping straight
+               to the correct spot instead. */
+        }
+        .now-playing-artwork {
+            width: 40px; height: 40px;
+            border-radius: 4px;
+            object-fit: cover;
+            flex-shrink: 0;
+            background-color: var(--card-bg);
+        }
+        .now-playing-text { flex: 1; min-width: 0; }
+        .now-playing-title {
+            margin: 0; font-weight: 700; font-size: 0.85rem;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .now-playing-artist {
+            margin: 2px 0 0 0; font-size: 0.75rem; color: var(--text-muted);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .now-playing-live-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            background-color: var(--spotify-green);
+            flex-shrink: 0;
+            animation: now-playing-pulse 1.5s ease-in-out infinite;
+        }
+        .now-playing-live-dot.is-paused { animation: none; opacity: 0.3; }
+        @keyframes now-playing-pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.35; }
+        }
+        body.has-now-playing-bar { padding-bottom: 76px; }
+
+    
+    </style>
+    <style>
+
+.header{flex-wrap:nowrap;gap:10px}
+.hd-title{flex:1;min-width:0}.hd-title h1{font-size:1.25rem;flex:none}
+.hd-venue{font-size:.78rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.mix-strip{display:flex;align-items:center;justify-content:center;gap:8px;height:26px;border-radius:6px;font-size:.72rem;font-weight:700;letter-spacing:.8px;text-transform:uppercase;margin-bottom:12px;background:rgba(29,185,84,.15);color:var(--spotify-green)}
+.mix-strip i{width:7px;height:7px;border-radius:50%;background:currentColor}
+.mix-strip.mixing{background:rgba(245,185,66,.15);color:#f5b942}
+.song-row{flex-direction:row;align-items:center;padding:10px;gap:10px}
+.song-details{gap:12px}.song-details img{width:44px;height:44px}
+.song-title{font-size:1rem}.song-artist{font-size:.82rem;margin-top:2px}
+.length-requester-row{flex-wrap:wrap;gap:4px 8px;margin-top:4px}
+.length-text{font-size:.78rem}.requester-badge{font-size:.72rem;padding:3px 8px}
+.actions{width:auto;margin-top:0;flex-wrap:nowrap;gap:6px}
+.btn.ico{width:34px;height:34px;padding:0;display:flex;align-items:center;justify-content:center;border-radius:8px}
+.btn.ico svg{width:18px;height:18px;fill:currentColor}
+.drag-handle svg{width:22px;height:22px}
+.player{position:fixed;left:0;right:0;bottom:0;z-index:400;margin:0;background:var(--hover-bg);border:none;border-top:1px solid var(--border-strong);border-radius:0;padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px))}
+.player-top{display:flex;align-items:center;gap:12px}
+.player-top img{width:52px;height:52px;border-radius:6px;flex-shrink:0}
+.player-top .tx{min-width:0;flex:1}
+.player-bar{height:4px;background:var(--border-strong);border-radius:2px;margin:12px 0 4px}
+.player-bar i{display:block;height:100%;width:0;background:var(--spotify-green);border-radius:2px}
+.player-times{display:flex;justify-content:space-between;font-size:.72rem;color:#888}
+.player-ctrl{display:flex;align-items:center;justify-content:space-between;margin-top:6px;padding:0 4px}
+.pc{width:40px;height:40px;border-radius:50%;background:none;border:none;color:var(--text-muted);display:flex;align-items:center;justify-content:center;cursor:pointer}
+.pc:hover{color:var(--text)}.pc svg{width:22px;height:22px;fill:currentColor}
+.pc.on{color:var(--spotify-green)}
+.pc.big{width:52px;height:52px;background:var(--text);color:var(--panel-bg)}.pc.big:hover{background:var(--spotify-green);color:#fff}.pc.big svg{width:28px;height:28px}
+.row-set{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 0;border-top:1px solid var(--border)}
+.settings-card .row-set:first-of-type{border-top:none;padding-top:0}
+.row-set .rl{font-weight:600}.row-set .rs{font-size:.8rem;color:#888;margin-top:2px}
+.switch{width:46px;height:26px;border-radius:13px;background:#535353;position:relative;flex:none;cursor:pointer;transition:background .15s}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:left .15s}
+.switch.on{background:var(--spotify-green)}.switch.on::after{left:23px}
+.theme-seg.full{display:flex;width:100%}.theme-seg.full button{flex:1}
+.blk-bar{display:flex;gap:8px;margin-bottom:14px}
+.blk-bar input{flex:1;min-width:0;background:var(--card-bg);border:1px solid var(--border-strong);padding:10px 14px;color:var(--text);border-radius:6px;font-size:.95rem}
+.blk-bar input:focus{outline:none;border-color:var(--spotify-green)}
+.blk-bar button.all{padding:10px 16px;border-radius:6px;border:1px solid var(--border-strong);background:var(--card-bg);color:var(--text-soft);font-weight:700;cursor:pointer}
+.blk-bar button.all.on{background:var(--text);color:var(--panel-bg)}
+.x-red{background:none;border:none;color:var(--red-action);cursor:pointer;padding:6px;display:flex}.x-red svg{width:22px;height:22px;fill:currentColor}
+.empty-placeholder{color:var(--text-muted);margin:0}
+.rotate-lock{position:fixed;inset:0;background:#000;z-index:10000;display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;padding:30px}
+.rotate-lock svg{width:110px;height:110px;fill:var(--spotify-green)}
+.rotate-lock h2{margin:0;font-size:1.6rem}.rotate-lock p{margin:0;color:var(--text-muted)}
+.sidebar-venue-code{margin:0}
+
+    </style>
+    <style>
+/* ===== manager.html additions ===== */
+html { overflow-x: hidden; }
+body { padding-top: calc(var(--page-pad, 12px) + env(safe-area-inset-top, 0px)); padding-left: calc(var(--page-pad, 12px) + env(safe-area-inset-left, 0px)); padding-right: calc(var(--page-pad, 12px) + env(safe-area-inset-right, 0px)); padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px)); }
+body.has-player { padding-bottom: calc(var(--player-h, 190px) + 16px); }
+.page { display: none; }
+.page.active { display: block; }
+body.basic-mode #nav-blk, body.basic-mode #nav-dsp { display: none !important; }
+
+.hints-icon-btn.hints-on { color: var(--spotify-green); }
+.settings-section-label + .row-set, .settings-card-hint + .row-set { border-top: none; padding-top: 0; }
+button.switch { border: none; padding: 0; }
+.switch:focus-visible { outline: 2px solid var(--spotify-green); outline-offset: 2px; }
+.field-row { display: flex; gap: 10px; align-items: flex-end; margin-top: 14px; }
+.field-row .input-group { flex: 1 1 0; }
+.field-row .save-config-btn { flex: none; }
+.cfg-block { margin-top: 14px; }
+.settings-card .utility-btn { width: 100%; }
+.sub-label { font-size: .72rem; text-transform: uppercase; letter-spacing: .5px; color: var(--text-muted); font-weight: 700; margin: 18px 0 0; }
+
+/* Playing / Mixing strip */
+.mix-strip.idle { background: var(--overlay-soft); color: var(--text-muted); }
+.mix-strip.paused { background: var(--overlay-soft); color: var(--text-muted); }
+
+/* Swipeable queue rows */
+.swipe-wrap { position: relative; margin-bottom: 8px; border-radius: 10px; overflow: hidden; transition: max-height .2s ease, margin .2s ease, opacity .2s ease; }
+.swipe-wrap.removing { max-height: 0 !important; margin-bottom: 0; opacity: 0; }
+.swipe-wrap.dragging { opacity: .5; }
+.swipe-wrap .song-row { margin-bottom: 0; position: relative; z-index: 1; touch-action: pan-y; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.swipe-fg.snap { transition: transform .2s ease; }
+.swipe-bg { position: absolute; inset: 0; display: flex; align-items: center; padding: 0 22px; gap: 8px; color: #fff; font-weight: 700; font-size: .85rem; text-transform: uppercase; letter-spacing: .6px; opacity: 0; }
+.swipe-bg svg { width: 22px; height: 22px; fill: currentColor; }
+.bg-played { background: var(--spotify-green); justify-content: flex-start; }
+.bg-drop { background: var(--red-action); justify-content: flex-end; }
+.swipe-wrap[data-dir="right"] .bg-played { opacity: 1; }
+.swipe-wrap[data-dir="left"] .bg-drop { opacity: 1; }
+.swipe-wrap.armed .swipe-bg { filter: brightness(1.2); }
+.song-row .actions { gap: 4px; }
+.length-text.plain { color: #777; }
+
+/* Bottom playback box */
+#player { display: none; }
+body.has-player #player { display: block; }
+.pc:disabled { opacity: .4; cursor: default; }
+.pc { position: relative; }
+.pc[data-repeat-state="track"]::after { content: "1"; position: absolute; right: 7px; bottom: 6px; font-size: .6rem; font-weight: 800; line-height: 1; }
+.player-top .tx p { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Venue code page */
+.venue-box .vc-digits { font-size: 3rem; }
+.venue-box { padding: 22px 16px; }
+
+/* Rotate message: any landscape orientation */
+.rotate-lock { display: none; }
+@media (orientation: landscape) { .rotate-lock { display: flex; } }
+#blk-results .settings-card { margin-bottom: 14px; }
+
+    </style>
+</head>
+<body>
+
+    <div id="admin-lock-screen">
+        <div class="lock-container">
+            <h2>Enter Admin Password</h2>
+            <input type="password" id="password-input" class="lock-input" placeholder="••••••••" onkeydown="if(event.key === 'Enter') verifyPassword()">
+            <button class="lock-btn" onclick="verifyPassword()">Unlock Dashboard</button>
+            <div id="lock-error-msg" class="lock-error">Incorrect password. Access denied.</div>
+        </div>
+    </div>
+
+    <div class="rotate-lock">
+        <svg viewBox="0 0 24 24"><path d="M16.48 2.52c3.27 1.55 5.61 4.72 5.97 8.48h1.5C23.44 4.84 18.29 0 12 0l-.66.03 3.81 3.81 1.33-1.32zm-6.25-.77c-.59-.59-1.54-.59-2.12 0L1.75 8.11c-.59.59-.59 1.54 0 2.12l12.02 12.02c.59.59 1.54.59 2.12 0l6.36-6.36c.59-.59.59-1.54 0-2.12L10.23 1.75zm4.6 19.44L2.81 9.17l6.36-6.36 12.02 12.02-6.36 6.36zm-7.31.29C4.25 19.94 1.91 16.76 1.55 13H.05C.56 19.16 5.71 24 12 24l.66-.03-3.81-3.81-1.33 1.32z"/></svg>
+        <h2>Rotate your screen</h2>
+        <p>Hold your phone upright to use the manager page.</p>
+    </div>
+
+    <!-- SIDEBAR -->
+    <div class="sidebar-backdrop" id="sidebar-backdrop" onclick="closeSidebar()"></div>
+    <div class="sidebar-panel" id="sidebar-panel">
+        <div class="sidebar-header">
+            <h3>Menu</h3>
+            <button class="sidebar-close-btn" onclick="closeSidebar()" aria-label="Close menu">&#10005;</button>
+        </div>
+        <button type="button" id="nav-play" class="sidebar-nav-item active-tab" onclick="go('play')">Playback and live queue</button>
+        <button type="button" id="nav-set" class="sidebar-nav-item" onclick="go('set')">Settings</button>
+        <button type="button" id="nav-blk" class="sidebar-nav-item" onclick="go('blk')">Blocked</button>
+        <button type="button" id="nav-dsp" class="sidebar-nav-item" onclick="go('dsp')">Display Controls</button>
+        <button type="button" id="nav-ven" class="sidebar-nav-item" onclick="go('ven')">Venue Code</button>
+        <button type="button" id="nav-acc" class="sidebar-nav-item" onclick="go('acc')">Account + events</button>
+    </div>
+
+    <div class="header">
+        <button type="button" class="menu-btn" onclick="openSidebar()" aria-label="Menu">
+            <svg viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+        </button>
+        <div class="hd-title">
+            <h1 id="admin-title">Cuelistr</h1>
+            <div class="hd-venue" id="admin-venue" style="display:none;"></div>
+        </div>
+        <button id="toggle-hints" class="hints-icon-btn hints-on" onclick="toggleHints()" aria-label="Show or hide setting hints">
+            <svg viewBox="0 0 24 24"><path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7zm2.85 11.1l-.85.6V15h-4v-2.3l-.85-.6C7.8 11.16 7 9.63 7 9c0-2.76 2.24-5 5-5s5 2.24 5 5c0 .63-.8 2.16-2.15 3.1z"/></svg>
+        </button>
+    </div>
+
+    <!-- ============ PLAYBACK + LIVE QUEUE ============ -->
+    <div class="page active" id="page-play">
+        <div class="mix-strip idle" id="mix-strip"><i></i><span id="mix-strip-text">Connecting</span></div>
+        <div id="queue-list"></div>
+    </div>
+
+    <!-- ============ SETTINGS ============ -->
+    <div class="page" id="page-set">
+        <div class="panel">
+            <h2>Settings</h2>
+
+            <div class="settings-card">
+                <div class="settings-section-label">Site Mode</div>
+                <p class="settings-card-hint" style="margin-top:0;">
+                    <strong>Basic</strong> is just search and request: guests search Spotify and send a song, and you see the queue and play it.
+                    <strong>Full</strong> turns everything back on exactly as you left it - nothing is deleted when you switch.
+                </p>
+                <div class="theme-seg full" id="site-mode-seg" role="group" aria-label="Site mode">
+                    <button type="button" data-mode="basic" onclick="setSiteMode('basic')">Basic</button>
+                    <button type="button" data-mode="full" onclick="setSiteMode('full')">Full</button>
+                </div>
+            </div>
+
+            <div class="settings-card">
+                <div class="settings-section-label">Event Details</div>
+                <p class="settings-card-hint" style="margin-top:0;">Event Name is the headline guests see (e.g. "Sarah's 30th Birthday"). Venue Name is usually where it's happening, shown underneath in smaller text - leave it blank to hide it.</p>
+                <div class="input-group" style="margin-bottom:14px;"><label>Event Name</label><input type="text" id="input-event-name" placeholder="Cuelistr" maxlength="60" style="width:100%;"></div>
+                <div class="input-group" style="margin-bottom:16px;"><label>Venue Name</label><input type="text" id="input-venue-name" placeholder="e.g. The Blind Pig, Ann Arbor" maxlength="120" style="width:100%;"></div>
+                <button class="save-config-btn" onclick="saveEventDetails()">Save Event Details</button>
+            </div>
+
+            <div class="settings-card">
+                <div class="settings-section-label">Requests</div>
+                <p class="settings-card-hint" style="margin-top:0;">Turn off to stop new guest requests.</p>
+                <div class="row-set"><div><div class="rl">Requests open</div></div><button type="button" class="switch" id="sw-requests" role="switch" aria-checked="false" aria-label="Requests open" onclick="toggleSwitch('requests')"></button></div>
+            </div>
+
+            <div class="settings-card">
+                <div class="settings-section-label">Guest Credits</div>
+                <p class="settings-card-hint" style="margin-top:0;">How many requests each guest can bank, and how fast they refill.</p>
+                <div class="config-dashboard" style="margin-bottom:16px;">
+                    <div class="input-group" style="flex:1 1 120px;"><label>Max Credit Bank</label><input type="number" id="input-max-credits" min="1" style="width:100%;"></div>
+                    <div class="input-group" style="flex:1 1 120px;"><label>Regen Timer (Secs)</label><input type="number" id="input-countdown" min="5" style="width:100%;"></div>
+                </div>
+                <button class="save-config-btn" onclick="saveCredits()">Update Rules</button>
+            </div>
+
+            <div class="settings-card">
+                <div class="settings-section-label">Explicit Songs</div>
+                <p class="settings-card-hint" style="margin-top:0;">Off hides explicit tracks from guests.</p>
+                <div class="row-set"><div><div class="rl">Explicit allowed</div></div><button type="button" class="switch" id="sw-explicit" role="switch" aria-checked="false" aria-label="Explicit allowed" onclick="toggleSwitch('explicit')"></button></div>
+            </div>
+
+            <div class="settings-card">
+                <div class="settings-section-label">Location</div>
+                <p class="settings-card-hint" style="margin-top:0;">When on, guests must be within the check-in distance of the pinned venue location to request a song. Turn it off to let anyone request from anywhere.</p>
+                <div class="row-set"><div><div class="rl">Location lock</div></div><button type="button" class="switch" id="sw-loclock" role="switch" aria-checked="false" aria-label="Location lock" onclick="toggleSwitch('loclock')"></button></div>
+                <div class="full-only cfg-block">
+                    <div class="settings-section-label" style="margin:0;">Check-In Distance</div>
+                    <p class="settings-card-hint" style="margin:8px 0 0;">How close, in meters, a guest has to be to the pinned venue location for Location Lock to let them request.</p>
+                    <div class="field-row">
+                        <div class="input-group"><label>Distance (Meters)</label><input type="number" id="input-location-radius" min="10" max="5000" step="10" style="width:100%;"></div>
+                        <button class="save-config-btn" onclick="saveLocationRadius()">Update</button>
+                    </div>
+                </div>
+                <div class="full-only cfg-block">
+                    <div class="settings-section-label" style="margin:0;">Venue Code Display Time</div>
+                    <p class="settings-card-hint" style="margin:8px 0 0;">How long the rotating code stays up on your Visuals screen when a guest asks for it (5 to 300 seconds).</p>
+                    <div class="field-row">
+                        <div class="input-group"><label>Show For (Seconds)</label><input type="number" id="input-code-display-seconds" min="5" max="300" step="5" style="width:100%;"></div>
+                        <button class="save-config-btn" onclick="saveCodeDisplaySeconds()">Update</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-card full-only">
+                <div class="settings-section-label">Kiosk Settings</div>
+                <p class="settings-card-hint" style="margin-top:0;"><strong>Display-only mode</strong> turns the kiosk page into a full-screen, read-only "now playing" board with no search, credits or voting.</p>
+                <div class="row-set"><div><div class="rl">Kiosk requests open</div></div><button type="button" class="switch" id="sw-kreq" role="switch" aria-checked="false" aria-label="Kiosk requests open" onclick="toggleSwitch('kreq')"></button></div>
+                <div class="row-set"><div><div class="rl">Display-only mode</div></div><button type="button" class="switch" id="sw-kdisp" role="switch" aria-checked="false" aria-label="Display-only mode" onclick="toggleSwitch('kdisp')"></button></div>
+                <div class="config-dashboard" style="margin:6px 0 16px;">
+                    <div class="input-group" style="flex:1 1 120px;"><label>Kiosk Max Credit Bank</label><input type="number" id="input-kiosk-max-credits" min="1" style="width:100%;"></div>
+                    <div class="input-group" style="flex:1 1 120px;"><label>Kiosk Regen Timer (Secs)</label><input type="number" id="input-kiosk-countdown" min="5" style="width:100%;"></div>
+                </div>
+                <div class="control-bar" style="margin-bottom:12px;"><button class="save-config-btn" onclick="saveKioskConfig()">Update Kiosk Rules</button></div>
+                <div class="control-bar"><button type="button" class="utility-btn" style="color:var(--text);" onclick="openKioskPage()">Open Kiosk Page</button></div>
+            </div>
+
+            <div class="settings-card danger-zone">
+                <div class="settings-section-label">Danger Zone</div>
+                <div class="control-bar" style="flex-direction:column;gap:10px;">
+                    <button class="utility-btn" onclick="clearSystem('clearQueue', 'Are you sure you want to completely empty the queue?')">Clear Active Queue</button>
+                    <button class="utility-btn" onclick="clearSystem('clearHistory', 'Are you sure you want to clear your played history log?')">Clear Played History</button>
+                    <button class="utility-btn" onclick="resetAllSettings()">Reset All Settings</button>
+                </div>
+                <p style="color:#a7a7a7;font-size:.8rem;margin:8px 0 0;" class="settings-card-hint">Reset puts credits, queue cap, filters, location lock, kiosk, music video and appearance settings back to their defaults. It keeps the event name, venue, Spotify connection, queue, history, blocked guests and the schedule.</p>
+                <div class="control-bar" style="margin-top:18px;">
+                    <button class="utility-btn" style="background:var(--red-action);border-color:var(--red-action);color:#fff;" onclick="closeEvent()">Close This Event</button>
+                </div>
+                <p style="color:#a7a7a7;font-size:.8rem;margin:8px 0 0;">Permanently deletes this event and everything in it - queue, history, settings, Spotify connection. This can't be undone, and the URL becomes free for anyone to reuse.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============ BLOCKED ============ -->
+    <div class="page" id="page-blk">
+        <div class="panel">
+            <h2>Blocked</h2>
+            <div class="theme-seg full" id="blk-tabs" style="margin-bottom:14px;" role="group" aria-label="Blocked type">
+                <button type="button" data-tab="music" class="is-active" onclick="setBlkTab('music')">Music</button>
+                <button type="button" data-tab="guests" onclick="setBlkTab('guests')">Guests</button>
+            </div>
+            <div class="blk-bar">
+                <input type="text" id="blk-search" placeholder="Search genres, songs, artists" oninput="onBlkInput()" autocomplete="off" autocapitalize="off" autocorrect="off">
+                <button type="button" class="all" id="blk-all" style="display:none;" onclick="toggleBlkAll()">All</button>
+            </div>
+            <div id="blk-results"></div>
+            <div class="settings-card">
+                <div class="settings-section-label" id="blk-list-label">Currently Blocked</div>
+                <div id="blk-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============ DISPLAY CONTROLS ============ -->
+    <div class="page" id="page-dsp">
+        <div class="panel">
+            <h2>Display Controls</h2>
+            <div class="settings-card">
+                <div class="settings-section-label">Screen Controls</div>
+                <p class="settings-card-hint" style="margin-top:0;">Applies to the venue screens right away.</p>
+                <div class="row-set"><div><div class="rl">Mute visuals</div></div><button type="button" class="switch" id="sw-vmute" role="switch" aria-checked="false" aria-label="Mute visuals" onclick="toggleSwitch('vmute')"></button></div>
+                <div class="row-set"><div><div class="rl">Mute all</div></div><button type="button" class="switch" id="sw-vmuteall" role="switch" aria-checked="false" aria-label="Mute all" onclick="toggleSwitch('vmuteall')"></button></div>
+                <div class="row-set"><div><div class="rl">Show queue</div></div><button type="button" class="switch" id="sw-vqueue" role="switch" aria-checked="false" aria-label="Show queue" onclick="toggleSwitch('vqueue')"></button></div>
+                <div class="control-bar" style="margin-top:6px;"><button type="button" class="utility-btn" style="color:var(--text);" onclick="openVisualsPage()">Open Visuals Display</button></div>
+            </div>
+            <div class="settings-card">
+                <div class="settings-section-label">Music Videos</div>
+                <div class="row-set"><div><div class="rl">Music videos</div></div><button type="button" class="switch" id="sw-vmv" role="switch" aria-checked="false" aria-label="Music videos" onclick="toggleSwitch('vmv')"></button></div>
+                <div class="row-set"><div><div class="rl">Subtitles</div></div><button type="button" class="switch" id="sw-vsub" role="switch" aria-checked="false" aria-label="Subtitles" onclick="toggleSwitch('vsub')"></button></div>
+                <div class="row-set"><div><div class="rl">Family mode</div></div><button type="button" class="switch" id="sw-vfam" role="switch" aria-checked="false" aria-label="Family mode" onclick="toggleSwitch('vfam')"></button></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============ VENUE CODE ============ -->
+    <div class="page" id="page-ven">
+        <div class="panel">
+            <h2>Venue Code</h2>
+            <div class="sidebar-venue-code venue-box" id="venue-box" style="display:none;">
+                <div class="vc-label">Venue Code</div>
+                <div class="vc-digits" id="venue-digits">------</div>
+                <div class="vc-sub" id="venue-sub">Changes every couple of minutes</div>
+                <div class="vc-bar"><div id="venue-bar"></div></div>
+            </div>
+            <p class="empty-placeholder" id="venue-none" style="display:none;">No venue code is active right now.</p>
+            <p class="settings-card-hint" style="margin:14px 0 0;">Read this out to guests outside the venue perimeter so they can still request songs.</p>
+        </div>
+    </div>
+
+    <!-- ============ ACCOUNT + EVENTS ============ -->
+    <div class="page" id="page-acc">
+        <div class="panel">
+            <h2>Account + events</h2>
+            <div class="sidebar-account-status" id="acct-status" style="margin-bottom:14px;">...</div>
+            <button type="button" class="sidebar-account-login" id="acct-login-open" onclick="openAccountModal()" style="display:none;width:100%;">Log In</button>
+            <div id="acct-events-wrap" style="display:none;">
+                <div class="sidebar-my-events-label">My Events</div>
+                <div class="sidebar-my-events" id="acct-events" style="margin-top:6px;"></div>
+                <a class="sidebar-account-link" href="/new" style="display:inline-block;margin:12px 0 20px;">+ Create new event</a>
+            </div>
+            <button type="button" class="sidebar-account-logout" id="acct-logout-btn" onclick="accountLogout()" style="display:none;width:100%;">Log Out</button>
+        </div>
+    </div>
+
+    <!-- ============ PLAYBACK BOX (fixed to bottom of screen) ============ -->
+    <div class="player" id="player">
+        <div class="player-top">
+            <img id="pl-art" alt="" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==">
+            <div class="tx">
+                <p class="song-title" id="pl-title" style="margin:0;">Nothing playing</p>
+                <p class="song-artist" id="pl-artist"></p>
+            </div>
+        </div>
+        <div class="player-bar"><i id="pl-fill"></i></div>
+        <div class="player-times"><span id="pl-t1">0:00</span><span id="pl-t2">0:00</span></div>
+        <div class="player-ctrl">
+            <button type="button" class="pc full-only" id="pl-shuffle" aria-label="Shuffle" onclick="togglePlaybackShuffle()"></button>
+            <button type="button" class="pc" id="pl-restart" aria-label="Restart" onclick="restartTrack()"></button>
+            <button type="button" class="pc big" id="pl-playpause" aria-label="Play or pause" onclick="togglePlayPause()"></button>
+            <button type="button" class="pc" id="pl-skip" aria-label="Skip" onclick="skipTrack()"></button>
+            <button type="button" class="pc full-only" id="pl-loop" aria-label="Loop" data-repeat-state="off" onclick="cyclePlaybackRepeat()"></button>
+        </div>
+    </div>
+
+    <!-- Account login popup -->
+    <div id="account-modal-overlay" onclick="if(event.target === this) closeAccountModal()">
+        <div class="acct-modal" role="dialog" aria-modal="true" aria-labelledby="acct-title">
+            <button type="button" class="acct-close" onclick="closeAccountModal()" aria-label="Close">&#10005;</button>
+            <h2 id="acct-title">Your Account</h2>
+            <div class="acct-tabs">
+                <button type="button" class="acct-tab active" id="acct-tab-login" onclick="switchAcctTab('login')">Log In</button>
+                <button type="button" class="acct-tab" id="acct-tab-signup" onclick="switchAcctTab('signup')">Create Account</button>
+            </div>
+            <div class="acct-form active" id="acct-form-login">
+                <div class="acct-field"><label>Username</label><input type="text" id="acct-login-username" autocapitalize="off" autocorrect="off" autocomplete="username"></div>
+                <div class="acct-field"><label>Password</label><input type="password" id="acct-login-password" autocomplete="current-password" onkeydown="if(event.key === 'Enter') acctLogin()"></div>
+                <button type="button" class="acct-link" onclick="switchAcctTab('forgot')">Forgot password?</button>
+                <button type="button" class="acct-submit" id="acct-login-btn" onclick="acctLogin()">Log In</button>
+            </div>
+            <div class="acct-form" id="acct-form-signup">
+                <div class="acct-field"><label>Username</label><input type="text" id="acct-signup-username" autocapitalize="off" autocorrect="off" placeholder="3-30 characters, no spaces" autocomplete="username"></div>
+                <div class="acct-field"><label>Email</label><input type="email" id="acct-signup-email" autocapitalize="off" autocorrect="off" autocomplete="email"></div>
+                <div class="acct-field"><label>Password</label><input type="password" id="acct-signup-password" placeholder="At least 8 characters" autocomplete="new-password" onkeydown="if(event.key === 'Enter') acctSignup()"></div>
+                <button type="button" class="acct-submit" id="acct-signup-btn" onclick="acctSignup()">Create Account</button>
+            </div>
+            <div class="acct-form" id="acct-form-forgot">
+                <div class="acct-field"><label>Account email</label><input type="email" id="acct-forgot-email" autocapitalize="off" autocorrect="off" autocomplete="email" onkeydown="if(event.key === 'Enter') acctForgot()"></div>
+                <button type="button" class="acct-submit" id="acct-forgot-btn" onclick="acctForgot()">Send Reset Link</button>
+                <div style="text-align:center;margin-top:12px;"><button type="button" class="acct-link" onclick="switchAcctTab('login')">Back to log in</button></div>
+            </div>
+            <div class="acct-error" id="acct-error"></div>
+            <div class="acct-ok" id="acct-ok"></div>
+        </div>
+    </div>
+
+    <div id="toast-container"></div>
+
+    <script>
+        // Served at /e/{slug}/manager - the event slug is the second path segment.
+        const EVENT_SLUG = location.pathname.split('/')[2] || '';
+        function eventUrl(p) { return `/e/${EVENT_SLUG}${p}`; }
+        const $ = id => document.getElementById(id);
+
+        // ---- Toasts ----
+        let toastTimer = null;
+        function showToast(message, type = 'error') {
+            const container = $('toast-container');
+            if (!container) { console.log(message); return; }
+            container.innerHTML = '';
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.textContent = message;
+            container.appendChild(toast);
+            requestAnimationFrame(() => toast.classList.add('toast-visible'));
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => {
+                toast.classList.remove('toast-visible');
+                setTimeout(() => toast.remove(), 300);
+            }, 3500);
+        }
+
+        // ---- Helpers (same as admin.html) ----
+        function escapeHtml(str) {
+            if (str === null || str === undefined) return '';
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+        function safeImageUrl(url) {
+            if (typeof url !== 'string') return 'https://picsum.photos/48';
+            try {
+                const parsed = new URL(url, window.location.origin);
+                if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return 'https://picsum.photos/48';
+                return escapeHtml(parsed.href);
+            } catch (e) { return 'https://picsum.photos/48'; }
+        }
+        function artistWithYear(artist, year) { return year ? `${artist} (${year})` : artist; }
+        function buildRequesterBadge(requesters) {
+            if (!requesters || requesters.length === 0) return '';
+            const label = requesters.length > 1 ? `${requesters[0]} +${requesters.length - 1} more` : requesters[0];
+            return `<span class="requester-badge"><svg viewBox="0 0 24 24"><path d="M12 12c2.7 0 8 1.34 8 4v2H4v-2c0-2.66 5.3-4 8-4zm0-2a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"/></svg>${escapeHtml(label)}</span>`;
+        }
+        function formatMsToClock(ms) {
+            if (!ms && ms !== 0) return '0:00';
+            const t = Math.floor(ms / 1000);
+            return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
+        }
+
+        // ---- Icons ----
+        const ICON = {
+            play: 'M8 5v14l11-7z',
+            pause: 'M6 19h4V5H6v14zm8-14v14h4V5h-4z',
+            restart: 'M6 6h2v12H6zm3.5 6l8.5 6V6z',
+            next: 'M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z',
+            shuffle: 'M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z',
+            loop: 'M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z',
+            x: 'M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z',
+            ok: 'M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z'
+        };
+        const svg = k => `<svg viewBox="0 0 24 24"><path d="${ICON[k]}"/></svg>`;
+
+        // ---- Sidebar + views ----
+        const VIEWS = ['play', 'set', 'blk', 'dsp', 'ven', 'acc'];
+        let currentView = 'play';
+        let managerBasicMode = false;
+        function openSidebar() { $('sidebar-backdrop').classList.add('is-visible'); $('sidebar-panel').classList.add('is-visible'); }
+        function closeSidebar() { $('sidebar-backdrop').classList.remove('is-visible'); $('sidebar-panel').classList.remove('is-visible'); }
+        function go(view) {
+            if (managerBasicMode && (view === 'blk' || view === 'dsp')) view = 'play';
+            currentView = view;
+            VIEWS.forEach(v => {
+                $('page-' + v).classList.toggle('active', v === view);
+                $('nav-' + v).classList.toggle('active-tab', v === view);
+            });
+            document.body.classList.toggle('has-player', view === 'play');
+            closeSidebar();
+            window.scrollTo(0, 0);
+            if (view === 'blk') renderBlockedPage();
+            if (view === 'acc') refreshAccountFooter();
+            measurePlayer();
+        }
+
+        // ---- Hints (same behaviour + storage key as admin.html) ----
+        function applyHintsVisibility(hintsOn) {
+            document.body.classList.toggle('hints-hidden', !hintsOn);
+            $('toggle-hints').classList.toggle('hints-on', hintsOn);
+        }
+        function toggleHints() {
+            const hintsOn = document.body.classList.contains('hints-hidden');
+            applyHintsVisibility(hintsOn);
+            try { localStorage.setItem('adminHintsOn', hintsOn ? '1' : '0'); } catch (e) { /* ignore */ }
+        }
+
+        // ---- Admin session: same token + 30 minute idle lock as admin.html (shared via localStorage) ----
+        let adminPassword = '';
+        let isAuthorized = false;
+        const ADMIN_IDLE_LOCK_MS = 30 * 60 * 1000;
+        const ADMIN_SESSION_KEY = 'cuelistr_admin_session:' + EVENT_SLUG;
+        let adminToken = '';
+        let lastActivityWrite = 0;
+        const _origFetch = window.fetch.bind(window);
+        function readAdminSession() { try { return JSON.parse(localStorage.getItem(ADMIN_SESSION_KEY) || 'null'); } catch (e) { return null; } }
+        function writeAdminSession(token, lastActive) { try { localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify({ token, lastActive })); } catch (e) { /* storage blocked */ } }
+        function clearAdminSession() { try { localStorage.removeItem(ADMIN_SESSION_KEY); } catch (e) { /* ignore */ } }
+        function markAdminActive() {
+            if (!adminToken) return;
+            const now = Date.now();
+            if (now - lastActivityWrite < 10000) return;
+            lastActivityWrite = now;
+            writeAdminSession(adminToken, now);
+        }
+        ['keydown', 'click', 'touchstart', 'mousemove', 'scroll'].forEach(ev => window.addEventListener(ev, markAdminActive, { passive: true }));
+        function storedSessionFresh(s) { return !!(s && s.token && Date.now() - (s.lastActive || 0) < ADMIN_IDLE_LOCK_MS); }
+        async function startAdminSession(password) {
+            try {
+                const res = await fetch(eventUrl('/api/admin/session'), { method: 'POST', headers: { 'x-admin-password': password } });
+                if (!res.ok) return false;
+                const d = await res.json();
+                adminToken = d.token;
+                lastActivityWrite = Date.now();
+                writeAdminSession(adminToken, lastActivityWrite);
+                return true;
+            } catch (e) { return false; }
+        }
+        function adminAuthHeaders() { return adminToken ? { 'x-admin-token': adminToken } : { 'x-admin-password': adminPassword }; }
+        function adminHeaders(extra) { return Object.assign(adminAuthHeaders(), extra || {}); }
+        function lockAdmin(message) {
+            const tok = adminToken;
+            adminToken = '';
+            adminPassword = '';
+            clearAdminSession();
+            if (tok) { try { _origFetch(eventUrl('/api/admin/session-end'), { method: 'POST', headers: { 'x-admin-token': tok } }).catch(() => {}); } catch (e) { /* ignore */ } }
+            isAuthorized = false;
+            const lock = $('admin-lock-screen');
+            lock.style.display = '';
+            lock.style.visibility = 'visible';
+            const em = $('lock-error-msg');
+            em.textContent = message || 'Locked.';
+            em.style.display = 'block';
+            const input = $('password-input');
+            input.value = '';
+            input.focus();
+        }
+        window.fetch = async function (input, init) {
+            const res = await _origFetch(input, init);
+            if (res.status === 401 && adminToken && init && init.headers && init.headers['x-admin-token']) {
+                lockAdmin('Your session expired. Enter the admin password to continue.');
+            }
+            return res;
+        };
+        setInterval(() => {
+            if (!adminToken) return;
+            if (!storedSessionFresh(readAdminSession())) lockAdmin('Locked after 30 minutes of inactivity. Enter the admin password to continue.');
+        }, 30000);
+        async function restoreAdminSession() {
+            const s = readAdminSession();
+            if (!storedSessionFresh(s)) { clearAdminSession(); return false; }
+            const lock = $('admin-lock-screen');
+            lock.style.visibility = 'hidden';
+            try {
+                const res = await fetch(eventUrl('/api/admin/data'), { headers: { 'x-admin-token': s.token } });
+                if (res.ok) {
+                    adminToken = s.token;
+                    adminPassword = '';
+                    isAuthorized = true;
+                    lastActivityWrite = 0;
+                    markAdminActive();
+                    lock.style.display = 'none';
+                    lock.style.visibility = 'visible';
+                    updateDashboard();
+                    return true;
+                }
+                clearAdminSession();
+            } catch (e) { /* offline - fall back to the lock screen */ }
+            lock.style.visibility = 'visible';
+            return false;
+        }
+        async function verifyPassword() {
+            const inputField = $('password-input');
+            const errorMsg = $('lock-error-msg');
+            const attempt = inputField.value;
+            try {
+                const res = await fetch(eventUrl('/api/admin/data'), { headers: { 'x-admin-password': attempt } });
+                if (res.ok) {
+                    adminPassword = attempt;
+                    if (await startAdminSession(attempt)) adminPassword = '';
+                    isAuthorized = true;
+                    $('admin-lock-screen').style.display = 'none';
+                    updateDashboard();
+                    return;
+                }
+            } catch (e) { /* fall through */ }
+            errorMsg.textContent = 'Incorrect password. Access denied.';
+            errorMsg.style.display = 'block';
+            inputField.value = '';
+            inputField.focus();
+        }
+
+        async function adminPost(path, body) {
+            return fetch(eventUrl(path), {
+                method: 'POST',
+                headers: adminHeaders({ 'Content-Type': 'application/json' }),
+                body: JSON.stringify(body || {})
+            });
+        }
+
+        // ---- Switches (green/grey toggles). Same endpoints + state as admin.html's toggle functions ----
+        const S = {};            // current server state by switch name
+        const swLock = {};       // optimistic hold so a poll in flight doesn't flip it back
+        const SWITCHES = {
+            requests: { el: 'sw-requests', path: '/api/admin/toggle',                          body: v => ({ allow: v }) },
+            explicit: { el: 'sw-explicit', path: '/api/admin/toggle-explicit',                 body: v => ({ blockExplicit: !v }) }, // on = explicit allowed
+            loclock:  { el: 'sw-loclock',  path: '/api/admin/toggle-location-lock',            body: v => ({ enabled: v }) },
+            kreq:     { el: 'sw-kreq',     path: '/api/admin/kiosk/toggle',                    body: v => ({ allow: v }) },
+            kdisp:    { el: 'sw-kdisp',    path: '/api/admin/kiosk/toggle-display-only',       body: v => ({ enabled: v }) },
+            vmute:    { el: 'sw-vmute',    path: '/api/admin/visuals/toggle-mute',             body: v => ({ enabled: v }) },
+            vmuteall: { el: 'sw-vmuteall', path: '/api/admin/visuals/toggle-mute-all',         body: v => ({ enabled: v }) },
+            vqueue:   { el: 'sw-vqueue',   path: '/api/admin/visuals/toggle-show-queue',       body: v => ({ enabled: v }) },
+            vmv:      { el: 'sw-vmv',      path: '/api/admin/visuals/toggle-music-videos',     body: v => ({ enabled: v }) },
+            vsub:     { el: 'sw-vsub',     path: '/api/admin/visuals/toggle-music-video-subtitles', body: v => ({ enabled: v }) },
+            vfam:     { el: 'sw-vfam',     path: '/api/admin/visuals/toggle-family-mode',      body: v => ({ enabled: v }) }
+        };
+        function paintSwitch(name, on) {
+            const el = $(SWITCHES[name].el);
+            el.classList.toggle('on', !!on);
+            el.setAttribute('aria-checked', on ? 'true' : 'false');
+        }
+        function setSwitchFromServer(name, value) {
+            if (value === undefined) return;
+            S[name] = !!value;
+            const lock = swLock[name];
+            paintSwitch(name, lock && Date.now() < lock.until ? lock.value : S[name]);
+        }
+        async function toggleSwitch(name) {
+            if (!isAuthorized) return;
+            const sw = SWITCHES[name];
+            const next = !S[name];
+            S[name] = next;
+            swLock[name] = { value: next, until: Date.now() + 3000 };
+            paintSwitch(name, next);
+            try {
+                const res = await adminPost(sw.path, sw.body(next));
+                if (!res.ok) {
+                    const d = await res.json().catch(() => ({}));
+                    delete swLock[name];
+                    showToast(d.error || 'Could not change that setting.', 'error');
+                }
+            } catch (e) {
+                delete swLock[name];
+                showToast('Could not reach the server.', 'error');
+            }
+            updateDashboard();
+        }
+
+        // ---- Site mode (Basic / Full) ----
+        function markSeg(id, mode) {
+            document.querySelectorAll('#' + id + ' button').forEach(b => b.classList.toggle('is-active', b.dataset.mode === mode));
+        }
+        function applyAdminMode(mode) {
+            const basic = mode === 'basic';
+            markSeg('site-mode-seg', basic ? 'basic' : 'full');
+            if (basic === managerBasicMode && document.body.classList.contains('basic-mode') === basic) return;
+            managerBasicMode = basic;
+            document.body.classList.toggle('basic-mode', basic);
+            if (basic && (currentView === 'blk' || currentView === 'dsp')) go('play');
+        }
+        async function setSiteMode(mode) {
+            if (mode === 'basic' && !managerBasicMode &&
+                !confirm('Switch to Basic mode?\n\nGuests will only be able to search and request. Kiosk, visuals, the scheduler, blocklists, stats and music videos are switched off until you go back to Full. Nothing is deleted.')) return;
+            try {
+                const res = await adminPost('/api/admin/site-mode', { mode });
+                if (!res.ok) { showToast('Could not change the mode.', 'error'); return; }
+                applyAdminMode(mode);
+                showToast(mode === 'basic' ? 'Basic mode on.' : 'Full mode on.', 'success');
+            } catch (e) { showToast('Could not reach the server.', 'error'); }
+        }
+
+        // ---- Settings saves ----
+        async function saveEventDetails() {
+            if (!isAuthorized) return;
+            const res = await adminPost('/api/admin/config', { eventName: $('input-event-name').value, venueName: $('input-venue-name').value });
+            if (res.ok) showToast('Event details saved.', 'success');
+            updateDashboard();
+        }
+        async function saveCredits() {
+            if (!isAuthorized) return;
+            const res = await adminPost('/api/admin/config', { maxCredits: $('input-max-credits').value, countdownLength: $('input-countdown').value });
+            if (res.ok) showToast('System parameters updated successfully.', 'success');
+            updateDashboard();
+        }
+        async function saveLocationRadius() {
+            if (!isAuthorized) return;
+            const meters = parseInt($('input-location-radius').value, 10);
+            if (!Number.isInteger(meters) || meters < 10 || meters > 5000) return showToast('Distance must be between 10 and 5000 meters.', 'error');
+            const res = await adminPost('/api/admin/location-radius', { meters });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok) showToast('Check-in distance updated.', 'success');
+            else showToast(data.error || 'Could not update distance.', 'error');
+        }
+        async function saveCodeDisplaySeconds() {
+            if (!isAuthorized) return;
+            const seconds = parseInt($('input-code-display-seconds').value, 10);
+            if (!Number.isInteger(seconds) || seconds < 5 || seconds > 300) return showToast('Time must be between 5 and 300 seconds.', 'error');
+            const res = await adminPost('/api/admin/code-display-seconds', { seconds });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok) showToast('Venue code display time updated.', 'success');
+            else showToast(data.error || 'Could not update time.', 'error');
+        }
+        async function saveKioskConfig() {
+            if (!isAuthorized) return;
+            const res = await adminPost('/api/admin/kiosk/config', { maxCredits: $('input-kiosk-max-credits').value, countdownLength: $('input-kiosk-countdown').value });
+            if (res.ok) showToast('Kiosk rules updated.', 'success');
+            updateDashboard();
+        }
+        let venueScreenKey = '';
+        function openKioskPage() {
+            window.open(eventUrl('/kiosk') + (venueScreenKey ? '?screen=' + encodeURIComponent(venueScreenKey) : ''), '_blank', 'noopener');
+        }
+        function openVisualsPage() {
+            window.open(eventUrl('/visuals') + (venueScreenKey ? '?screen=' + encodeURIComponent(venueScreenKey) : ''), '_blank', 'noopener');
+        }
+
+        // ---- Danger zone (same as admin.html) ----
+        async function clearSystem(actionType, message) {
+            if (!isAuthorized) return;
+            if (confirm(message)) {
+                await adminPost('/api/admin/action', { id: null, action: actionType });
+                updateDashboard();
+            }
+        }
+        async function resetAllSettings() {
+            if (!isAuthorized) return;
+            if (!confirm('Reset ALL settings for this event back to their defaults?\n\nThis resets credits, the queue cap, song/decade filters, location lock, request toggles, kiosk settings, music video settings, appearance and the fallback playlist.\n\nIt keeps the event name, venue, Spotify connection, queue, history, blocked guests and the schedule. This can\'t be undone.')) return;
+            try {
+                const res = await adminPost('/api/admin/action', { id: null, action: 'resetSettings' });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                showToast('All settings were reset to their defaults.', 'success');
+            } catch (e) { showToast('Could not reset the settings. Try again.', 'error'); }
+            updateDashboard();
+        }
+        async function closeEvent() {
+            if (!isAuthorized) return;
+            const typed = prompt(`This permanently deletes "${EVENT_SLUG}" - queue, history, settings, everything. This can't be undone.\n\nEnter the admin password to confirm:`);
+            if (typed === null) return;
+            if (typed === '') { showToast('Password required - event was not closed.', 'error'); return; }
+            try {
+                const res = await fetch(eventUrl('/api/admin'), { method: 'DELETE', headers: { 'x-admin-password': typed } });
+                if (res.status === 401) { showToast('Incorrect password - event was not closed.', 'error'); return; }
+                if (!res.ok) { showToast('Could not close the event. Try again.', 'error'); return; }
+                window.location.href = '/new';
+            } catch (e) { showToast('Could not reach the server. Try again.', 'error'); }
+        }
+
+        // ---- Live queue ----
+        let lastGuestQueue = [];
+        let spotifyUpcomingQueue = [];
+        let isDraggingQueue = false;
+        let isSwiping = false;
+        let lastQueueHtml = '';
+
+        function renderQueueList() {
+            if (isDraggingQueue || isSwiping) return;
+            const el = $('queue-list');
+            const guestIds = new Set(lastGuestQueue.map(s => s.id));
+            const spotifyOnly = (spotifyUpcomingQueue || []).filter(t => !guestIds.has(t.id));
+            let html;
+            if (lastGuestQueue.length === 0 && spotifyOnly.length === 0) {
+                html = '<p class="empty-placeholder" style="padding:30px 0;text-align:center;">Queue empty.</p>';
+            } else {
+                const guestRows = lastGuestQueue.map(song => `
+                    <div class="swipe-wrap" data-track-id="${escapeHtml(song.id)}">
+                        <div class="swipe-bg bg-played">${svg('ok')}<span>Played</span></div>
+                        <div class="swipe-bg bg-drop"><span>Drop</span>${svg('x')}</div>
+                        <div class="song-row swipe-fg">
+                            <div class="song-details">
+                                <img src="${safeImageUrl(song.artwork)}" alt="" draggable="false">
+                                <div class="text-container">
+                                    <div class="title-wrapper">
+                                        <p class="song-title">${escapeHtml(song.title)}</p>
+                                        ${song.explicit ? '<span class="explicit-badge">E</span>' : ''}
+                                    </div>
+                                    <p class="song-artist">${escapeHtml(artistWithYear(song.artist, song.year))}</p>
+                                    <div class="length-requester-row">
+                                        <span class="length-text">${escapeHtml(song.duration)}</span>
+                                        ${buildRequesterBadge(song.requesters)}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="actions">
+                                <button class="drag-handle" type="button" aria-label="Drag to reorder" onpointerdown="startQueueDrag(event, this)">
+                                    <svg viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="6" width="16" height="2.2" rx="1"></rect><rect x="4" y="11" width="16" height="2.2" rx="1"></rect><rect x="4" y="16" width="16" height="2.2" rx="1"></rect></svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>`).join('');
+                const spotifyRows = spotifyOnly.map(t => `
+                    <div class="song-row">
+                        <div class="song-details">
+                            <img src="${safeImageUrl(t.artwork)}" alt="" draggable="false">
+                            <div class="text-container">
+                                <div class="title-wrapper"><p class="song-title">${escapeHtml(t.title)}</p></div>
+                                <p class="song-artist">${escapeHtml(artistWithYear(t.artist, t.year))}</p>
+                                <div class="length-requester-row"><span class="length-text plain">Playlist</span></div>
+                            </div>
+                        </div>
+                        <div class="actions">
+                            <button type="button" class="btn btn-played ico play-now" data-track-id="${escapeHtml(t.id)}" aria-label="Play now">${svg('play')}</button>
+                        </div>
+                    </div>`).join('');
+                html = `<div id="guest-queue-rows">${guestRows}</div>${spotifyRows}`;
+            }
+            if (html === lastQueueHtml) return;
+            lastQueueHtml = html;
+            el.innerHTML = html;
+        }
+
+        async function triggerAction(id, action) {
+            if (!isAuthorized) return;
+            try { await adminPost('/api/admin/action', { id, action }); } catch (e) { showToast('Could not reach the server.', 'error'); }
+            updateDashboard();
+        }
+
+        // Play Now on a Spotify playlist row
+        $('queue-list').addEventListener('click', async e => {
+            const btn = e.target.closest('.play-now');
+            if (!btn || !isAuthorized) return;
+            btn.disabled = true;
+            await playbackCommand('play-track', { trackId: btn.dataset.trackId });
+            btn.disabled = false;
+        });
+
+        // Swipe a requested song: right = Played, left = Drop
+        let swipe = null;
+        const queueEl = $('queue-list');
+        queueEl.addEventListener('pointerdown', e => {
+            if (!isAuthorized || isDraggingQueue || swipe) return;
+            if (e.pointerType === 'mouse' && e.button !== 0) return;
+            if (e.target.closest('.drag-handle')) return;
+            const fg = e.target.closest('.swipe-fg');
+            if (!fg) return;
+            const wrap = fg.parentNode;
+            if (!wrap.dataset.trackId) return;
+            swipe = { fg, wrap, id: wrap.dataset.trackId, x0: e.clientX, y0: e.clientY, dx: 0, locked: false, pid: e.pointerId, w: wrap.offsetWidth || 320 };
+        });
+        queueEl.addEventListener('pointermove', e => {
+            if (!swipe || e.pointerId !== swipe.pid) return;
+            const dx = e.clientX - swipe.x0, dy = e.clientY - swipe.y0;
+            if (!swipe.locked) {
+                if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) { swipe = null; return; }
+                if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) {
+                    swipe.locked = true;
+                    isSwiping = true;
+                    try { swipe.fg.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+                } else return;
+            }
+            swipe.dx = dx;
+            swipe.fg.classList.remove('snap');
+            swipe.fg.style.transform = `translateX(${dx}px)`;
+            swipe.wrap.dataset.dir = dx > 0 ? 'right' : 'left';
+            swipe.wrap.classList.toggle('armed', Math.abs(dx) >= Math.max(80, swipe.w * 0.3));
+        });
+        function endSwipe(e) {
+            if (!swipe || e.pointerId !== swipe.pid) return;
+            const s = swipe;
+            swipe = null;
+            if (!s.locked) return;
+            const cancelled = e.type === 'pointercancel';
+            const thr = Math.max(80, s.w * 0.3);
+            if (!cancelled && Math.abs(s.dx) >= thr) {
+                const action = s.dx > 0 ? 'played' : 'remove';
+                s.fg.classList.add('snap');
+                s.fg.style.transform = `translateX(${s.dx > 0 ? s.w : -s.w}px)`;
+                setTimeout(() => {
+                    s.wrap.style.maxHeight = s.wrap.offsetHeight + 'px';
+                    requestAnimationFrame(() => s.wrap.classList.add('removing'));
+                    setTimeout(() => {
+                        s.wrap.remove();
+                        lastGuestQueue = lastGuestQueue.filter(x => x.id !== s.id);
+                        lastQueueHtml = '';
+                        isSwiping = false;
+                        triggerAction(s.id, action);
+                    }, 220);
+                }, 170);
+            } else {
+                s.fg.classList.add('snap');
+                s.fg.style.transform = '';
+                s.wrap.classList.remove('armed');
+                setTimeout(() => { delete s.wrap.dataset.dir; isSwiping = false; renderQueueList(); }, 210);
+            }
+        }
+        queueEl.addEventListener('pointerup', endSwipe);
+        queueEl.addEventListener('pointercancel', endSwipe);
+
+        // Pointer-based drag reorder (same logic + endpoint as admin.html)
+        function startQueueDrag(evt, handleEl) {
+            if (!isAuthorized) return;
+            evt.preventDefault();
+            const rowEl = handleEl.closest('.swipe-wrap');
+            const container = $('guest-queue-rows');
+            if (!rowEl || !container) return;
+            isDraggingQueue = true;
+            rowEl.classList.add('dragging');
+            handleEl.setPointerCapture(evt.pointerId);
+
+            function onMove(e) {
+                const rows = [...container.querySelectorAll('.swipe-wrap')].filter(r => r !== rowEl);
+                let placed = false;
+                for (const r of rows) {
+                    const rect = r.getBoundingClientRect();
+                    if (e.clientY < rect.top + rect.height / 2) { container.insertBefore(rowEl, r); placed = true; break; }
+                }
+                if (!placed) container.appendChild(rowEl);
+            }
+            async function onUp() {
+                handleEl.releasePointerCapture(evt.pointerId);
+                handleEl.removeEventListener('pointermove', onMove);
+                handleEl.removeEventListener('pointerup', onUp);
+                handleEl.removeEventListener('pointercancel', onUp);
+                rowEl.classList.remove('dragging');
+                isDraggingQueue = false;
+                const orderedIds = [...container.querySelectorAll('.swipe-wrap')].map(r => r.dataset.trackId);
+                const byId = new Map(lastGuestQueue.map(s => [s.id, s]));
+                lastGuestQueue = orderedIds.map(id => byId.get(id)).filter(Boolean);
+                lastQueueHtml = '';
+                if (!isAuthorized) return;
+                try { await adminPost('/api/admin/reorder', { orderedIds }); } catch (err) { console.log('Reorder failed.'); }
+            }
+            handleEl.addEventListener('pointermove', onMove);
+            handleEl.addEventListener('pointerup', onUp);
+            handleEl.addEventListener('pointercancel', onUp);
+        }
+
+        // ---- Blocked page ----
+        const GENRE_OPTIONS = [
+            { key: 'pop', label: 'Pop' }, { key: 'hiphop', label: 'Hip-Hop/Rap' }, { key: 'rock', label: 'Rock/Metal' },
+            { key: 'rnb', label: 'R&B/Soul' }, { key: 'country', label: 'Country' }, { key: 'electronic', label: 'Electronic/Dance' },
+            { key: 'latin', label: 'Latin' }, { key: 'indie', label: 'Indie/Alt' }, { key: 'jazz', label: 'Jazz/Blues' },
+            { key: 'classical', label: 'Classical' }, { key: 'reggae', label: 'Reggae' }, { key: 'kpop', label: 'K-Pop' },
+            { key: 'afrobeats', label: 'Afrobeats' }
+        ];
+        let lastBlockedVoters = [], lastBlockedArtists = [], lastBlockedTracks = [], lastGuests = [], lastBlockedGenres = [];
+        let blkTab = 'music', blkAll = false, blkTimer = null, blkMusic = null;
+
+        function setBlkTab(tab) {
+            blkTab = tab;
+            blkAll = false;
+            blkMusic = null;
+            $('blk-search').value = '';
+            renderBlockedPage();
+        }
+        function toggleBlkAll() { blkAll = !blkAll; renderBlockedPage(); }
+        function onBlkInput() {
+            if (blkTab === 'guests') { renderBlockedPage(); return; }
+            clearTimeout(blkTimer);
+            const q = $('blk-search').value.trim();
+            if (!q) { blkMusic = null; renderBlockedPage(); return; }
+            blkTimer = setTimeout(() => runMusicSearch(q), 350);
+        }
+        async function runMusicSearch(q) {
+            if (!isAuthorized) return;
+            try {
+                const res = await fetch(eventUrl(`/api/admin/blocklist-search?q=${encodeURIComponent(q)}`), { headers: adminHeaders() });
+                const data = await res.json();
+                if ($('blk-search').value.trim() !== q) return; // typed something newer meanwhile
+                blkMusic = res.ok ? { q, tracks: data.tracks || [], artists: data.artists || [], genres: data.genres || [] } : { q, error: true };
+            } catch (e) {
+                if ($('blk-search').value.trim() !== q) return;
+                blkMusic = { q, error: true };
+            }
+            renderBlockedPage();
+        }
+
+        const attr = (obj) => Object.entries(obj).map(([k, v]) => `data-${k}="${escapeHtml(v)}"`).join(' ');
+        function resultRow(img, title, sub, actionHtml) {
+            return `<div class="search-result-row">${img ? `<img src="${safeImageUrl(img)}" alt="">` : ''}<div class="search-result-text"><div class="search-result-title">${escapeHtml(title)}</div>${sub ? `<div class="search-result-artist">${escapeHtml(sub)}</div>` : ''}</div>${actionHtml}</div>`;
+        }
+        const blockBtn = (act, data) => `<button type="button" class="btn btn-block" data-act="${act}" ${attr(data)}>Block</button>`;
+        const unblockTextBtn = (act, data) => `<button type="button" class="btn btn-unblock" data-act="${act}" ${attr(data)}>Unblock</button>`;
+        const xBtn = (act, data) => `<button type="button" class="x-red" aria-label="Unblock" data-act="${act}" ${attr(data)}>${svg('x')}</button>`;
+
+        function renderBlockedPage() {
+            if (!$('page-blk')) return;
+            document.querySelectorAll('#blk-tabs button').forEach(b => b.classList.toggle('is-active', b.dataset.tab === blkTab));
+            $('blk-search').placeholder = blkTab === 'music' ? 'Search genres, songs, artists' : 'Search checked-in guests';
+            $('blk-all').style.display = blkTab === 'guests' ? '' : 'none';
+            $('blk-all').classList.toggle('on', blkAll);
+            const q = $('blk-search').value.trim();
+            let results = '', list = '', label = 'Currently Blocked';
+
+            if (blkTab === 'music') {
+                if (q && blkMusic && blkMusic.q === q) {
+                    if (blkMusic.error) results = '<p class="empty-placeholder">Search unavailable right now.</p>';
+                    else {
+                        const rows = [
+                            ...blkMusic.genres.map(g => resultRow(null, g.label, 'Genre', g.blocked ? unblockTextBtn('unblock-genre', { id: g.key }) : blockBtn('block-genre', { id: g.key, name: g.label }))),
+                            ...blkMusic.artists.map(a => resultRow(a.image, a.name, 'Artist', a.blocked ? unblockTextBtn('unblock-artist', { id: a.id }) : blockBtn('block-artist', { id: a.id, name: a.name }))),
+                            ...blkMusic.tracks.map(t => resultRow(t.artwork, t.name, artistWithYear(t.artist, t.year), t.blocked ? unblockTextBtn('unblock-track', { id: t.id }) : blockBtn('block-track', { id: t.id, name: t.name, artist: t.artist })))
+                        ];
+                        results = `<div class="settings-card">${rows.join('') || '<p class="empty-placeholder">No results.</p>'}</div>`;
+                    }
+                } else if (q) {
+                    results = '<div class="settings-card"><p class="empty-placeholder">Searching...</p></div>';
+                }
+                const rows = [
+                    ...lastBlockedGenres.map(k => resultRow(null, (GENRE_OPTIONS.find(g => g.key === k) || {}).label || k, 'Genre', xBtn('unblock-genre', { id: k }))),
+                    ...lastBlockedArtists.map(a => resultRow(null, a.name, 'Artist', xBtn('unblock-artist', { id: a.artistId }))),
+                    ...lastBlockedTracks.map(t => resultRow(null, t.name, t.artist || 'Song', xBtn('unblock-track', { id: t.trackId })))
+                ];
+                list = rows.join('') || '<p class="empty-placeholder">Nothing is blocked right now.</p>';
+            } else {
+                if (q) {
+                    const ql = q.toLowerCase();
+                    const matches = lastGuests.filter(g => !g.blocked && (g.label || '').toLowerCase().includes(ql));
+                    results = `<div class="settings-card">${matches.map(g => resultRow(null, g.label, '', blockBtn('block-guest', { id: g.voterId, name: g.label }))).join('') || '<p class="empty-placeholder">No results.</p>'}</div>`;
+                }
+                if (blkAll) {
+                    label = 'All Guests';
+                    list = lastGuests.map(g => resultRow(null, g.label, '', g.blocked ? xBtn('unblock-guest', { id: g.voterId }) : blockBtn('block-guest', { id: g.voterId, name: g.label }))).join('') || '<p class="empty-placeholder">No guests yet.</p>';
+                } else {
+                    label = 'Blocked Guests';
+                    list = lastBlockedVoters.map(b => resultRow(null, b.label, '', xBtn('unblock-guest', { id: b.voterId }))).join('') || '<p class="empty-placeholder">No one is blocked.</p>';
+                }
+            }
+            $('blk-results').innerHTML = results;
+            $('blk-list-label').textContent = label;
+            $('blk-list').innerHTML = list;
+        }
+
+        $('page-blk').addEventListener('click', async e => {
+            const b = e.target.closest('[data-act]');
+            if (!b || !isAuthorized) return;
+            const act = b.dataset.act, id = b.dataset.id, name = b.dataset.name || '';
+            try {
+                if (act === 'block-genre') { await adminPost('/api/admin/block-genre', { genreKey: id }); showToast(`Blocked "${name}".`, 'success'); }
+                else if (act === 'unblock-genre') await adminPost('/api/admin/unblock-genre', { genreKey: id });
+                else if (act === 'block-artist') { await adminPost('/api/admin/block-artist', { artistId: id, name }); showToast(`Blocked "${name}".`, 'success'); }
+                else if (act === 'unblock-artist') await adminPost('/api/admin/unblock-artist', { artistId: id });
+                else if (act === 'block-track') { await adminPost('/api/admin/block-track', { trackId: id, name, artist: b.dataset.artist || '' }); showToast(`Blocked "${name}".`, 'success'); }
+                else if (act === 'unblock-track') await adminPost('/api/admin/unblock-track', { trackId: id });
+                else if (act === 'block-guest') {
+                    if (!confirm(`Block "${name}" from requesting or voting for the rest of this event?`)) return;
+                    await adminPost('/api/admin/block-voter', { voterId: id, label: name });
+                    showToast(`Blocked "${name}".`, 'success');
+                }
+                else if (act === 'unblock-guest') await adminPost('/api/admin/unblock-voter', { voterId: id });
+            } catch (err) { showToast('Could not update the blocklist.', 'error'); return; }
+            await updateDashboard();
+            const q = $('blk-search').value.trim();
+            if (blkTab === 'music' && q) runMusicSearch(q); // refresh Block/Unblock state on the results
+        });
+
+        // ---- Venue code (same data as the admin.html sidebar box) ----
+        let venueCode = null;
+        let lastGuestAskedForDisplay = false;
+        function renderVenueCode(vc) {
+            venueCode = vc && vc.code ? vc : null;
+            if (venueCode) {
+                if (venueCode.guestAskedForDisplay && !lastGuestAskedForDisplay) {
+                    showToast('A guest asked for the venue code. It is showing on your Visuals screen.', 'success');
+                }
+                lastGuestAskedForDisplay = !!venueCode.guestAskedForDisplay;
+            }
+            paintVenueCode();
+        }
+        function paintVenueCode() {
+            const box = $('venue-box');
+            if (!venueCode) { box.style.display = 'none'; $('venue-none').style.display = 'block'; return; }
+            box.style.display = 'block';
+            $('venue-none').style.display = 'none';
+            $('venue-digits').textContent = venueCode.code;
+            const msLeft = Math.max(0, venueCode.expiresAt - Date.now());
+            $('venue-bar').style.width = Math.max(0, Math.min(100, (msLeft / venueCode.periodMs) * 100)) + '%';
+            $('venue-sub').textContent = `Changes in ${Math.ceil(msLeft / 1000)}s`;
+            box.classList.toggle('asked', !!venueCode.guestAskedForDisplay);
+        }
+        setInterval(() => { if (currentView === 'ven') paintVenueCode(); }, 1000);
+
+        // ---- Account + events (same endpoints as the admin.html sidebar footer) ----
+        async function refreshAccountFooter() {
+            const statusEl = $('acct-status'), logoutBtn = $('acct-logout-btn'), loginBtn = $('acct-login-open'), eventsWrap = $('acct-events-wrap');
+            try {
+                const res = await fetch('/api/account/me');
+                const data = await res.json();
+                if (data.loggedIn) {
+                    statusEl.innerHTML = `Logged in as <strong>${escapeHtml(data.username)}</strong>`;
+                    logoutBtn.style.display = 'block';
+                    loginBtn.style.display = 'none';
+                    eventsWrap.style.display = 'block';
+                    loadMyEvents();
+                } else {
+                    statusEl.textContent = 'Log in to see your events and create new ones.';
+                    logoutBtn.style.display = 'none';
+                    loginBtn.style.display = 'block';
+                    eventsWrap.style.display = 'none';
+                }
+            } catch (err) {
+                statusEl.textContent = '';
+                logoutBtn.style.display = 'none';
+                loginBtn.style.display = 'none';
+                eventsWrap.style.display = 'none';
+            }
+        }
+        async function loadMyEvents() {
+            const box = $('acct-events');
+            try {
+                const res = await fetch('/api/account/my-events');
+                if (!res.ok) { box.innerHTML = ''; return; }
+                const list = (await res.json()).events || [];
+                if (list.length === 0) { box.innerHTML = '<div class="ev-meta" style="color:var(--text-muted);font-size:0.8rem;">No events yet.</div>'; return; }
+                box.innerHTML = list.map(ev => `
+                    <a class="sidebar-event-link${ev.slug === EVENT_SLUG ? ' current' : ''}" href="/e/${encodeURIComponent(ev.slug)}/manager">
+                        <span class="ev-name">${escapeHtml(ev.eventName || ev.slug)}</span>
+                        <span class="ev-meta">${ev.venueName ? escapeHtml(ev.venueName) + ' &middot; ' : ''}${ev.slug === EVENT_SLUG ? 'Current event' : (ev.requestsAllowed ? 'Requests open' : 'Requests off')}</span>
+                    </a>`).join('');
+            } catch (err) { box.innerHTML = ''; }
+        }
+        async function accountLogout() {
+            try { await fetch('/api/account/logout', { method: 'POST' }); } catch (err) { /* proceed regardless */ }
+            refreshAccountFooter();
+        }
+        function openAccountModal() {
+            $('account-modal-overlay').classList.add('open');
+            switchAcctTab('login');
+            setTimeout(() => { const f = $('acct-login-username'); if (f) f.focus(); }, 50);
+        }
+        function closeAccountModal() { $('account-modal-overlay').classList.remove('open'); }
+        function acctMsg(kind, text) {
+            const err = $('acct-error'), ok = $('acct-ok');
+            err.style.display = 'none'; ok.style.display = 'none';
+            if (!text) return;
+            const el = kind === 'ok' ? ok : err;
+            el.textContent = text;
+            el.style.display = 'block';
+        }
+        function switchAcctTab(name) {
+            ['login', 'signup', 'forgot'].forEach(n => $(`acct-form-${n}`).classList.toggle('active', n === name));
+            $('acct-tab-login').classList.toggle('active', name === 'login');
+            $('acct-tab-signup').classList.toggle('active', name === 'signup');
+            acctMsg(null, '');
+        }
+        async function acctPost(url, body, btnId, busyText) {
+            const btn = $(btnId);
+            const original = btn.textContent;
+            btn.disabled = true; btn.textContent = busyText;
+            try {
+                const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+                const data = await res.json().catch(() => ({}));
+                return { ok: res.ok, data };
+            } catch (err) {
+                return { ok: false, data: { error: 'Could not reach the server. Try again.' } };
+            } finally { btn.disabled = false; btn.textContent = original; }
+        }
+        async function acctLogin() {
+            const username = $('acct-login-username').value.trim();
+            const password = $('acct-login-password').value;
+            acctMsg(null, '');
+            const r = await acctPost('/api/account/login', { username, password }, 'acct-login-btn', 'Logging in...');
+            if (!r.ok) return acctMsg('err', r.data.error || 'Could not log in.');
+            $('acct-login-password').value = '';
+            closeAccountModal();
+            showToast(`Logged in as ${r.data.username}`, 'success');
+            refreshAccountFooter();
+        }
+        async function acctSignup() {
+            const username = $('acct-signup-username').value.trim();
+            const email = $('acct-signup-email').value.trim();
+            const password = $('acct-signup-password').value;
+            acctMsg(null, '');
+            const r = await acctPost('/api/account/signup', { username, email, password }, 'acct-signup-btn', 'Creating...');
+            if (!r.ok) return acctMsg('err', r.data.error || 'Could not create the account.');
+            $('acct-signup-password').value = '';
+            closeAccountModal();
+            showToast(`Account created. Logged in as ${r.data.username}`, 'success');
+            refreshAccountFooter();
+        }
+        async function acctForgot() {
+            const email = $('acct-forgot-email').value.trim();
+            acctMsg(null, '');
+            const r = await acctPost('/api/account/forgot-password', { email }, 'acct-forgot-btn', 'Sending...');
+            if (!r.ok) return acctMsg('err', r.data.error || 'Could not send the reset link.');
+            acctMsg('ok', r.data.message || 'If that email is registered, a reset link has been sent.');
+        }
+        document.addEventListener('keydown', e => { if (e.key === 'Escape') closeAccountModal(); });
+
+        // ---- Dashboard poll (same endpoint + 3s interval as admin.html) ----
+        function setIfIdle(id, value) {
+            const el = $(id);
+            if (document.activeElement !== el && value !== undefined && value !== null) el.value = value;
+        }
+        async function updateDashboard() {
+            if (!isAuthorized) return;
+            try {
+                const res = await fetch(eventUrl('/api/admin/data'), { headers: adminHeaders() });
+                if (!res.ok) return;
+                const data = await res.json();
+                applyAdminMode(data.siteMode);
+
+                const evName = (data.eventName || '').trim();
+                $('admin-title').textContent = evName || 'Cuelistr';
+                const venueEl = $('admin-venue');
+                const venueName = (data.venueName || '').trim();
+                venueEl.textContent = venueName;
+                venueEl.style.display = venueName ? '' : 'none';
+
+                venueScreenKey = data.screenKey || '';
+                renderVenueCode(data.venueCode);
+
+                setIfIdle('input-event-name', data.eventName || '');
+                setIfIdle('input-venue-name', data.venueName || '');
+                setIfIdle('input-max-credits', data.maxCredits);
+                setIfIdle('input-countdown', data.countdownLength);
+                setIfIdle('input-location-radius', data.locationRadiusMeters || 300);
+                setIfIdle('input-code-display-seconds', data.codeDisplaySeconds || 45);
+
+                setSwitchFromServer('requests', !!data.requestsAllowed);
+                setSwitchFromServer('explicit', !data.explicitBlockActive);
+                setSwitchFromServer('loclock', data.locationLockEnabled !== false);
+
+                if (data.kiosk) {
+                    setSwitchFromServer('kreq', !!data.kiosk.requestsAllowed);
+                    setSwitchFromServer('kdisp', !!data.kiosk.displayOnlyMode);
+                    setIfIdle('input-kiosk-max-credits', data.kiosk.maxCredits);
+                    setIfIdle('input-kiosk-countdown', data.kiosk.countdownLength);
+                }
+                if (data.visuals) {
+                    setSwitchFromServer('vmute', !!data.visuals.muteVisuals);
+                    setSwitchFromServer('vmuteall', !!data.visuals.muteAll);
+                    setSwitchFromServer('vqueue', !!data.visuals.showQueue);
+                    setSwitchFromServer('vmv', !!data.visuals.musicVideosEnabled);
+                    setSwitchFromServer('vsub', !!data.visuals.musicVideoSubtitlesEnabled);
+                    setSwitchFromServer('vfam', !!data.visuals.familyModeEnabled);
+                }
+
+                lastGuestQueue = data.queue || [];
+                renderQueueList();
+
+                lastBlockedVoters = data.blockedVoters || [];
+                lastBlockedArtists = data.blockedArtists || [];
+                lastBlockedTracks = data.blockedTracks || [];
+                lastBlockedGenres = data.genreFilter || [];
+                lastGuests = data.guests || [];
+                if (currentView === 'blk') renderBlockedPage();
+            } catch (e) { console.log('Sync error.'); }
+        }
+
+        // ---- Playback (same endpoints + 4s poll as admin.html) ----
+        let nowPlaying = null;          // last /api/now-playing payload + fetchedAt
+        let nowPlayingTicker = null;
+        let lastTrackId = null;
+        let mixUntil = 0;
+        const MIX_WINDOW_MS = 11000;    // assumed crossfade length, same figure visuals.html uses
+        const optimisticLocks = { isPlaying: null, shuffleState: null, repeatState: null };
+        function setOptimisticLock(key, value) { optimisticLocks[key] = { value, until: Date.now() + 3000 }; }
+        function optimisticValue(key, serverValue) {
+            const lock = optimisticLocks[key];
+            return lock && Date.now() < lock.until ? lock.value : serverValue;
+        }
+
+        async function playbackCommand(action, body) {
+            try {
+                const res = await adminPost(`/api/admin/playback/${action}`, body || {});
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) { showToast(data.error || 'Playback command failed.'); return false; }
+                pollNowPlaying();
+                return true;
+            } catch (e) { showToast('Could not reach the server.'); return false; }
+        }
+        function currentIsPlaying() { return !!nowPlaying && optimisticValue('isPlaying', !!nowPlaying.isPlaying); }
+        function togglePlayPause() {
+            if (!isAuthorized) return;
+            const next = !currentIsPlaying();
+            setOptimisticLock('isPlaying', next);
+            paintTransport();
+            renderStrip();
+            playbackCommand(next ? 'play' : 'pause');
+        }
+        function skipTrack() { if (isAuthorized) playbackCommand('next'); }
+        function restartTrack() { if (isAuthorized) playbackCommand('seek', { positionMs: 0 }); }
+        function togglePlaybackShuffle() {
+            if (!isAuthorized) return;
+            const next = !$('pl-shuffle').classList.contains('on');
+            setOptimisticLock('shuffleState', next);
+            $('pl-shuffle').classList.toggle('on', next);
+            playbackCommand('shuffle', { enabled: next });
+        }
+        const REPEAT_CYCLE = ['off', 'context', 'track'];
+        function cyclePlaybackRepeat() {
+            if (!isAuthorized) return;
+            const btn = $('pl-loop');
+            const current = btn.dataset.repeatState || 'off';
+            const next = REPEAT_CYCLE[(REPEAT_CYCLE.indexOf(current) + 1) % REPEAT_CYCLE.length];
+            btn.dataset.repeatState = next;
+            btn.classList.toggle('on', next !== 'off');
+            setOptimisticLock('repeatState', next);
+            playbackCommand('repeat', { mode: next });
+        }
+
+        function paintTransport() {
+            $('pl-playpause').innerHTML = svg(currentIsPlaying() ? 'pause' : 'play');
+        }
+        function renderStrip() {
+            const strip = $('mix-strip'), text = $('mix-strip-text');
+            let label, cls;
+            if (!nowPlaying) { label = 'Connecting'; cls = 'idle'; }
+            else if (!nowPlaying.connected) { label = 'Spotify not connected'; cls = 'idle'; }
+            else if (!nowPlaying.title) { label = 'Nothing playing'; cls = 'idle'; }
+            else if (!currentIsPlaying()) { label = 'Paused'; cls = 'paused'; }
+            else if (Date.now() < mixUntil) { label = 'Mixing'; cls = 'mixing'; }
+            else { label = 'Playing'; cls = ''; }
+            strip.className = 'mix-strip' + (cls ? ' ' + cls : '');
+            text.textContent = label;
+        }
+        function renderProgress() {
+            if (!nowPlaying || !nowPlaying.durationMs) {
+                $('pl-fill').style.width = '0%'; $('pl-t1').textContent = '0:00'; $('pl-t2').textContent = '0:00';
+                renderStrip();
+                return;
+            }
+            const elapsed = currentIsPlaying() ? (Date.now() - nowPlaying.fetchedAt) : 0;
+            const pos = Math.min(nowPlaying.durationMs, nowPlaying.progressMs + elapsed);
+            $('pl-fill').style.width = (pos / nowPlaying.durationMs) * 100 + '%';
+            $('pl-t1').textContent = formatMsToClock(pos);
+            $('pl-t2').textContent = formatMsToClock(nowPlaying.durationMs);
+            renderStrip();
+        }
+        function updateNowPlaying(data) {
+            const prevTrack = lastTrackId;
+            nowPlaying = data ? Object.assign({}, data, { progressMs: data.progressMs || 0, durationMs: data.durationMs || 0, fetchedAt: Date.now() }) : null;
+            if (nowPlaying && nowPlaying.connected && nowPlaying.title) {
+                $('pl-title').textContent = nowPlaying.title;
+                $('pl-artist').textContent = nowPlaying.artist || '';
+                $('pl-art').src = nowPlaying.artwork ? safeImageUrl(nowPlaying.artwork) : 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
+                // A new track starting while music is playing means the songs are crossfading
+                if (prevTrack && nowPlaying.trackId && nowPlaying.trackId !== prevTrack && nowPlaying.isPlaying && nowPlaying.progressMs < MIX_WINDOW_MS) {
+                    mixUntil = Date.now() + (MIX_WINDOW_MS - nowPlaying.progressMs);
+                }
+                lastTrackId = nowPlaying.trackId || null;
+            } else {
+                $('pl-title').textContent = nowPlaying && !nowPlaying.connected ? 'Spotify not connected' : 'Nothing playing';
+                $('pl-artist').textContent = '';
+                $('pl-art').src = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
+                lastTrackId = null;
+            }
+            const shuffleOn = optimisticValue('shuffleState', !!(nowPlaying && nowPlaying.shuffleState));
+            $('pl-shuffle').classList.toggle('on', shuffleOn);
+            const repeat = optimisticValue('repeatState', (nowPlaying && nowPlaying.repeatState) || 'off');
+            $('pl-loop').dataset.repeatState = repeat;
+            $('pl-loop').classList.toggle('on', repeat !== 'off');
+            paintTransport();
+            renderProgress();
+            if (!nowPlayingTicker) nowPlayingTicker = setInterval(renderProgress, 250);
+            spotifyUpcomingQueue = (nowPlaying && nowPlaying.upcoming) || [];
+            renderQueueList();
+        }
+        async function pollNowPlaying() {
+            try {
+                const res = await fetch(eventUrl('/api/now-playing'));
+                if (!res.ok) return;
+                updateNowPlaying(await res.json());
+            } catch (e) { /* keep last known state on a transient network hiccup */ }
+        }
+
+        // Keep the last queue row clear of the fixed playback box
+        function measurePlayer() {
+            const p = $('player');
+            if (p) document.documentElement.style.setProperty('--player-h', p.offsetHeight + 'px');
+        }
+        if (window.ResizeObserver) new ResizeObserver(measurePlayer).observe($('player'));
+        window.addEventListener('resize', measurePlayer);
+
+        // ---- Start up ----
+        $('pl-shuffle').innerHTML = svg('shuffle');
+        $('pl-restart').innerHTML = svg('restart');
+        $('pl-playpause').innerHTML = svg('play');
+        $('pl-skip').innerHTML = svg('next');
+        $('pl-loop').innerHTML = svg('loop');
+        document.body.classList.add('has-player');
+        measurePlayer();
+
+        window.onload = () => {
+            $('password-input').focus();
+            restoreAdminSession();
+            let savedHints = null;
+            try { savedHints = localStorage.getItem('adminHintsOn'); } catch (e) { /* ignore */ }
+            applyHintsVisibility(savedHints === null ? true : savedHints === '1');
+            refreshAccountFooter();
+            pollNowPlaying();
+            measurePlayer();
+        };
+        setInterval(updateDashboard, 3000);
+        setInterval(pollNowPlaying, 4000);
+    </script>
+</body>
+</html>
