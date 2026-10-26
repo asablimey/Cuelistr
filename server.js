@@ -2861,10 +2861,16 @@ function logDepartedTrack(event, track, outcome) {
 // True if this track departed the queue too recently (fewer than
 // SONG_REQUEST_GAP other departures ago) to be requested again. A track
 // that has never departed (or never existed) is never on cooldown.
+function getSongRepeatGap(event) {               // set per event in Manager -> Music -> Repeat gap
+    const n = event && event.systemConfigs ? event.systemConfigs.songRepeatGap : undefined;
+    return (Number.isInteger(n) && n >= 0 && n <= 500) ? n : SONG_REQUEST_GAP;
+}
 function isSongOnCooldown(event, trackId) {
+    const gap = getSongRepeatGap(event);
+    if (gap === 0) return false;
     const lastDeparture = event.songLastDeparture && event.songLastDeparture[trackId];
     if (lastDeparture === undefined) return false;
-    return (event.songDepartureCounter - lastDeparture) < SONG_REQUEST_GAP;
+    return (event.songDepartureCounter - lastDeparture) < gap;
 }
 
 // Used only where user-supplied data (eventName) gets interpolated directly
@@ -2895,6 +2901,19 @@ const EXTENDED_MIX_PATTERN = /\b(extended|club|dub|instrumental|maxi[\s-]?mix|12
 function isExtendedOrClubMix(trackName) {
     if (!trackName) return false;
     return EXTENDED_MIX_PATTERN.test(trackName);
+}
+
+// Remixes and re-worked versions, by the descriptor in the title ("- Remix", "(Club Remix)", "Sped Up",
+// "Slowed + Reverb", "Nightcore", "Bootleg", "Mashup"). Plain "edit" is NOT matched, so Radio Edits are safe.
+const REMIX_PATTERN = /\b(remix(ed)?|rmx|bootleg|mash[\s-]?up|sped[\s-]?up|slowed|nightcore|rework(ed)?)\b/i;
+function isRemixVersion(trackName) {
+    return !!trackName && REMIX_PATTERN.test(trackName);
+}
+// Live recordings, by the descriptor ("- Live", "(Live at Wembley)", "Live From ...", "Live Version").
+// A bare word "Live" inside a normal title ("Live Forever") is not matched.
+const LIVE_PATTERN = /([\(\[\-–—]\s*live\b)|(\blive\s+(at|from|in|on|version|session|recording|performance|acoustic|lounge)\b)|(\bunplugged\b)/i;
+function isLiveVersion(trackName) {
+    return !!trackName && LIVE_PATTERN.test(trackName);
 }
 
 // Flags karaoke/backing-track versions by the descriptor Spotify's karaoke
@@ -4066,6 +4085,14 @@ app.get('/e/:slug/api/search', publicActionLimiter, async (req, res) => {
             tracks = tracks.filter(track => !isExtendedOrClubMix(track.name));
         }
 
+        if (event.systemConfigs.remixBlockActive) {
+            tracks = tracks.filter(track => !isRemixVersion(track.name));
+        }
+
+        if (event.systemConfigs.liveBlockActive) {
+            tracks = tracks.filter(track => !isLiveVersion(track.name));
+        }
+
         // Blocked tab: drop anything the DJ has specifically blocked, by
         // track or by its primary artist, before it ever reaches a guest.
         tracks = tracks.filter(track => !isTrackBlocked(event, track.id) && !isArtistBlocked(event, track._primaryArtistId));
@@ -4358,6 +4385,14 @@ function buildRequestHandler(isKiosk) {
             return res.status(403).json({ error: "Only radio edits are currently allowed - try searching for the standard version." });
         }
 
+        if (event.systemConfigs.remixBlockActive && isRemixVersion(verifiedTrack.name)) {
+            return res.status(403).json({ error: "Remixes aren't allowed at this event - try the original version." });
+        }
+
+        if (event.systemConfigs.liveBlockActive && isLiveVersion(verifiedTrack.name)) {
+            return res.status(403).json({ error: "Live versions aren't allowed at this event - try the studio version." });
+        }
+
         if (event.systemConfigs.decadeFilter && event.systemConfigs.decadeFilter.length > 0) {
             const decade = releaseYear ? Math.floor(releaseYear / 10) * 10 : null;
             if (decade === null || !event.systemConfigs.decadeFilter.includes(decade)) {
@@ -4591,6 +4626,9 @@ app.get('/e/:slug/api/admin/data', (req, res) => {
         queueFull: isQueueFull(event),
         genreFilter: event.systemConfigs.genreFilter || [],
         decadeFilter: event.systemConfigs.decadeFilter || [],
+        remixBlockActive: !!event.systemConfigs.remixBlockActive,
+        liveBlockActive: !!event.systemConfigs.liveBlockActive,
+        songRepeatGap: getSongRepeatGap(event),
         guestSpotifyConnectEnabled: event.systemConfigs.guestSpotifyConnectEnabled,
         spotifyAutoQueueEnabled: event.systemConfigs.spotifyAutoQueueEnabled,
         locationLockEnabled: event.systemConfigs.locationLockEnabled !== false,
@@ -4721,7 +4759,7 @@ app.get('/e/:slug/api/my-requests', publicReadLimiter, voterIdentityMiddleware, 
 
 app.post('/e/:slug/api/admin/config', (req, res) => {
     const event = req.event;
-    const { maxCredits, countdownLength, eventName, venueName, maxQueueLength, genreFilter, decadeFilter } = req.body;
+    const { maxCredits, countdownLength, eventName, venueName, maxQueueLength, genreFilter, decadeFilter, songRepeatGap } = req.body;
     if (maxCredits !== undefined) event.systemConfigs.maxCredits = parseInt(maxCredits) || event.systemConfigs.maxCredits;
     if (countdownLength !== undefined) event.systemConfigs.countdownLength = parseInt(countdownLength) || event.systemConfigs.countdownLength;
     if (typeof eventName === 'string') event.systemConfigs.eventName = eventName.trim().slice(0, 60);
@@ -4732,6 +4770,10 @@ app.post('/e/:slug/api/admin/config', (req, res) => {
     if (maxQueueLength !== undefined) {
         const parsed = parseInt(maxQueueLength);
         if (parsed > 0) event.systemConfigs.maxQueueLength = parsed;
+    }
+    if (songRepeatGap !== undefined) {
+        const gap = parseInt(songRepeatGap, 10);
+        if (Number.isInteger(gap) && gap >= 0 && gap <= 500) event.systemConfigs.songRepeatGap = gap;
     }
     if (Array.isArray(genreFilter)) {
         event.systemConfigs.genreFilter = genreFilter.filter(key => Object.prototype.hasOwnProperty.call(GENRE_CATEGORIES, key));
@@ -5281,6 +5323,20 @@ app.post('/e/:slug/api/admin/toggle', (req, res) => {
 app.post('/e/:slug/api/admin/toggle-explicit', (req, res) => {
     const { blockExplicit } = req.body;
     if (typeof blockExplicit === 'boolean') req.event.systemConfigs.explicitBlockActive = blockExplicit;
+    events.scheduleSave(req.event.slug);
+    res.json({ success: true });
+});
+
+app.post('/e/:slug/api/admin/toggle-remixes', (req, res) => {
+    const { blockRemixes } = req.body;
+    if (typeof blockRemixes === 'boolean') req.event.systemConfigs.remixBlockActive = blockRemixes;
+    events.scheduleSave(req.event.slug);
+    res.json({ success: true });
+});
+
+app.post('/e/:slug/api/admin/toggle-live-versions', (req, res) => {
+    const { blockLive } = req.body;
+    if (typeof blockLive === 'boolean') req.event.systemConfigs.liveBlockActive = blockLive;
     events.scheduleSave(req.event.slug);
     res.json({ success: true });
 });
