@@ -1392,11 +1392,18 @@
                                 <button id="toggle-mute-all" class="toggle-btn closed-status" onclick="toggleMuteAll()">Mute All: OFF</button>
                                 <button id="toggle-show-queue" class="toggle-btn closed-status" onclick="toggleShowQueue()">Show Queue: OFF</button>
                             </div>
+                            <div class="control-bar" style="margin-top: 10px;">
+                                <button id="toggle-show-clock" class="toggle-btn closed-status" onclick="toggleShowClock()">Show Time: OFF</button>
+                                <button id="toggle-show-venue-code" class="toggle-btn closed-status" onclick="toggleShowVenueCode()">Show Venue Code: OFF</button>
+                            </div>
                             <p class="settings-card-hint" style="margin-top: 16px; margin-bottom: 0;">
                                 <strong>Mute Visuals</strong> turns the visuals display fully black. <strong>Mute All</strong> does
                                 the same and also pauses playback (resuming it when switched back off). <strong>Show Queue</strong>
                                 pins the Now Playing + Up Next board on screen, overriding any scheduled Ambient Visuals content,
-                                until switched off.
+                                until switched off. <strong>Show Time</strong> puts a 12-hour clock in the top-left corner of the
+                                visuals display (hidden while a music video is on screen). <strong>Show Venue Code</strong> keeps the
+                                live, updating venue code on the display at all times, music videos included; it only works on a
+                                display opened from the Open Visuals Display button.
                             </p>
                         </div>
 
@@ -1651,6 +1658,8 @@
         let visualsMuted = false;
         let visualsMuteAll = false;
         let visualsShowQueue = false;
+        let visualsShowClock = false;
+        let visualsShowVenueCode = false;
         let musicVideosEnabled = false;
         let musicVideoSubtitlesEnabled = false;
         let preferVisualizersEnabled = false;
@@ -2261,6 +2270,26 @@ async function verifyPassword() {
                 method: 'POST',
                 headers: adminHeaders({ 'Content-Type': 'application/json' }),
                 body: JSON.stringify({ enabled: !visualsMuteAll })
+            });
+            updateDashboard();
+        }
+
+        async function toggleShowClock() {
+            if (!isAuthorized) return;
+            await fetch(eventUrl('/api/admin/visuals/toggle-show-clock'), {
+                method: 'POST',
+                headers: adminHeaders({ 'Content-Type': 'application/json' }),
+                body: JSON.stringify({ enabled: !visualsShowClock })
+            });
+            updateDashboard();
+        }
+
+        async function toggleShowVenueCode() {
+            if (!isAuthorized) return;
+            await fetch(eventUrl('/api/admin/visuals/toggle-show-venue-code'), {
+                method: 'POST',
+                headers: adminHeaders({ 'Content-Type': 'application/json' }),
+                body: JSON.stringify({ enabled: !visualsShowVenueCode })
             });
             updateDashboard();
         }
@@ -2895,6 +2924,16 @@ async function verifyPassword() {
                     visualsShowQueue = !!data.visuals.showQueue;
                     showQueueBtn.innerText = visualsShowQueue ? "Show Queue: ON" : "Show Queue: OFF";
                     showQueueBtn.className = visualsShowQueue ? "toggle-btn open-status" : "toggle-btn closed-status";
+
+                    const showClockBtn = document.getElementById('toggle-show-clock');
+                    visualsShowClock = !!data.visuals.showClockEnabled;
+                    showClockBtn.innerText = visualsShowClock ? "Show Time: ON" : "Show Time: OFF";
+                    showClockBtn.className = visualsShowClock ? "toggle-btn open-status" : "toggle-btn closed-status";
+
+                    const showVenueCodeBtn = document.getElementById('toggle-show-venue-code');
+                    visualsShowVenueCode = !!data.visuals.showVenueCodeEnabled;
+                    showVenueCodeBtn.innerText = visualsShowVenueCode ? "Show Venue Code: ON" : "Show Venue Code: OFF";
+                    showVenueCodeBtn.className = visualsShowVenueCode ? "toggle-btn open-status" : "toggle-btn closed-status";
 
                     const musicVideosBtn = document.getElementById('toggle-music-videos');
                     musicVideosEnabled = !!data.visuals.musicVideosEnabled;
