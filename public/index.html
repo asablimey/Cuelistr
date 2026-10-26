@@ -101,6 +101,23 @@
             width: 100%;
         }
 
+        /* --- Pinned top bar (header never scrolls away) ---
+           position: fixed instead of sticky: html/body have overflow-x: hidden, which
+           makes sticky unreliable. The page content is pushed down by --fixed-header-h,
+           which a tiny script at the bottom keeps equal to the header's real height
+           (it changes with 1-2 line titles, the venue subtitle, display-only mode...). */
+        :root { --fixed-header-h: 72px; --page-max: 800px; }
+        body { padding-top: 0; }
+        .container { padding-top: calc(var(--fixed-header-h) + 16px); }
+        .container > .header {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            z-index: 600;
+            margin: 0;
+            background-color: var(--spotify-black);
+            padding: calc(12px + env(safe-area-inset-top, 0px)) max(16px, calc((100% - var(--page-max)) / 2)) 12px;
+        }
+
         .header {
             display: flex;
             justify-content: space-between;
@@ -781,6 +798,13 @@
             box-sizing: border-box;
             z-index: 500;
             overflow: hidden;
+            /* Pinned + solid: always glued to the bottom edge, never see-through,
+               sits on its own layer so it doesn't wobble while the page scrolls. */
+            background-color: var(--panel-bg);
+            transform: translateZ(0);
+            will-change: transform;
+            height: calc(60px + env(safe-area-inset-bottom, 0px));
+            padding-bottom: env(safe-area-inset-bottom, 0px);
         }
         .now-playing-bar.is-visible { display: flex; }
         .now-playing-progress-track {
@@ -826,7 +850,7 @@
             0%, 100% { opacity: 1; }
             50% { opacity: 0.35; }
         }
-        body.has-now-playing-bar { padding-bottom: 76px; }
+        body.has-now-playing-bar { padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
 
         /* --- Hamburger menu button ---
            Lives as a normal flex child inside .header (far left), the same
@@ -874,6 +898,8 @@
         .sidebar-header {
             display: flex; align-items: center; justify-content: space-between;
             padding: 20px; border-bottom: 1px solid var(--border);
+            /* Pinned: stays put while the menu list scrolls under it. */
+            position: sticky; top: 0; z-index: 2; background: var(--panel-bg); flex-shrink: 0;
         }
         .sidebar-header h3 { margin: 0; font-size: 1.1rem; }
         .sidebar-close-btn { background: none; border: none; color: var(--text-muted); font-size: 1.3rem; cursor: pointer; padding: 4px 8px; }
@@ -2548,5 +2574,19 @@
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
+    <script>
+        // Keeps the page content clear of the pinned top bar: copies the header's real height
+        // into --fixed-header-h whenever it changes (long titles, subtitle, rotation, display-only mode).
+        (function () {
+            var h = document.querySelector('.container > .header');
+            if (!h) return;
+            function sync() { document.documentElement.style.setProperty('--fixed-header-h', h.offsetHeight + 'px'); }
+            sync();
+            if (window.ResizeObserver) new ResizeObserver(sync).observe(h);
+            window.addEventListener('resize', sync);
+            window.addEventListener('load', sync);
+            if (document.fonts && document.fonts.ready) document.fonts.ready.then(sync);
+        })();
+    </script>
 </body>
 </html>
