@@ -1118,9 +1118,14 @@ body.has-player { overflow: hidden; }
             <h1 id="admin-title">Cuelistr</h1>
             <div class="hd-venue" id="admin-venue" style="display:none;"></div>
         </div>
-        <button id="toggle-hints" class="hints-icon-btn" onclick="toggleHints()" aria-label="Show or hide setting hints">
-            <svg viewBox="0 0 24 24"><path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7zm2.85 11.1l-.85.6V15h-4v-2.3l-.85-.6C7.8 11.16 7 9.63 7 9c0-2.76 2.24-5 5-5s5 2.24 5 5c0 .63-.8 2.16-2.15 3.1z"/></svg>
-        </button>
+        <div style="display:flex; align-items:center; gap:4px; flex:none;">
+            <button id="toggle-hints" class="hints-icon-btn" onclick="toggleHints()" aria-label="Show or hide setting hints">
+                <svg viewBox="0 0 24 24"><path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7zm2.85 11.1l-.85.6V15h-4v-2.3l-.85-.6C7.8 11.16 7 9.63 7 9c0-2.76 2.24-5 5-5s5 2.24 5 5c0 .63-.8 2.16-2.15 3.1z"/></svg>
+            </button>
+            <button id="toggle-fullscreen" class="fullscreen-icon-btn" onclick="toggleFullscreen()" aria-label="Toggle fullscreen">
+                <svg viewBox="0 0 24 24" id="fullscreen-svg"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+            </button>
+        </div>
     </div>
 
     <!-- ============ PLAYBACK + LIVE QUEUE ============ -->
@@ -1418,6 +1423,22 @@ body.has-player { overflow: hidden; }
             if (view === 'acc') refreshAccountFooter();
             measurePlayer();
         }
+
+        // ---- Fullscreen (same as admin.html) ----
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => console.log(`Error enabling fullscreen: ${err.message}`));
+            } else {
+                document.exitFullscreen();
+            }
+        }
+        function updateFullscreenIcon() {
+            const svgNode = $('fullscreen-svg');
+            svgNode.innerHTML = !document.fullscreenElement
+                ? '<path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>'
+                : '<path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/>';
+        }
+        document.addEventListener('fullscreenchange', updateFullscreenIcon);
 
         // ---- Hints (same behaviour + storage key as admin.html) ----
         function applyHintsVisibility(hintsOn) {
