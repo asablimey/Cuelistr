@@ -3321,8 +3321,8 @@ function getThemes(event) {
 
 // Paths (relative to /e/:slug) still available in Basic mode.
 const BASIC_ALLOWED_PUBLIC = /^\/(?:$|data$|api\/(?:public-config|site-config|search|request|set-username|now-playing|verify-code|show-code)$)/;
-const BASIC_ALLOWED_ADMIN = /^\/(?:session|session-end|data|config|toggle|toggle-explicit|toggle-location-lock|toggle-spotify-auto-queue|action|reorder|site-mode|theme|spotify-login-ticket|spotify-disconnect|playback\/(?:play|pause|next|previous|volume|seek))$/;
-const BASIC_ALLOWED_PAGES = /^\/(?:admin(?:\/spotify-login)?)?\/?$/;
+const BASIC_ALLOWED_ADMIN = /^\/(?:session|session-end|data|config|toggle|toggle-explicit|toggle-location-lock|toggle-spotify-auto-queue|action|reorder|site-mode|theme|spotify-login-ticket|spotify-disconnect|playback\/(?:play|pause|next|previous|volume|seek|play-track))$/;
+const BASIC_ALLOWED_PAGES = /^\/(?:(?:admin(?:\/spotify-login)?|manager))?\/?$/;
 
 function basicBlockedPage(res) {
     res.status(403).type('html').send('<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Not available</title><style>body{background:#121212;color:#fff;font-family:-apple-system,BlinkMacSystemFont,sans-serif;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0;padding:24px;text-align:center}p{color:#a7a7a7;max-width:360px;line-height:1.5}</style></head><body><div><h2>Not available in Basic mode</h2><p>This page is turned off while the event is in Basic mode. The DJ can switch to Full mode from Admin &rarr; Settings.</p></div></body></html>');
@@ -3343,7 +3343,7 @@ app.use('/e/:slug', async (req, res, next) => {
             return res.status(403).json({ error: 'Not available in Basic mode.', basicMode: true });
         }
         if (p === '/data' || p === '/') return next();
-        if (BASIC_ALLOWED_PAGES.test(p)) return next(); // '/' and '/admin'
+        if (BASIC_ALLOWED_PAGES.test(p)) return next(); // '/', '/admin' and '/manager'
         return basicBlockedPage(res); // kiosk, visuals, admin/scheduler, kiosk-data...
     } catch (err) { next(err); }
 });
@@ -3363,6 +3363,11 @@ app.get('/e/:slug/admin/scheduler', (req, res) => {
 });
 app.get('/e/:slug/admin', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
+// Portrait phone version of the admin page. Same password/session as /admin
+// (the lock screen and /api/admin/* auth live in the page + requireAdminAuth).
+app.get('/e/:slug/manager', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'manager.html'));
 });
 app.get('/e/:slug/kiosk', voterIdentityMiddleware, (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'kiosk.html'));
@@ -5209,6 +5214,49 @@ app.post('/e/:slug/api/admin/playback/seek', async (req, res) => {
     if (!Number.isInteger(positionMs) || positionMs < 0) return res.status(400).json({ error: 'positionMs must be a non-negative integer.' });
     const result = await spotifyPlayerCommand(req.event, 'PUT', '/seek', `?position_ms=${positionMs}`);
     res.status(result.success ? 200 : 400).json(result);
+});
+
+// Jumps straight to one track from the live "up next" list (the manager page's
+// Play Now button). Keeps the current playlist/album as the playback context when
+// it can, so playback carries on from that track instead of stopping after it;
+// falls back to playing just that track if Spotify won't take it in that context.
+app.post('/e/:slug/api/admin/playback/play-track', async (req, res) => {
+    const trackId = req.body && req.body.trackId;
+    if (typeof trackId !== 'string' || !/^[A-Za-z0-9]{22}$/.test(trackId)) {
+        return res.status(400).json({ success: false, error: 'Invalid track ID.' });
+    }
+    const event = req.event;
+    const token = await getDjAccessToken(event);
+    if (!token) return res.status(400).json({ success: false, error: 'Admin Spotify account is not connected yet.' });
+    const trackUri = `spotify:track:${trackId}`;
+    const play = body => fetch('https://api.spotify.com/v1/me/player/play', {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+    });
+    try {
+        let contextUri = null;
+        const stateRes = await fetch('https://api.spotify.com/v1/me/player', { headers: { 'Authorization': `Bearer ${token}` } });
+        if (stateRes.status === 200) {
+            const state = await stateRes.json();
+            const ctx = state && state.context;
+            if (ctx && (ctx.type === 'playlist' || ctx.type === 'album') && ctx.uri) contextUri = ctx.uri;
+        }
+        let r = contextUri ? await play({ context_uri: contextUri, offset: { uri: trackUri } }) : null;
+        if (!r || (r.status !== 204 && r.status !== 200)) r = await play({ uris: [trackUri] });
+        if (r.status === 204 || r.status === 200) {
+            await sleep(500);
+            await syncNowPlayingForEvent(event);
+            return res.json({ success: true });
+        }
+        if (r.status === 404) return res.status(400).json({ success: false, error: 'No active device - open Spotify and play something first.' });
+        if (r.status === 403) return res.status(400).json({ success: false, error: 'Forbidden - this usually means the account is not Spotify Premium.' });
+        console.error(`[SPOTIFY PLAYER] (${event.slug}) play-track failed`, r.status);
+        return res.status(400).json({ success: false, error: `Spotify rejected the request (status ${r.status}).` });
+    } catch (err) {
+        console.error(`[SPOTIFY PLAYER] (${event.slug}) play-track request failed:`, err.message);
+        return res.status(400).json({ success: false, error: 'Request to Spotify failed.' });
+    }
 });
 
 app.post('/e/:slug/api/admin/site-mode', (req, res) => {
