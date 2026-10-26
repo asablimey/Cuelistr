@@ -108,15 +108,18 @@
            (it changes with 1-2 line titles, the venue subtitle, display-only mode...). */
         :root { --fixed-header-h: 72px; --page-max: 800px; }
         body { padding-top: 0; }
-        .container { padding-top: calc(var(--fixed-header-h) + 16px); }
-        .container > .header {
+        .container { padding-top: calc(var(--fixed-header-h) + 6px); }
+        /* One solid pinned block: header + search bar + "Up Next" title. Only the song list scrolls. */
+        .pinned-top {
             position: fixed;
             top: 0; left: 0; right: 0;
             z-index: 600;
-            margin: 0;
             background-color: var(--spotify-black);
-            padding: calc(12px + env(safe-area-inset-top, 0px)) max(16px, calc((100% - var(--page-max)) / 2)) 12px;
+            padding: calc(12px + env(safe-area-inset-top, 0px)) max(16px, calc((100% - var(--page-max)) / 2)) 8px;
         }
+        .pinned-top .header { margin-bottom: 10px; }
+        .pinned-top .search-bar-wrapper { margin-bottom: 10px; }
+        .pinned-top .section-title-row { margin-bottom: 0; }
 
         .header {
             display: flex;
@@ -1123,6 +1126,7 @@
     </div>
 
     <div class="container">
+        <div class="pinned-top">
         <div class="header">
             <button type="button" class="menu-btn" onclick="openSidebar()" aria-label="Menu">
                 <svg viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
@@ -1161,6 +1165,7 @@
 
         <div class="section-title-row">
             <div class="section-title" id="list-title">Up Next</div>
+        </div>
         </div>
         <div id="main-display-list"></div>
     </div>
@@ -2578,7 +2583,7 @@
         // Keeps the page content clear of the pinned top bar: copies the header's real height
         // into --fixed-header-h whenever it changes (long titles, subtitle, rotation, display-only mode).
         (function () {
-            var h = document.querySelector('.container > .header');
+            var h = document.querySelector('.pinned-top');
             if (!h) return;
             function sync() { document.documentElement.style.setProperty('--fixed-header-h', h.offsetHeight + 'px'); }
             sync();
