@@ -6,6 +6,9 @@
     <link rel="icon" type="image/svg+xml" href="/assets/cuelistr-icon.svg">
     <link rel="icon" type="image/png" href="/assets/favicon.png">
     <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+    <link rel="manifest" href="/manifest-kiosk.webmanifest">
+    <meta name="theme-color" content="#121212">
+    <script>if ('serviceWorker' in navigator) { window.addEventListener('load', function () { navigator.serviceWorker.register('/sw.js').catch(function () {}); }); }</script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Khula:wght@600&display=swap">
@@ -706,7 +709,12 @@
         // This page is served at /e/{slug}/kiosk, so the event's slug is
         // always the second path segment - every relative API call below
         // goes through eventUrl() so it hits the right event's data.
-        const EVENT_SLUG = location.pathname.split('/')[2] || '';
+        // Works two ways: /e/{slug}/kiosk (old links, the admin "open kiosk" button) or the
+        // slugless /kiosk (the installed app), which uses the event this device last opened/picked.
+        const KIOSK_EVENT_KEY = 'cuelistr_kiosk_event';
+        const PATH_SLUG = location.pathname.split('/')[1] === 'e' ? (location.pathname.split('/')[2] || '') : '';
+        const EVENT_SLUG = PATH_SLUG || (function () { try { return localStorage.getItem(KIOSK_EVENT_KEY) || ''; } catch (e) { return ''; } })();
+        if (PATH_SLUG) { try { localStorage.setItem(KIOSK_EVENT_KEY, PATH_SLUG); } catch (e) { /* storage blocked */ } }
         function eventUrl(p) { return `/e/${EVENT_SLUG}${p}`; }
 
         // Toast notifications - non-blocking replacement for alert()
@@ -791,8 +799,10 @@
         let guestUsername = 'android_kiosk';
 
         async function fetchSystemState() {
+            if (!EVENT_SLUG) return; // no event chosen yet - the picker below is showing
             try {
                 const res = await fetch(eventUrl('/kiosk-data'));
+                if (res.status === 404) { try { localStorage.removeItem(KIOSK_EVENT_KEY); } catch (e) { /* ignore */ } location.replace('/kiosk'); return; } // saved event was deleted
                 if (!res.ok) return;
                 const data = await res.json();
 
@@ -1267,6 +1277,7 @@
         }
 
         async function pollNowPlaying() {
+            if (!EVENT_SLUG) return;
             try {
                 const res = await fetch(eventUrl('/api/now-playing'));
                 if (!res.ok) return;
@@ -1290,7 +1301,7 @@
         (function () {
             const key = new URLSearchParams(location.search).get('screen');
             if (!key) return;
-            const slug = location.pathname.split('/')[2] || '';
+            const slug = EVENT_SLUG;
             const box = document.getElementById('venue-code-screen');
             async function pollVenueCode() {
                 try {
@@ -1308,6 +1319,59 @@
             }
             pollVenueCode();
             setInterval(pollVenueCode, 3000);
+        })();
+    </script>
+    <script>
+        // Slugless /kiosk: no event chosen on this device yet -> pick one. Once picked it is remembered, so the
+        // installed app just opens straight to it. To switch a kiosk to another event later, tap the title 5 times.
+        (function () {
+            if (EVENT_SLUG) {
+                var h = document.getElementById('event-name-header'), taps = [];
+                if (h) h.addEventListener('click', function () {
+                    var n = Date.now();
+                    taps = taps.filter(function (t) { return n - t < 2500; });
+                    taps.push(n);
+                    if (taps.length >= 5) {
+                        taps = [];
+                        if (confirm('Switch this kiosk to a different event?')) {
+                            try { localStorage.removeItem(KIOSK_EVENT_KEY); } catch (e) { /* ignore */ }
+                            location.replace('/kiosk');
+                        }
+                    }
+                });
+                return;
+            }
+            var css = document.createElement('style');
+            css.textContent = '#kiosk-picker{position:fixed;inset:0;z-index:100001;background:#121212;color:#fff;display:flex;flex-direction:column;align-items:center;padding:24px;overflow-y:auto;font-family:-apple-system,BlinkMacSystemFont,sans-serif}' +
+                '#kiosk-picker h2{margin:12px 0 6px}#kiosk-picker p{color:#a7a7a7;margin:0 0 16px}' +
+                '#kiosk-picker input{width:100%;max-width:460px;padding:12px 14px;border-radius:8px;border:1px solid #333;background:#242424;color:#fff;font-size:1rem;margin-bottom:12px;box-sizing:border-box}' +
+                '#kiosk-picker .kp-list{width:100%;max-width:460px;display:flex;flex-direction:column;gap:8px}' +
+                '#kiosk-picker button{text-align:left;background:#181818;border:1px solid #282828;color:#fff;border-radius:10px;padding:14px;font-size:1rem;cursor:pointer}' +
+                '#kiosk-picker button:hover{border-color:#1DB954}#kiosk-picker small{display:block;color:#a7a7a7;margin-top:2px}';
+            document.head.appendChild(css);
+            var box = document.createElement('div');
+            box.id = 'kiosk-picker';
+            box.innerHTML = '<h2>Choose this kiosk\u2019s event</h2><p>You only need to do this once on this device.</p><input id="kp-search" type="search" placeholder="Search events\u2026" autocomplete="off"><div class="kp-list" id="kp-list">Loading\u2026</div>';
+            document.body.appendChild(box);
+            var venues = [];
+            function esc(t) { return String(t == null ? '' : t).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+            function paint() {
+                var q = document.getElementById('kp-search').value.trim().toLowerCase();
+                var list = venues.filter(function (v) { return !q || (v.eventName + ' ' + (v.venueName || '') + ' ' + v.slug).toLowerCase().indexOf(q) !== -1; });
+                var el = document.getElementById('kp-list');
+                el.innerHTML = list.length ? list.map(function (v) {
+                    return '<button type="button" data-slug="' + esc(v.slug) + '">' + esc(v.eventName || v.slug) + (v.venueName ? '<small>' + esc(v.venueName) + '</small>' : '') + '</button>';
+                }).join('') : 'No events found.';
+            }
+            document.getElementById('kp-search').addEventListener('input', paint);
+            document.getElementById('kp-list').addEventListener('click', function (e) {
+                var b = e.target.closest('button[data-slug]');
+                if (!b) return;
+                try { localStorage.setItem(KIOSK_EVENT_KEY, b.dataset.slug); } catch (err) { /* ignore */ }
+                location.replace('/kiosk');
+            });
+            fetch('/api/venues').then(function (r) { return r.json(); }).then(function (d) { venues = d.venues || []; paint(); })
+                .catch(function () { document.getElementById('kp-list').textContent = 'Could not load events. Check the connection and reload.'; });
         })();
     </script>
 </body>
