@@ -14,6 +14,11 @@
     <meta name="apple-mobile-web-app-title" content="Admin Dashboard">
 
     <style>
+        /* No blue tap/click highlight on buttons (keyboard focus rings are kept for accessibility) */
+        * { -webkit-tap-highlight-color: transparent; }
+        button, [role="button"], [role="switch"], select, summary, label.toggle, .btn, .pill-btn, .toggle-btn, .utility-btn, .primary-btn { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+        button:focus:not(:focus-visible), [role="button"]:focus:not(:focus-visible), [role="switch"]:focus:not(:focus-visible) { outline: none; }
+
         :root {
             --spotify-green: #1DB954;
             --spotify-black: #121212;
@@ -1409,6 +1414,15 @@
                                 <button id="toggle-music-videos" class="toggle-btn closed-status" onclick="toggleMusicVideos()">Music Videos: OFF</button>
                                 <button id="toggle-music-video-subtitles" class="toggle-btn closed-status" onclick="toggleMusicVideoSubtitles()">Subtitles: OFF</button>
                             </div>
+                            <div class="control-bar" style="margin-top: 10px;">
+                                <button id="toggle-prefer-visualizers" class="toggle-btn closed-status" onclick="togglePreferVisualizers()">Prefer Visualisers/Lyric Vids: OFF</button>
+                            </div>
+                            <p class="settings-card-hint" style="margin-top: 10px; margin-bottom: 0;">
+                                <strong>Prefer Visualisers/Lyric Vids</strong>: when a song has a Visualizer or Lyric video
+                                in the catalog (set in the Video type column), play that instead of its music video.
+                                Songs without one still get the music video. With Family Mode on, only rows marked
+                                Suggestive = NO are considered.
+                            </p>
                             <p class="settings-card-hint" style="margin-top: 16px; margin-bottom: 0;">
                                 <strong>Subtitles</strong> turns on YouTube's caption track for whatever video is
                                 currently showing, when that video has one available.
@@ -1639,6 +1653,7 @@
         let visualsShowQueue = false;
         let musicVideosEnabled = false;
         let musicVideoSubtitlesEnabled = false;
+        let preferVisualizersEnabled = false;
         let familyModeEnabled = false;
         // The song currently on screen's video match, as last reported by the
         // public status endpoint - null until the first poll succeeds, or if
@@ -2270,6 +2285,16 @@ async function verifyPassword() {
             updateDashboard();
         }
 
+        async function togglePreferVisualizers() {
+            if (!isAuthorized) return;
+            await fetch(eventUrl('/api/admin/visuals/toggle-prefer-visualizers'), {
+                method: 'POST',
+                headers: adminHeaders({ 'Content-Type': 'application/json' }),
+                body: JSON.stringify({ enabled: !preferVisualizersEnabled })
+            });
+            updateDashboard();
+        }
+
         async function toggleMusicVideoSubtitles() {
             if (!isAuthorized) return;
             await fetch(eventUrl('/api/admin/visuals/toggle-music-video-subtitles'), {
@@ -2880,6 +2905,11 @@ async function verifyPassword() {
                     musicVideoSubtitlesEnabled = !!data.visuals.musicVideoSubtitlesEnabled;
                     musicVideoSubtitlesBtn.innerText = musicVideoSubtitlesEnabled ? "Subtitles: ON" : "Subtitles: OFF";
                     musicVideoSubtitlesBtn.className = musicVideoSubtitlesEnabled ? "toggle-btn open-status" : "toggle-btn closed-status";
+
+                    const preferVizBtn = document.getElementById('toggle-prefer-visualizers');
+                    preferVisualizersEnabled = !!data.visuals.preferVisualizersEnabled;
+                    preferVizBtn.innerText = preferVisualizersEnabled ? "Prefer Visualisers/Lyric Vids: ON" : "Prefer Visualisers/Lyric Vids: OFF";
+                    preferVizBtn.className = preferVisualizersEnabled ? "toggle-btn open-status" : "toggle-btn closed-status";
 
                     if (document.activeElement !== document.getElementById('input-music-video-offset')) {
                         document.getElementById('input-music-video-offset').value = data.visuals.musicVideoOffsetMs;
