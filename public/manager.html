@@ -1291,6 +1291,8 @@ body.has-player { overflow: hidden; }
                 <div class="row-set"><div><div class="rl">Mute visuals</div></div><button type="button" class="switch" id="sw-vmute" role="switch" aria-checked="false" aria-label="Mute visuals" onclick="toggleSwitch('vmute')"></button></div>
                 <div class="row-set"><div><div class="rl">Mute all</div></div><button type="button" class="switch" id="sw-vmuteall" role="switch" aria-checked="false" aria-label="Mute all" onclick="toggleSwitch('vmuteall')"></button></div>
                 <div class="row-set"><div><div class="rl">Show queue</div></div><button type="button" class="switch" id="sw-vqueue" role="switch" aria-checked="false" aria-label="Show queue" onclick="toggleSwitch('vqueue')"></button></div>
+                <div class="row-set"><div><div class="rl">Show time</div></div><button type="button" class="switch" id="sw-vclock" role="switch" aria-checked="false" aria-label="Show time" onclick="toggleSwitch('vclock')"></button></div>
+                <div class="row-set"><div><div class="rl">Show venue code</div></div><button type="button" class="switch" id="sw-vcode" role="switch" aria-checked="false" aria-label="Show venue code" onclick="toggleSwitch('vcode')"></button></div>
             </div>
             <div class="settings-card">
                 <div class="settings-section-label">Music Videos</div>
@@ -1618,6 +1620,8 @@ body.has-player { overflow: hidden; }
             kdisp:    { el: 'sw-kdisp',    path: '/api/admin/kiosk/toggle-display-only',       body: v => ({ enabled: v }) },
             vmute:    { el: 'sw-vmute',    path: '/api/admin/visuals/toggle-mute',             body: v => ({ enabled: v }) },
             vmuteall: { el: 'sw-vmuteall', path: '/api/admin/visuals/toggle-mute-all',         body: v => ({ enabled: v }) },
+            vclock:   { el: 'sw-vclock',   path: '/api/admin/visuals/toggle-show-clock',      body: v => ({ enabled: v }) },
+            vcode:    { el: 'sw-vcode',    path: '/api/admin/visuals/toggle-show-venue-code', body: v => ({ enabled: v }) },
             vqueue:   { el: 'sw-vqueue',   path: '/api/admin/visuals/toggle-show-queue',       body: v => ({ enabled: v }) },
             vmv:      { el: 'sw-vmv',      path: '/api/admin/visuals/toggle-music-videos',     body: v => ({ enabled: v }) },
             vviz:     { el: 'sw-vviz',     path: '/api/admin/visuals/toggle-prefer-visualizers', body: v => ({ enabled: v }) },
@@ -2271,6 +2275,8 @@ body.has-player { overflow: hidden; }
                     setSwitchFromServer('vmute', !!data.visuals.muteVisuals);
                     setSwitchFromServer('vmuteall', !!data.visuals.muteAll);
                     setSwitchFromServer('vqueue', !!data.visuals.showQueue);
+                    setSwitchFromServer('vclock', !!data.visuals.showClockEnabled);
+                    setSwitchFromServer('vcode', !!data.visuals.showVenueCodeEnabled);
                     setSwitchFromServer('vmv', !!data.visuals.musicVideosEnabled);
                     setSwitchFromServer('vviz', !!data.visuals.preferVisualizersEnabled);
                     setSwitchFromServer('vsub', !!data.visuals.musicVideoSubtitlesEnabled);
