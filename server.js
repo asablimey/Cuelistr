@@ -2383,7 +2383,7 @@ const MUSIC_VIDEO_OFFSET_MAX_MS = 5000;
 function ensureVisualsConfigs(event) {
     if (!event.visualsConfigs || typeof event.visualsConfigs !== 'object') event.visualsConfigs = {};
     const v = event.visualsConfigs;
-    for (const key of ['muteVisuals', 'muteAll', 'showQueue', 'musicVideosEnabled', 'musicVideoSubtitlesEnabled', 'pausedByMuteAll', 'familyModeEnabled']) {
+    for (const key of ['muteVisuals', 'muteAll', 'showQueue', 'musicVideosEnabled', 'musicVideoSubtitlesEnabled', 'pausedByMuteAll', 'familyModeEnabled', 'preferVisualizersEnabled', 'showClockEnabled', 'showVenueCodeEnabled']) {
         if (typeof v[key] !== 'boolean') v[key] = false;
     }
     // How far ahead (positive) or behind (negative) of the raw Spotify
@@ -4235,8 +4235,13 @@ app.get('/e/:slug/api/venue-code-display', publicReadLimiter, (req, res) => {
     res.set('Cache-Control', 'no-store');
     const slug = req.event.slug;
     const st = codeDisplayState.get(slug);
-    if (!st || Date.now() >= st.until || !isValidScreenKey(slug, req.query.screen)) return res.json({ show: false });
-    res.json({ show: true, code: getCurrentVenueCode(slug).code, secondsLeft: Math.ceil((st.until - Date.now()) / 1000) });
+    if (!isValidScreenKey(slug, req.query.screen)) return res.json({ show: false });
+    // Admin -> Settings -> Screen Controls -> Show Venue Code keeps the code on screen all the time;
+    // otherwise it only appears while a guest's "Display Code" request is active.
+    const pinned = !!ensureVisualsConfigs(req.event).showVenueCodeEnabled;
+    const guestActive = !!(st && Date.now() < st.until);
+    if (!pinned && !guestActive) return res.json({ show: false });
+    res.json({ show: true, code: getCurrentVenueCode(slug).code, pinned, secondsLeft: guestActive ? Math.ceil((st.until - Date.now()) / 1000) : null });
 });
 
 // Which config (system vs kiosk) applies used to be decided by an `isKiosk`
@@ -5355,6 +5360,9 @@ app.post('/e/:slug/api/admin/visuals/toggle-show-queue', makeVisualsToggleRoute(
 app.post('/e/:slug/api/admin/visuals/toggle-music-videos', makeVisualsToggleRoute('musicVideosEnabled'));
 app.post('/e/:slug/api/admin/visuals/toggle-music-video-subtitles', makeVisualsToggleRoute('musicVideoSubtitlesEnabled'));
 app.post('/e/:slug/api/admin/visuals/toggle-family-mode', makeVisualsToggleRoute('familyModeEnabled'));
+app.post('/e/:slug/api/admin/visuals/toggle-prefer-visualizers', makeVisualsToggleRoute('preferVisualizersEnabled'));
+app.post('/e/:slug/api/admin/visuals/toggle-show-clock', makeVisualsToggleRoute('showClockEnabled'));
+app.post('/e/:slug/api/admin/visuals/toggle-show-venue-code', makeVisualsToggleRoute('showVenueCodeEnabled'));
 
 // Item 8: family-mode safety lists. Deliberately global (see the comment on
 // musicVideoDenylist/musicVideoAllowlist above) - reachable from any event's
@@ -5494,7 +5502,7 @@ app.get('/e/:slug/api/admin/visuals/music-video-debug', async (req, res) => {
         out.catalog = {
             autoMatchEnabled: MV_AUTO_MATCH,
             ...(await videoCatalog.stats()),
-            thisTrack: np.trackId ? await videoCatalog.lookup({ trackId: np.trackId, isrc: np.isrc, title: np.title, artist: np.artist }, { familyMode: !!vcfg.familyModeEnabled }) : null
+            thisTrack: np.trackId ? await videoCatalog.lookup({ trackId: np.trackId, isrc: np.isrc, title: np.title, artist: np.artist }, { familyMode: !!vcfg.familyModeEnabled, preferVisualizers: !!vcfg.preferVisualizersEnabled }) : null
         };
     } catch (e) {
         out.catalog = { autoMatchEnabled: MV_AUTO_MATCH, error: e.message };
@@ -5948,6 +5956,9 @@ app.post('/e/:slug/api/admin/action', (req, res) => {
         vcfg.musicVideosEnabled = false;
         vcfg.musicVideoSubtitlesEnabled = false;
         vcfg.familyModeEnabled = false;
+        vcfg.preferVisualizersEnabled = false;
+        vcfg.showClockEnabled = false;
+        vcfg.showVenueCodeEnabled = false;
         vcfg.musicVideoOffsetMs = MUSIC_VIDEO_OFFSET_DEFAULT_MS;
         vcfg.musicVideoInfoSeconds = MUSIC_VIDEO_INFO_SECONDS_DEFAULT;
         events.scheduleSave(event.slug);
@@ -6300,7 +6311,7 @@ app.get('/e/:slug/api/ambient-visuals', publicReadLimiter, (req, res) => {
     const vcfg = ensureVisualsConfigs(event);
     // Screen overrides from Admin -> Settings -> Content ride along on every
     // response so the display can apply them even when nothing is scheduled.
-    const overrides = { muted: !!(vcfg.muteVisuals || vcfg.muteAll), showQueue: !!vcfg.showQueue };
+    const overrides = { muted: !!(vcfg.muteVisuals || vcfg.muteAll), showQueue: !!vcfg.showQueue, showClock: !!vcfg.showClockEnabled };
     if (!event.musicScheduler?.enabled) {
         return res.json({ active: false, ...overrides });
     }
@@ -6388,7 +6399,7 @@ async function mvBuildClockAndNext(event, vcfg, runtime, np) {
         }
         if (!allowed) { next.known = true; return { clock, next }; }
 
-        const lookup = await videoCatalog.lookup({ trackId: up.id, title: up.title, artist: up.artist }, { familyMode: !!vcfg.familyModeEnabled });
+        const lookup = await videoCatalog.lookup({ trackId: up.id, title: up.title, artist: up.artist }, { familyMode: !!vcfg.familyModeEnabled, preferVisualizers: !!vcfg.preferVisualizersEnabled });
         if (lookup.status === 'hit') {
             const row = lookup.row;
             const ytCheck = await youtubeCheckVideo(row.youtubeId);
@@ -6527,7 +6538,7 @@ app.get('/e/:slug/api/music-video', publicReadLimiter, async (req, res) => {
     // the song playing right now, not only to the next one.
     let catalogLookup;
     try {
-        catalogLookup = await videoCatalog.lookup({ trackId: np.trackId, isrc: np.isrc, title: np.title, artist: np.artist }, { familyMode: !!vcfg.familyModeEnabled });
+        catalogLookup = await videoCatalog.lookup({ trackId: np.trackId, isrc: np.isrc, title: np.title, artist: np.artist }, { familyMode: !!vcfg.familyModeEnabled, preferVisualizers: !!vcfg.preferVisualizersEnabled });
     } catch (e) {
         catalogLookup = { status: 'error', error: e.message };
     }
