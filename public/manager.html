@@ -1049,14 +1049,31 @@ body.has-player #player { display: block; }
 .pc[data-repeat-state="track"]::after { content: "1"; position: absolute; right: 7px; bottom: 6px; font-size: .6rem; font-weight: 800; line-height: 1; }
 .player-top .tx p { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* Venue code page */
-.venue-box .vc-digits { font-size: 3rem; }
-.venue-box { padding: 22px 16px; }
+#sidebar-panel .sidebar-venue-code { margin: 16px 20px 0; }
 
 /* Rotate message: any landscape orientation */
 .rotate-lock { display: none; }
 @media (orientation: landscape) { .rotate-lock { display: flex; } }
 #blk-results .settings-card { margin-bottom: 14px; }
+
+/* Shorter queue rows */
+.swipe-wrap .song-row, #queue-list > .song-row { padding: 6px 10px; gap: 8px; }
+#queue-list .song-details { gap: 10px; }
+#queue-list .song-details img { width: 38px; height: 38px; }
+#queue-list .song-title { font-size: .95rem; }
+#queue-list .song-artist { font-size: .78rem; margin-top: 0; }
+#queue-list .length-requester-row { margin-top: 2px; }
+#queue-list .requester-badge { padding: 2px 7px; }
+#queue-list .swipe-wrap, #queue-list > .song-row { margin-bottom: 6px; }
+.btn.ico.play-now { width: 34px; height: 34px; min-width: 34px; flex: none; padding: 0; border-radius: 4px; align-self: center; }
+
+/* Playback tab: only the queue scrolls; top bar, strip and player stay put */
+html:has(body.has-player) { overflow: hidden; }
+body.has-player { height: 100vh; height: 100dvh; overflow: hidden; display: flex; flex-direction: column; padding-bottom: 0; }
+body.has-player > .header { width: 100%; flex: none; }
+body.has-player #page-play.active { display: flex; flex-direction: column; flex: 1; min-height: 0; width: 100%; max-width: var(--page-max, 1400px); margin: 0 auto; }
+body.has-player .mix-strip { flex: none; }
+body.has-player #queue-list { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding-bottom: calc(var(--player-h, 190px) + 8px); }
 
     </style>
 </head>
@@ -1088,8 +1105,13 @@ body.has-player #player { display: block; }
         <button type="button" id="nav-set" class="sidebar-nav-item" onclick="go('set')">Settings</button>
         <button type="button" id="nav-blk" class="sidebar-nav-item" onclick="go('blk')">Blocked</button>
         <button type="button" id="nav-dsp" class="sidebar-nav-item" onclick="go('dsp')">Display Controls</button>
-        <button type="button" id="nav-ven" class="sidebar-nav-item" onclick="go('ven')">Venue Code</button>
         <button type="button" id="nav-acc" class="sidebar-nav-item" onclick="go('acc')">Account + events</button>
+        <div class="sidebar-venue-code" id="venue-box" style="display:none;">
+            <div class="vc-label">Venue Code</div>
+            <div class="vc-digits" id="venue-digits">------</div>
+            <div class="vc-sub" id="venue-sub">Changes every couple of minutes</div>
+            <div class="vc-bar"><div id="venue-bar"></div></div>
+        </div>
     </div>
 
     <div class="header">
@@ -1250,21 +1272,6 @@ body.has-player #player { display: block; }
         </div>
     </div>
 
-    <!-- ============ VENUE CODE ============ -->
-    <div class="page" id="page-ven">
-        <div class="panel">
-            <h2>Venue Code</h2>
-            <div class="sidebar-venue-code venue-box" id="venue-box" style="display:none;">
-                <div class="vc-label">Venue Code</div>
-                <div class="vc-digits" id="venue-digits">------</div>
-                <div class="vc-sub" id="venue-sub">Changes every couple of minutes</div>
-                <div class="vc-bar"><div id="venue-bar"></div></div>
-            </div>
-            <p class="empty-placeholder" id="venue-none" style="display:none;">No venue code is active right now.</p>
-            <p class="settings-card-hint" style="margin:14px 0 0;">Read this out to guests outside the venue perimeter so they can still request songs.</p>
-        </div>
-    </div>
-
     <!-- ============ ACCOUNT + EVENTS ============ -->
     <div class="page" id="page-acc">
         <div class="panel">
@@ -1396,7 +1403,7 @@ body.has-player #player { display: block; }
         const svg = k => `<svg viewBox="0 0 24 24"><path d="${ICON[k]}"/></svg>`;
 
         // ---- Sidebar + views ----
-        const VIEWS = ['play', 'set', 'blk', 'dsp', 'ven', 'acc'];
+        const VIEWS = ['play', 'set', 'blk', 'dsp', 'acc'];
         let currentView = 'play';
         let managerBasicMode = false;
         function openSidebar() { $('sidebar-backdrop').classList.add('is-visible'); $('sidebar-panel').classList.add('is-visible'); }
@@ -2000,16 +2007,15 @@ body.has-player #player { display: block; }
         }
         function paintVenueCode() {
             const box = $('venue-box');
-            if (!venueCode) { box.style.display = 'none'; $('venue-none').style.display = 'block'; return; }
+            if (!venueCode) { box.style.display = 'none'; return; }
             box.style.display = 'block';
-            $('venue-none').style.display = 'none';
             $('venue-digits').textContent = venueCode.code;
             const msLeft = Math.max(0, venueCode.expiresAt - Date.now());
             $('venue-bar').style.width = Math.max(0, Math.min(100, (msLeft / venueCode.periodMs) * 100)) + '%';
             $('venue-sub').textContent = `Changes in ${Math.ceil(msLeft / 1000)}s`;
             box.classList.toggle('asked', !!venueCode.guestAskedForDisplay);
         }
-        setInterval(() => { if (currentView === 'ven') paintVenueCode(); }, 1000);
+        setInterval(paintVenueCode, 1000);
 
         // ---- Account + events (same endpoints as the admin.html sidebar footer) ----
         async function refreshAccountFooter() {
