@@ -1174,6 +1174,12 @@ body.has-player { overflow: hidden; }
         .switch.sm::after { top: 3px; left: 3px; width: 14px; height: 14px; }
         .switch.sm.on::after { left: 19px; }
     </style>
+    <style>
+        /* Mini now-playing bar (all tabs except Playback): tap to jump back to the live queue */
+        .now-playing-bar { cursor: pointer; transform: translateZ(0); height: calc(60px + env(safe-area-inset-bottom, 0px)); padding-bottom: env(safe-area-inset-bottom, 0px); -webkit-user-select: none; user-select: none; }
+        .now-playing-bar:active { background-color: var(--hover-bg); }
+        body.has-now-playing-bar { padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
+    </style>
 </head>
 <body>
 
@@ -1220,6 +1226,17 @@ body.has-player { overflow: hidden; }
         </div>
         <div class="ss-upnext-label">Up Next</div>
         <div class="ss-list" id="ss-list"></div>
+    </div>
+
+    <!-- Mini now-playing bar: shown on every tab except Playback. Tap = back to the live queue. -->
+    <div class="now-playing-bar" id="now-playing-bar" role="button" tabindex="0" aria-label="Now playing - go to playback and live queue" onclick="go('play')" onkeydown="if(event.key === 'Enter' || event.key === ' ') { event.preventDefault(); go('play'); }">
+        <div class="now-playing-progress-track"><div class="now-playing-progress-fill" id="now-playing-progress-fill"></div></div>
+        <img class="now-playing-artwork" id="now-playing-artwork" src="" alt="">
+        <div class="now-playing-text">
+            <p class="now-playing-title" id="now-playing-title"></p>
+            <p class="now-playing-artist" id="now-playing-artist"></p>
+        </div>
+        <div class="now-playing-live-dot" id="now-playing-live-dot"></div>
     </div>
 
     <!-- SIDEBAR -->
@@ -1633,6 +1650,7 @@ body.has-player { overflow: hidden; }
             window.scrollTo(0, 0);
             if (view === 'blk') renderBlockedPage();
             if (view === 'acc') refreshAccountFooter();
+            syncMiniBar();
             measurePlayer();
         }
 
@@ -2655,6 +2673,7 @@ body.has-player { overflow: hidden; }
                 $('pl-art').src = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
                 lastTrackId = null;
             }
+            syncMiniBar();
             const shuffleOn = optimisticValue('shuffleState', !!(nowPlaying && nowPlaying.shuffleState));
             $('pl-shuffle').classList.toggle('on', shuffleOn);
             const repeat = optimisticValue('repeatState', (nowPlaying && nowPlaying.repeatState) || 'off');
@@ -2962,6 +2981,31 @@ body.has-player { overflow: hidden; }
             paint();
             acquire();
         })();
+
+        // ---- Mini now-playing bar ----
+        function paintMiniProgress() {
+            const fill = $('now-playing-progress-fill');
+            if (!fill || !nowPlaying || !nowPlaying.durationMs) return;
+            const elapsed = nowPlaying.isPlaying ? Date.now() - nowPlaying.fetchedAt : 0;
+            fill.style.width = Math.min(100, ((nowPlaying.progressMs + elapsed) / nowPlaying.durationMs) * 100) + '%';
+        }
+        let miniTicker = null;
+        function syncMiniBar() {
+            const bar = $('now-playing-bar');
+            const hasTrack = !!(nowPlaying && nowPlaying.connected && nowPlaying.title);
+            const show = hasTrack && currentView !== 'play';
+            bar.classList.toggle('is-visible', show);
+            document.body.classList.toggle('has-now-playing-bar', show);
+            if (!show) { if (miniTicker) { clearInterval(miniTicker); miniTicker = null; } return; }
+            const art = safeImageUrl(nowPlaying.artwork);
+            const artEl = $('now-playing-artwork');
+            if (artEl.getAttribute('src') !== art) artEl.setAttribute('src', art);
+            $('now-playing-title').textContent = nowPlaying.title;
+            $('now-playing-artist').textContent = nowPlaying.artist || '';
+            $('now-playing-live-dot').classList.toggle('is-paused', !nowPlaying.isPlaying);
+            paintMiniProgress();
+            if (!miniTicker) miniTicker = setInterval(paintMiniProgress, 250);
+        }
 
         // ---- Start up ----
         $('pl-shuffle').innerHTML = svg('shuffle');
