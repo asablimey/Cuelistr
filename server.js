@@ -2383,7 +2383,7 @@ const MUSIC_VIDEO_OFFSET_MAX_MS = 5000;
 function ensureVisualsConfigs(event) {
     if (!event.visualsConfigs || typeof event.visualsConfigs !== 'object') event.visualsConfigs = {};
     const v = event.visualsConfigs;
-    for (const key of ['muteVisuals', 'muteAll', 'showQueue', 'musicVideosEnabled', 'musicVideoSubtitlesEnabled', 'pausedByMuteAll', 'familyModeEnabled', 'preferVisualizersEnabled', 'showClockEnabled', 'showVenueCodeEnabled']) {
+    for (const key of ['muteVisuals', 'muteAll', 'showQueue', 'musicVideosEnabled', 'musicVideoSubtitlesEnabled', 'pausedByMuteAll', 'familyModeEnabled', 'preferVisualizersEnabled', 'showClockEnabled', 'showVenueCodeEnabled', 'showLogoEnabled']) {
         if (typeof v[key] !== 'boolean') v[key] = false;
     }
     // How far ahead (positive) or behind (negative) of the raw Spotify
@@ -5419,6 +5419,7 @@ app.post('/e/:slug/api/admin/visuals/toggle-family-mode', makeVisualsToggleRoute
 app.post('/e/:slug/api/admin/visuals/toggle-prefer-visualizers', makeVisualsToggleRoute('preferVisualizersEnabled'));
 app.post('/e/:slug/api/admin/visuals/toggle-show-clock', makeVisualsToggleRoute('showClockEnabled'));
 app.post('/e/:slug/api/admin/visuals/toggle-show-venue-code', makeVisualsToggleRoute('showVenueCodeEnabled'));
+app.post('/e/:slug/api/admin/visuals/toggle-show-logo', makeVisualsToggleRoute('showLogoEnabled'));
 
 // Item 8: family-mode safety lists. Deliberately global (see the comment on
 // musicVideoDenylist/musicVideoAllowlist above) - reachable from any event's
@@ -6015,6 +6016,7 @@ app.post('/e/:slug/api/admin/action', (req, res) => {
         vcfg.preferVisualizersEnabled = false;
         vcfg.showClockEnabled = false;
         vcfg.showVenueCodeEnabled = false;
+        vcfg.showLogoEnabled = false;
         vcfg.musicVideoOffsetMs = MUSIC_VIDEO_OFFSET_DEFAULT_MS;
         vcfg.musicVideoInfoSeconds = MUSIC_VIDEO_INFO_SECONDS_DEFAULT;
         events.scheduleSave(event.slug);
@@ -6367,7 +6369,7 @@ app.get('/e/:slug/api/ambient-visuals', publicReadLimiter, (req, res) => {
     const vcfg = ensureVisualsConfigs(event);
     // Screen overrides from Admin -> Settings -> Content ride along on every
     // response so the display can apply them even when nothing is scheduled.
-    const overrides = { muted: !!(vcfg.muteVisuals || vcfg.muteAll), showQueue: !!vcfg.showQueue, showClock: !!vcfg.showClockEnabled };
+    const overrides = { muted: !!(vcfg.muteVisuals || vcfg.muteAll), showQueue: !!vcfg.showQueue, showClock: !!vcfg.showClockEnabled, showLogo: !!vcfg.showLogoEnabled };
     if (!event.musicScheduler?.enabled) {
         return res.json({ active: false, ...overrides });
     }
