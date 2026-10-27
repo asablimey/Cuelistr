@@ -173,6 +173,23 @@
             color: #666; font-size: 1.3rem; text-align: center;
         }
 
+        /* ---------- Show Logo (Admin/Manager -> Display Controls) ----------
+           Logo sits bottom-right of the queue board only. While it's on, the
+           board gets extra bottom padding so the Up Next list ends above the
+           logo instead of running under it (fitQueueRows hides rows that
+           no longer fit). */
+        :root { --qv-logo-h: clamp(26px, 4.6vh, 46px); --qv-pad-y: clamp(20px, 4.5vh, 40px); --qv-pad-x: clamp(24px, 4vw, 56px); }
+        .qv-logo {
+            position: absolute; right: var(--qv-pad-x); bottom: var(--qv-pad-y);
+            height: var(--qv-logo-h); width: auto; max-width: 40vw;
+            opacity: 0; pointer-events: none; transition: opacity 0.5s ease; z-index: 2;
+        }
+        body.show-logo .qv-logo { opacity: 0.6; }
+        body.show-logo #queue-view,
+        body.show-logo .amb-queue {
+            padding-bottom: calc(var(--qv-pad-y) + var(--qv-logo-h) + clamp(10px, 1.8vh, 18px));
+        }
+
         /* ---------- Full blackout, toggled from Admin -> Settings -> Content ---------- */
         /* Sits above both #ambient-view and #queue-view regardless of which
            is active. Purely visual - polling and slide timers keep running
@@ -180,7 +197,12 @@
         #mute-overlay {
             position: fixed; inset: 0; background: #000; z-index: 9999; display: none;
         }
-        #mute-overlay.is-visible { display: block; }
+        #mute-overlay.is-visible { display: flex; align-items: center; justify-content: center; }
+        /* Mute Visuals / Mute All: large Cuelistr logo dead-centre instead of a bare black screen. */
+        .mute-logo {
+            width: auto; height: auto; max-width: min(60vw, 900px); max-height: 30vh;
+            object-fit: contain; opacity: 0.9; pointer-events: none; user-select: none;
+        }
 
         /* ---------- Music Video overlay: replaces ambient visuals when the
            current track has a confident YouTube match (see pollMusicVideo).
@@ -379,6 +401,7 @@
         </div>
         <div class="qv-upnext-label">Up Next</div>
         <div class="qv-list" id="qv-list"></div>
+        <img class="qv-logo" src="/assets/cuelistr-logo-dark.svg" alt="">
     </div>
 
     <!-- Music Video overlay: shown in place of Ambient Visuals whenever the
@@ -403,7 +426,7 @@
         <img class="mv-logo" id="mv-logo" src="/assets/cuelistr-logo-dark.svg" alt="">
     </div>
 
-    <div id="mute-overlay"></div>
+    <div id="mute-overlay"><img class="mute-logo" src="/assets/cuelistr-logo-dark.svg" alt=""></div>
 
     <!-- The YouTube IFrame API is loaded dynamically (with automatic retry
          if it fails) from inside the script below, not as a static tag -
@@ -583,6 +606,12 @@
         // Admin -> Settings -> Content overrides, read from every
         // /api/ambient-visuals poll below (see pollAmbientVisuals).
         let visualsForceQueue = false;
+        function applyLogoSetting(on) {
+            const was = document.body.classList.contains('show-logo');
+            document.body.classList.toggle('show-logo', !!on);
+            // Padding change alters the list height - re-fit so no row sits under the logo.
+            if (was !== !!on) requestAnimationFrame(() => { if (typeof refitAllQueueLists === 'function') refitAllQueueLists(); });
+        }
         function applyMuteOverlay(muted) {
             document.getElementById('mute-overlay').classList.toggle('is-visible', !!muted);
         }
@@ -651,6 +680,7 @@
                     </div>
                     <div class="qv-upnext-label">Up Next</div>
                     <div class="qv-list" id="amb-qv-list"></div>
+                    <img class="qv-logo" src="/assets/cuelistr-logo-dark.svg" alt="">
                 </div>`;
 
             const renderList = () => applyQueueList(el.querySelector('#amb-qv-list'), requests, upcoming);
@@ -876,6 +906,7 @@
                 if (!res.ok) return;
                 const data = await res.json();
                 if (typeof applyClockSetting === 'function') applyClockSetting(!!data.showClock && !data.muted);
+                applyLogoSetting(!!data.showLogo && !data.muted);
                 // The Music Video overlay owns the screen once a video is
                 // actually on screen (not while it's still loading behind the
                 // scenes) - this poll isn't allowed to switch the view out from
