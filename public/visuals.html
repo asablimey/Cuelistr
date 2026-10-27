@@ -198,11 +198,19 @@
             position: fixed; inset: 0; background: #000; z-index: 9999; display: none;
         }
         #mute-overlay.is-visible { display: flex; align-items: center; justify-content: center; }
-        /* Mute Visuals / Mute All: large Cuelistr logo dead-centre instead of a bare black screen. */
-        .mute-logo {
-            width: auto; height: auto; max-width: min(60vw, 900px); max-height: 30vh;
-            object-fit: contain; opacity: 0.9; pointer-events: none; user-select: none;
+        /* ---------- Show Custom slide ---------- */
+        #custom-overlay {
+            position: fixed; inset: 0; background: #000; z-index: 9000; display: none;
+            container-type: size; overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         }
+        #custom-overlay.is-visible { display: block; }
+        #custom-overlay .cs-layer { position: absolute; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+        #custom-overlay .cs-layer img { width: 100%; height: 100%; object-fit: contain; }
+        #custom-overlay .cs-text { text-align: center; font-weight: 800; line-height: 1.15; overflow-wrap: anywhere; }
+        #custom-overlay .cs-time { font-weight: 800; line-height: 1; white-space: nowrap; font-variant-numeric: tabular-nums; }
+        #custom-overlay .cs-qr { background: #fff; padding: 3%; }
+        #custom-overlay .cs-qr img { width: 100% !important; height: 100% !important; object-fit: contain; }
 
         /* ---------- Music Video overlay: replaces ambient visuals when the
            current track has a confident YouTube match (see pollMusicVideo).
@@ -426,7 +434,11 @@
         <img class="mv-logo" id="mv-logo" src="/assets/cuelistr-logo-dark.svg" alt="">
     </div>
 
-    <div id="mute-overlay"><img class="mute-logo" src="/assets/cuelistr-logo-dark.svg" alt=""></div>
+    <div id="mute-overlay"></div>
+
+    <!-- Show Custom: simple custom slide (text / logos / venue QR / time / image) laid out from
+         Manager -> Display Controls. Sits above everything except the mute blackout. -->
+    <div id="custom-overlay"></div>
 
     <!-- The YouTube IFrame API is loaded dynamically (with automatic retry
          if it fails) from inside the script below, not as a static tag -
@@ -611,6 +623,66 @@
             document.body.classList.toggle('show-logo', !!on);
             // Padding change alters the list height - re-fit so no row sits under the logo.
             if (was !== !!on) requestAnimationFrame(() => { if (typeof refitAllQueueLists === 'function') refitAllQueueLists(); });
+        }
+        // ---- Show Custom slide (Manager -> Display Controls) ----
+        // Layout/sizing MUST stay in sync with csFill()/csPlace() in manager.html (the preview).
+        let customSlideKey = '';
+        let customTimeTimer = null;
+        function customTimeText() {
+            const d = new Date(); const h = d.getHours();
+            return String(h % 12 || 12).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0') + ' ' + (h < 12 ? 'AM' : 'PM');
+        }
+        function applyCustomOverlay(show, slide) {
+            const el = document.getElementById('custom-overlay');
+            if (!show) {
+                el.classList.remove('is-visible');
+                if (customTimeTimer) { clearInterval(customTimeTimer); customTimeTimer = null; }
+                customSlideKey = '';
+                el.innerHTML = '';
+                return;
+            }
+            el.classList.add('is-visible');
+            const key = JSON.stringify(slide || {});
+            if (key === customSlideKey) return;
+            customSlideKey = key;
+            if (customTimeTimer) { clearInterval(customTimeTimer); customTimeTimer = null; }
+            el.innerHTML = '';
+            const timeEls = [];
+            for (const l of ((slide && slide.layers) || [])) {
+                const box = document.createElement('div');
+                box.className = 'cs-layer';
+                box.style.cssText = `left:${l.x}%;top:${l.y}%;width:${l.w}%;height:${l.h}%;`;
+                if (l.type === 'text') {
+                    const t = document.createElement('div');
+                    t.className = 'cs-text';
+                    t.style.cssText = `color:${l.color || '#fff'};font-size:${l.size || 8}cqh;`;
+                    t.textContent = l.text || '';
+                    box.appendChild(t);
+                } else if (l.type === 'time') {
+                    const t = document.createElement('div');
+                    t.className = 'cs-time';
+                    t.style.cssText = `color:${l.color || '#fff'};font-size:${l.h * 0.6}cqh;`;
+                    t.textContent = customTimeText();
+                    timeEls.push(t);
+                    box.appendChild(t);
+                } else if (l.type === 'cuelistrLogo') {
+                    box.innerHTML = '<img src="/assets/cuelistr-logo-dark.svg" alt="">';
+                } else if ((l.type === 'customLogo' || l.type === 'image') && l.src) {
+                    const im = document.createElement('img');
+                    im.src = l.src; im.alt = '';
+                    box.appendChild(im);
+                } else if (l.type === 'qr') {
+                    box.classList.add('cs-qr');
+                    const inner = document.createElement('div');
+                    inner.style.cssText = 'width:100%;height:100%;';
+                    box.appendChild(inner);
+                    const build = () => { try { new QRCode(inner, { text: location.origin + '/e/' + EVENT_SLUG, width: 512, height: 512, correctLevel: QRCode.CorrectLevel.M }); } catch (e) {} };
+                    if (typeof QRCode !== 'undefined') build();
+                    else { const sc = document.createElement('script'); sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js'; sc.onload = build; document.head.appendChild(sc); }
+                } else { continue; }
+                el.appendChild(box);
+            }
+            if (timeEls.length) customTimeTimer = setInterval(() => timeEls.forEach(t => { t.textContent = customTimeText(); }), 1000);
         }
         function applyMuteOverlay(muted) {
             document.getElementById('mute-overlay').classList.toggle('is-visible', !!muted);
@@ -905,8 +977,9 @@
                 const res = await fetch(eventUrl('/api/ambient-visuals'));
                 if (!res.ok) return;
                 const data = await res.json();
-                if (typeof applyClockSetting === 'function') applyClockSetting(!!data.showClock && !data.muted);
-                applyLogoSetting(!!data.showLogo && !data.muted);
+                if (typeof applyClockSetting === 'function') applyClockSetting(!!data.showClock && !data.muted && !data.showCustom);
+                applyLogoSetting(!!data.showLogo && !data.muted && !data.showCustom);
+                applyCustomOverlay(!!data.showCustom, data.customSlide);
                 // The Music Video overlay owns the screen once a video is
                 // actually on screen (not while it's still loading behind the
                 // scenes) - this poll isn't allowed to switch the view out from
