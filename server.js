@@ -2383,8 +2383,14 @@ const MUSIC_VIDEO_OFFSET_MAX_MS = 5000;
 function ensureVisualsConfigs(event) {
     if (!event.visualsConfigs || typeof event.visualsConfigs !== 'object') event.visualsConfigs = {};
     const v = event.visualsConfigs;
-    for (const key of ['muteVisuals', 'muteAll', 'showQueue', 'musicVideosEnabled', 'musicVideoSubtitlesEnabled', 'pausedByMuteAll', 'familyModeEnabled', 'preferVisualizersEnabled', 'showClockEnabled', 'showVenueCodeEnabled', 'showLogoEnabled']) {
+    for (const key of ['muteVisuals', 'muteAll', 'showQueue', 'musicVideosEnabled', 'musicVideoSubtitlesEnabled', 'pausedByMuteAll', 'familyModeEnabled', 'preferVisualizersEnabled', 'showClockEnabled', 'showVenueCodeEnabled', 'showLogoEnabled', 'showCustom']) {
         if (typeof v[key] !== 'boolean') v[key] = false;
+    }
+    // Manager -> Display Controls -> Show Custom: layout of the simple custom slide
+    // (text, logos, venue QR, time, image). Percent-based boxes so it fills any screen.
+    // Validated on write by sanitizeCustomSlide().
+    if (!v.customSlide || typeof v.customSlide !== 'object' || !Array.isArray(v.customSlide.layers)) {
+        v.customSlide = { layers: [] };
     }
     // How far ahead (positive) or behind (negative) of the raw Spotify
     // position the ENTIRE video stream should target - moves where the
@@ -5420,6 +5426,42 @@ app.post('/e/:slug/api/admin/visuals/toggle-prefer-visualizers', makeVisualsTogg
 app.post('/e/:slug/api/admin/visuals/toggle-show-clock', makeVisualsToggleRoute('showClockEnabled'));
 app.post('/e/:slug/api/admin/visuals/toggle-show-venue-code', makeVisualsToggleRoute('showVenueCodeEnabled'));
 app.post('/e/:slug/api/admin/visuals/toggle-show-logo', makeVisualsToggleRoute('showLogoEnabled'));
+app.post('/e/:slug/api/admin/visuals/toggle-show-custom', makeVisualsToggleRoute('showCustom'));
+
+// ---- Show Custom slide layout ----
+// One layer per feature type. Array order is the stacking order (last = on top).
+const CUSTOM_SLIDE_TYPES = ['image', 'text', 'cuelistrLogo', 'customLogo', 'qr', 'time'];
+function sanitizeCustomSlide(raw) {
+    const layers = [];
+    const seen = new Set();
+    const num = (v, lo, hi, d) => (typeof v === 'number' && Number.isFinite(v)) ? Math.max(lo, Math.min(hi, v)) : d;
+    const hex = c => (typeof c === 'string' && /^#[0-9a-fA-F]{6}$/.test(c)) ? c : '#ffffff';
+    for (const l of (raw && Array.isArray(raw.layers) ? raw.layers : [])) {
+        if (!l || typeof l !== 'object' || !CUSTOM_SLIDE_TYPES.includes(l.type) || seen.has(l.type)) continue;
+        seen.add(l.type);
+        const w = num(l.w, 4, 100, 30);
+        const h = num(l.h, 4, 100, 20);
+        const out = { type: l.type, x: num(l.x, 0, 100 - w, 35), y: num(l.y, 0, 100 - h, 40), w, h };
+        if (l.type === 'text') {
+            out.text = typeof l.text === 'string' ? l.text.slice(0, 200) : '';
+            out.color = hex(l.color);
+            out.size = num(l.size, 2, 40, 8);
+        } else if (l.type === 'time') {
+            out.color = hex(l.color);
+        } else if (l.type === 'customLogo' || l.type === 'image') {
+            // Cloudinary URLs only, same rule as the ambient media library.
+            out.src = isCloudinaryUrl(l.src) ? l.src : '';
+        }
+        layers.push(out);
+    }
+    return { layers };
+}
+app.post('/e/:slug/api/admin/visuals/custom-slide', (req, res) => {
+    const vcfg = ensureVisualsConfigs(req.event);
+    vcfg.customSlide = sanitizeCustomSlide(req.body);
+    events.scheduleSave(req.event.slug);
+    res.json({ success: true, customSlide: vcfg.customSlide });
+});
 
 // Item 8: family-mode safety lists. Deliberately global (see the comment on
 // musicVideoDenylist/musicVideoAllowlist above) - reachable from any event's
@@ -6369,7 +6411,8 @@ app.get('/e/:slug/api/ambient-visuals', publicReadLimiter, (req, res) => {
     const vcfg = ensureVisualsConfigs(event);
     // Screen overrides from Admin -> Settings -> Content ride along on every
     // response so the display can apply them even when nothing is scheduled.
-    const overrides = { muted: !!(vcfg.muteVisuals || vcfg.muteAll), showQueue: !!vcfg.showQueue, showClock: !!vcfg.showClockEnabled, showLogo: !!vcfg.showLogoEnabled };
+    const overrides = { muted: !!(vcfg.muteVisuals || vcfg.muteAll), showQueue: !!vcfg.showQueue, showClock: !!vcfg.showClockEnabled, showLogo: !!vcfg.showLogoEnabled, showCustom: !!vcfg.showCustom };
+    if (vcfg.showCustom) overrides.customSlide = vcfg.customSlide;
     if (!event.musicScheduler?.enabled) {
         return res.json({ active: false, ...overrides });
     }
@@ -6484,7 +6527,7 @@ app.get('/e/:slug/api/music-video', publicReadLimiter, async (req, res) => {
     // Mute / Show Queue from Admin -> Settings -> Content win over videos:
     // returning nothing makes the display drop the video, after which its
     // ambient poll applies the black-out or the queue board.
-    if (vcfg.muteVisuals || vcfg.muteAll || vcfg.showQueue) return res.json({ ...emptyResponse, override: true, reason: 'admin_override_mute_or_show_queue_is_on' });
+    if (vcfg.muteVisuals || vcfg.muteAll || vcfg.showQueue || vcfg.showCustom) return res.json({ ...emptyResponse, override: true, reason: 'admin_override_mute_or_show_queue_or_custom_is_on' });
 
     // Admin -> Settings -> Content -> Music Videos forces a video attempt for
     // every song, ignoring the scheduler. With it off, only an active Music
