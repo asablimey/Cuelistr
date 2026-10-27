@@ -1014,6 +1014,30 @@ button.switch { border: none; padding: 0; }
 .settings-card .utility-btn { width: 100%; }
 .sub-label { font-size: .72rem; text-transform: uppercase; letter-spacing: .5px; color: var(--text-muted); font-weight: 700; margin: 18px 0 0; }
 
+/* Show Custom editor */
+#cs-stage { position: relative; width: 100%; aspect-ratio: 16 / 9; background: #000; border: 1px solid var(--border-strong); border-radius: 10px; margin-top: 10px; container-type: size; user-select: none; -webkit-user-select: none; }
+#cs-stage .cs-l { position: absolute; touch-action: none; cursor: move; outline: 1px dashed rgba(255,255,255,0.28); }
+#cs-stage .cs-l.sel { outline: 2px solid var(--spotify-green); }
+#cs-stage .cs-in { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; pointer-events: none; }
+#cs-stage .cs-in img { width: 100%; height: 100%; object-fit: contain; }
+#cs-stage .cs-text { text-align: center; font-weight: 800; line-height: 1.15; overflow-wrap: anywhere; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+#cs-stage .cs-time { font-weight: 800; line-height: 1; white-space: nowrap; font-variant-numeric: tabular-nums; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+#cs-stage .cs-qrbox { width: 100%; height: 100%; background: #fff; padding: 3%; }
+#cs-stage .cs-qrbox img { width: 100% !important; height: 100% !important; object-fit: contain; }
+#cs-stage .cs-ph { color: #777; font-size: 3.2cqh; font-weight: 700; text-align: center; padding: 4px; }
+#cs-stage .cs-h { position: absolute; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%; background: #fff; border: 3px solid var(--spotify-green); touch-action: none; z-index: 5; }
+#cs-stage .cs-h::after { content: ""; position: absolute; inset: -12px; }
+#cs-stage .cs-h-nw { left: 0; top: 0; cursor: nwse-resize; } #cs-stage .cs-h-ne { left: 100%; top: 0; cursor: nesw-resize; }
+#cs-stage .cs-h-sw { left: 0; top: 100%; cursor: nesw-resize; } #cs-stage .cs-h-se { left: 100%; top: 100%; cursor: nwse-resize; }
+#cs-props { margin-top: 14px; }
+#cs-props .cs-prow { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 10px; }
+#cs-props input[type=text] { flex: 1 1 220px; background: var(--panel-bg); border: 1px solid var(--border-strong); color: var(--text); border-radius: 8px; padding: 11px 12px; font-size: 1rem; min-width: 0; }
+#cs-props input[type=range] { flex: 1 1 160px; accent-color: var(--spotify-green); }
+#cs-props input[type=color] { width: 46px; height: 40px; padding: 2px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--panel-bg); }
+#cs-props .cs-pl { font-size: .72rem; text-transform: uppercase; letter-spacing: .5px; color: var(--text-muted); font-weight: 700; }
+#cs-props .utility-btn { width: auto; }
+.cs-status { margin-top: 10px; font-size: .8rem; color: var(--text-muted); min-height: 1em; }
+
 /* Playing / Mixing strip */
 .mix-strip.idle { background: var(--overlay-soft); color: var(--text-muted); }
 .mix-strip.paused { background: var(--overlay-soft); color: var(--text-muted); }
@@ -1485,6 +1509,16 @@ body.has-player { overflow: hidden; }
                 <div class="row-set"><div><div class="rl">Subtitles</div></div><button type="button" class="switch" id="sw-vsub" role="switch" aria-checked="false" aria-label="Subtitles" onclick="toggleSwitch('vsub')"></button></div>
                 <div class="row-set"><div><div class="rl">Family mode</div></div><button type="button" class="switch" id="sw-vfam" role="switch" aria-checked="false" aria-label="Family mode" onclick="toggleSwitch('vfam')"></button></div>
             </div>
+            <div class="settings-card" id="custom-card">
+                <div class="settings-section-label">Custom Screen</div>
+                <div class="row-set"><div><div class="rl">Show Custom</div><div class="rs">Puts this slide on the venue screens in place of everything else (Mute still wins)</div></div><button type="button" class="switch" id="sw-vcustom" role="switch" aria-checked="false" aria-label="Show Custom" onclick="toggleSwitch('vcustom')"></button></div>
+                <div class="sub-label">Include</div>
+                <div class="chip-row" id="cs-chips"></div>
+                <div class="sub-label">Preview &middot; drag to move, pull a corner to resize</div>
+                <div id="cs-stage" aria-label="Custom slide preview"></div>
+                <div id="cs-props"></div>
+                <div class="cs-status" id="cs-status"></div>
+            </div>
         </div>
     </div>
 
@@ -1816,7 +1850,8 @@ body.has-player { overflow: hidden; }
             vmv:      { el: 'sw-vmv',      path: '/api/admin/visuals/toggle-music-videos',     body: v => ({ enabled: v }) },
             vviz:     { el: 'sw-vviz',     path: '/api/admin/visuals/toggle-prefer-visualizers', body: v => ({ enabled: v }) },
             vsub:     { el: 'sw-vsub',     path: '/api/admin/visuals/toggle-music-video-subtitles', body: v => ({ enabled: v }) },
-            vfam:     { el: 'sw-vfam',     path: '/api/admin/visuals/toggle-family-mode',      body: v => ({ enabled: v }) }
+            vfam:     { el: 'sw-vfam',     path: '/api/admin/visuals/toggle-family-mode',      body: v => ({ enabled: v }) },
+            vcustom:  { el: 'sw-vcustom',  path: '/api/admin/visuals/toggle-show-custom',      body: v => ({ enabled: v }) }
         };
         function paintSwitch(name, on) {
             const el = $(SWITCHES[name].el);
@@ -2463,6 +2498,231 @@ body.has-player { overflow: hidden; }
             const el = $(id);
             if (document.activeElement !== el && value !== undefined && value !== null) el.value = value;
         }
+        // =====================================================================
+        // Show Custom slide editor (Display Controls -> Custom Screen)
+        // csFill()/csPlace() MUST stay in sync with applyCustomOverlay() in visuals.html:
+        // layers are % boxes of the screen, text size is in cqh (% of screen height).
+        // =====================================================================
+        const CS_ASPECT = 16 / 9;   // preview + QR squareness assume a landscape 16:9 screen
+        const CS_MIN = 5;           // smallest box edge, in %
+        const CS_CLOUD_NAME = 'zqywiwqr';
+        const CS_UPLOAD_PRESET = 'dylhzuki';
+        const CS_FEATURES = [
+            { type: 'text', label: 'Text' }, { type: 'cuelistrLogo', label: 'Cuelistr logo' },
+            { type: 'customLogo', label: 'Custom logo' }, { type: 'qr', label: 'Venue QR code' },
+            { type: 'time', label: 'Time' }, { type: 'image', label: 'Image' }
+        ];
+        let csLayers = [], csSel = null, csDrag = null;
+        let csSaveTimer = null, csSaving = false, csLastEdit = 0, csLastServerKey = '', csInit = false;
+
+        function csDefault(type) {
+            const d = {
+                text:         { x: 10, y: 38, w: 80, h: 24, text: 'Welcome', color: '#ffffff', size: 12 },
+                cuelistrLogo: { x: 30, y: 6,  w: 40, h: 22 },
+                customLogo:   { x: 6,  y: 6,  w: 22, h: 30, src: '' },
+                qr:           { x: 70, y: 45, w: 22, h: 22 * CS_ASPECT },
+                time:         { x: 60, y: 4,  w: 34, h: 14, color: '#ffffff' },
+                image:        { x: 10, y: 10, w: 80, h: 80, src: '' }
+            }[type];
+            return Object.assign({ type }, d);
+        }
+        const csGet = type => csLayers.find(l => l.type === type);
+        const csEsc = v => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+
+        function csPlace(el, l) {
+            el.style.left = l.x + '%'; el.style.top = l.y + '%';
+            el.style.width = l.w + '%'; el.style.height = l.h + '%';
+            const t = el.querySelector('.cs-time');
+            if (t) t.style.fontSize = (l.h * 0.6) + 'cqh';
+        }
+        function csFill(inner, l) {
+            if (l.type === 'text') {
+                const t = document.createElement('div');
+                t.className = 'cs-text'; t.style.color = l.color || '#fff'; t.style.fontSize = (l.size || 8) + 'cqh';
+                t.textContent = l.text || ''; inner.appendChild(t);
+            } else if (l.type === 'time') {
+                const t = document.createElement('div');
+                t.className = 'cs-time'; t.style.color = l.color || '#fff';
+                const d = new Date(), h = d.getHours();
+                t.textContent = String(h % 12 || 12).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0') + ' ' + (h < 12 ? 'AM' : 'PM');
+                inner.appendChild(t);
+            } else if (l.type === 'cuelistrLogo') {
+                inner.innerHTML = '<img src="/assets/cuelistr-logo-dark.svg" alt="">';
+            } else if (l.type === 'customLogo' || l.type === 'image') {
+                if (l.src) { const im = document.createElement('img'); im.src = l.src; im.alt = ''; inner.appendChild(im); }
+                else { const ph = document.createElement('div'); ph.className = 'cs-ph'; ph.textContent = l.type === 'image' ? 'Image - upload below' : 'Logo - upload below'; inner.appendChild(ph); }
+            } else if (l.type === 'qr') {
+                const box = document.createElement('div'); box.className = 'cs-qrbox'; inner.appendChild(box);
+                try { new QRCode(box, { text: location.origin + '/e/' + EVENT_SLUG, width: 256, height: 256, correctLevel: QRCode.CorrectLevel.M }); } catch (e) { box.textContent = 'QR'; }
+            }
+        }
+
+        function csRebuild() {
+            const st = $('cs-stage'); if (!st) return;
+            st.innerHTML = '';
+            for (const l of csLayers) {
+                const el = document.createElement('div');
+                el.className = 'cs-l' + (l.type === csSel ? ' sel' : '');
+                el.dataset.type = l.type;
+                const inner = document.createElement('div'); inner.className = 'cs-in';
+                csFill(inner, l); el.appendChild(inner);
+                csPlace(el, l);
+                if (l.type === csSel) for (const dir of ['nw', 'ne', 'sw', 'se']) {
+                    const h = document.createElement('div'); h.className = 'cs-h cs-h-' + dir; h.dataset.dir = dir; el.appendChild(h);
+                }
+                st.appendChild(el);
+            }
+            csRenderChips(); csRenderProps();
+        }
+        function csRenderChips() {
+            $('cs-chips').innerHTML = CS_FEATURES.map(f =>
+                `<button type="button" class="chip${csGet(f.type) ? ' is-selected' : ''}" onclick="csToggle('${f.type}')">${f.label}</button>`).join('');
+        }
+        function csRenderProps() {
+            const box = $('cs-props'); const l = csSel && csGet(csSel);
+            if (!l) {
+                box.innerHTML = '<div class="settings-card-hint" style="margin:0;">' + (csLayers.length ? 'Tap something in the preview to edit it.' : 'Pick what to include above, then arrange it in the preview.') + '</div>';
+                return;
+            }
+            const name = (CS_FEATURES.find(f => f.type === l.type) || {}).label;
+            let h = `<div class="cs-pl">${name}</div>`;
+            if (l.type === 'text') {
+                h += `<div class="cs-prow"><input type="text" maxlength="200" value="${csEsc(l.text)}" placeholder="Type your message" oninput="csSetText(this.value)"></div>
+                      <div class="cs-prow"><span class="cs-pl">Size</span><input type="range" min="3" max="30" step="0.5" value="${l.size || 8}" oninput="csSetProp('size', +this.value)"><span class="cs-pl">Colour</span><input type="color" value="${l.color || '#ffffff'}" oninput="csSetProp('color', this.value)"></div>`;
+            } else if (l.type === 'time') {
+                h += `<div class="cs-prow"><span class="cs-pl">Colour</span><input type="color" value="${l.color || '#ffffff'}" oninput="csSetProp('color', this.value)"><span class="settings-card-hint" style="margin:0;">Make the box taller for bigger digits.</span></div>`;
+            } else if (l.type === 'customLogo' || l.type === 'image') {
+                h += `<div class="cs-prow"><button type="button" class="utility-btn" id="cs-upload-btn" onclick="$('cs-file').click()">${l.src ? 'Replace picture' : 'Upload picture'}</button>${l.src ? '<button type="button" class="utility-btn" onclick="csClearSrc()">Remove picture</button>' : ''}<input type="file" id="cs-file" accept="image/*" hidden onchange="csUpload(this)"></div>`;
+            } else if (l.type === 'qr') {
+                h += `<div class="cs-prow"><span class="settings-card-hint" style="margin:0;">Links to this event's guest page. Stays square when resized.</span></div>`;
+            } else {
+                h += `<div class="cs-prow"><span class="settings-card-hint" style="margin:0;">Drag and resize in the preview.</span></div>`;
+            }
+            h += `<div class="cs-prow"><button type="button" class="utility-btn" onclick="csFront()">Bring to front</button></div>`;
+            box.innerHTML = h;
+        }
+
+        function csToggle(type) {
+            if (csGet(type)) { csLayers = csLayers.filter(l => l.type !== type); if (csSel === type) csSel = null; }
+            else { csLayers.push(csDefault(type)); csSel = type; }
+            csRebuild(); csQueueSave();
+        }
+        function csFront() {
+            const l = csSel && csGet(csSel); if (!l) return;
+            csLayers = csLayers.filter(x => x !== l); csLayers.push(l);
+            csRebuild(); csQueueSave();
+        }
+        function csSetText(v) {
+            const l = csGet('text'); if (!l) return;
+            l.text = v;
+            const t = $('cs-stage').querySelector('[data-type="text"] .cs-text'); if (t) t.textContent = v;
+            csQueueSave();
+        }
+        function csSetProp(k, v) {
+            const l = csSel && csGet(csSel); if (!l) return;
+            l[k] = v;
+            const t = $('cs-stage').querySelector(`[data-type="${l.type}"] .cs-text, [data-type="${l.type}"] .cs-time`);
+            if (t) { if (k === 'color') t.style.color = v; if (k === 'size') t.style.fontSize = v + 'cqh'; }
+            csQueueSave();
+        }
+        function csClearSrc() { const l = csSel && csGet(csSel); if (!l) return; l.src = ''; csRebuild(); csQueueSave(); }
+        async function csUpload(input) {
+            const file = input.files && input.files[0]; input.value = '';
+            const l = csSel && csGet(csSel);
+            if (!file || !l) return;
+            if (!/^image\//.test(file.type)) { showToast('Please choose an image file.', 'error'); return; }
+            if (file.size > 12 * 1024 * 1024) { showToast('That picture is too big (12 MB max).', 'error'); return; }
+            const btn = $('cs-upload-btn'); if (btn) { btn.disabled = true; btn.textContent = 'Uploading...'; }
+            try {
+                const form = new FormData(); form.append('file', file); form.append('upload_preset', CS_UPLOAD_PRESET);
+                const res = await fetch(`https://api.cloudinary.com/v1_1/${CS_CLOUD_NAME}/image/upload`, { method: 'POST', body: form });
+                const data = await res.json();
+                if (!res.ok || !data.secure_url) throw new Error((data.error && data.error.message) || 'Upload failed');
+                l.src = data.secure_url;
+                csRebuild(); csQueueSave();
+            } catch (e) {
+                showToast('Could not upload that picture.', 'error');
+                csRenderProps();
+            }
+        }
+
+        // ---- drag / resize ----
+        function csResize(l, d, dxp, dyp) {
+            const o = d.o; let x1 = o.x, y1 = o.y, x2 = o.x + o.w, y2 = o.y + o.h;
+            const W = d.dir.includes('w'), N = d.dir.includes('n');
+            if (W) x1 = Math.max(0, Math.min(x2 - CS_MIN, o.x + dxp)); else x2 = Math.min(100, Math.max(x1 + CS_MIN, o.x + o.w + dxp));
+            if (N) y1 = Math.max(0, Math.min(y2 - CS_MIN, o.y + dyp)); else y2 = Math.min(100, Math.max(y1 + CS_MIN, o.y + o.h + dyp));
+            if (l.type === 'qr') {   // keep it square on screen
+                let w = x2 - x1, h = w * CS_ASPECT;
+                const maxH = N ? y2 : 100 - y1; if (h > maxH) { h = maxH; w = h / CS_ASPECT; }
+                const maxW = W ? x2 : 100 - x1; if (w > maxW) { w = maxW; h = w * CS_ASPECT; }
+                if (w < CS_MIN) { w = CS_MIN; h = w * CS_ASPECT; }
+                if (W) x1 = x2 - w; else x2 = x1 + w;
+                if (N) y1 = y2 - h; else y2 = y1 + h;
+            }
+            l.x = x1; l.y = y1; l.w = x2 - x1; l.h = y2 - y1;
+        }
+        function csPointerDown(e) {
+            const el = e.target.closest('.cs-l');
+            if (!el) { if (csSel) { csSel = null; csRebuild(); } return; }
+            e.preventDefault();
+            const handle = e.target.closest('.cs-h');
+            const type = el.dataset.type;
+            if (csSel !== type) { csSel = type; csRebuild(); }
+            const l = csGet(type); if (!l) return;
+            csDrag = { mode: handle ? 'resize' : 'move', dir: handle ? handle.dataset.dir : '', type, sx: e.clientX, sy: e.clientY,
+                       o: { x: l.x, y: l.y, w: l.w, h: l.h }, rect: $('cs-stage').getBoundingClientRect() };
+        }
+        window.addEventListener('pointermove', e => {
+            if (!csDrag) return;
+            const l = csGet(csDrag.type); if (!l) { csDrag = null; return; }
+            const dxp = (e.clientX - csDrag.sx) / csDrag.rect.width * 100;
+            const dyp = (e.clientY - csDrag.sy) / csDrag.rect.height * 100;
+            if (csDrag.mode === 'move') {
+                l.x = Math.max(0, Math.min(100 - csDrag.o.w, csDrag.o.x + dxp));
+                l.y = Math.max(0, Math.min(100 - csDrag.o.h, csDrag.o.y + dyp));
+            } else csResize(l, csDrag, dxp, dyp);
+            const el = $('cs-stage').querySelector(`[data-type="${l.type}"]`); if (el) csPlace(el, l);
+            csLastEdit = Date.now();
+        });
+        const csPointerEnd = () => { if (csDrag) { csDrag = null; csQueueSave(); } };
+        window.addEventListener('pointerup', csPointerEnd);
+        window.addEventListener('pointercancel', csPointerEnd);
+        $('cs-stage').addEventListener('pointerdown', csPointerDown);
+
+        // ---- save / sync (auto-saves ~0.5s after the last change) ----
+        function csQueueSave() {
+            csLastEdit = Date.now();
+            $('cs-status').textContent = 'Saving...';
+            clearTimeout(csSaveTimer);
+            csSaveTimer = setTimeout(csSave, 500);
+        }
+        async function csSave() {
+            csSaveTimer = null;
+            if (!isAuthorized) return;
+            csSaving = true;
+            const round = n => Math.round(n * 100) / 100;
+            const layers = csLayers.map(l => Object.assign({}, l, { x: round(l.x), y: round(l.y), w: round(l.w), h: round(l.h) }));
+            try {
+                const res = await adminPost('/api/admin/visuals/custom-slide', { layers });
+                const d = await res.json().catch(() => ({}));
+                if (!res.ok) { $('cs-status').textContent = ''; showToast(d.error || 'Could not save the custom screen.', 'error'); }
+                else { csLastServerKey = JSON.stringify((d.customSlide || {}).layers || []); $('cs-status').textContent = 'Saved'; }
+            } catch (e) { $('cs-status').textContent = ''; showToast('Could not reach the server.', 'error'); }
+            csSaving = false;
+        }
+        function csSync(slide) {
+            if (!slide || !Array.isArray(slide.layers)) return;
+            const key = JSON.stringify(slide.layers);
+            if (!csInit) { csInit = true; csLastServerKey = key; csLayers = JSON.parse(key); csRebuild(); return; }
+            if (csDrag || csSaveTimer || csSaving || Date.now() - csLastEdit < 5000) return;
+            if (document.activeElement && document.activeElement.closest && document.activeElement.closest('#cs-props')) return;
+            if (key === csLastServerKey) return;
+            csLastServerKey = key; csLayers = JSON.parse(key);
+            if (csSel && !csGet(csSel)) csSel = null;
+            csRebuild();
+        }
+
         async function updateDashboard() {
             if (!isAuthorized) return;
             try {
@@ -2519,6 +2779,8 @@ body.has-player { overflow: hidden; }
                     setSwitchFromServer('vviz', !!data.visuals.preferVisualizersEnabled);
                     setSwitchFromServer('vsub', !!data.visuals.musicVideoSubtitlesEnabled);
                     setSwitchFromServer('vfam', !!data.visuals.familyModeEnabled);
+                    setSwitchFromServer('vcustom', !!data.visuals.showCustom);
+                    csSync(data.visuals.customSlide);
                 }
 
                 lastGuestQueue = data.queue || [];
@@ -3029,5 +3291,6 @@ body.has-player { overflow: hidden; }
         setInterval(updateDashboard, 3000);
         setInterval(pollNowPlaying, 4000);
     </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </body>
 </html>
