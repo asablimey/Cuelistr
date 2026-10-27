@@ -1395,15 +1395,17 @@
                             <div class="control-bar" style="margin-top: 10px;">
                                 <button id="toggle-show-clock" class="toggle-btn closed-status" onclick="toggleShowClock()">Show Time: OFF</button>
                                 <button id="toggle-show-venue-code" class="toggle-btn closed-status" onclick="toggleShowVenueCode()">Show Venue Code: OFF</button>
+                                <button id="toggle-show-logo" class="toggle-btn closed-status" onclick="toggleShowLogo()">Show Logo: OFF</button>
                             </div>
                             <p class="settings-card-hint" style="margin-top: 16px; margin-bottom: 0;">
-                                <strong>Mute Visuals</strong> turns the visuals display fully black. <strong>Mute All</strong> does
+                                <strong>Mute Visuals</strong> blanks the visuals display to a black screen with a large centred Cuelistr logo. <strong>Mute All</strong> does
                                 the same and also pauses playback (resuming it when switched back off). <strong>Show Queue</strong>
                                 pins the Now Playing + Up Next board on screen, overriding any scheduled Ambient Visuals content,
                                 until switched off. <strong>Show Time</strong> puts a 12-hour clock in the top-left corner of the
                                 visuals display (hidden while a music video is on screen). <strong>Show Venue Code</strong> keeps the
                                 live, updating venue code on the display at all times, music videos included; it only works on a
-                                display opened from the Open Visuals Display button.
+                                display opened from the Open Visuals Display button. <strong>Show Logo</strong> puts the Cuelistr
+                                logo in the bottom-right corner of the queue board, clear of the queue boxes (music videos already show it).
                             </p>
                         </div>
 
@@ -1659,6 +1661,7 @@
         let visualsMuteAll = false;
         let visualsShowQueue = false;
         let visualsShowClock = false;
+        let visualsShowLogo = false;
         let visualsShowVenueCode = false;
         let musicVideosEnabled = false;
         let musicVideoSubtitlesEnabled = false;
@@ -2280,6 +2283,16 @@ async function verifyPassword() {
                 method: 'POST',
                 headers: adminHeaders({ 'Content-Type': 'application/json' }),
                 body: JSON.stringify({ enabled: !visualsShowClock })
+            });
+            updateDashboard();
+        }
+
+        async function toggleShowLogo() {
+            if (!isAuthorized) return;
+            await fetch(eventUrl('/api/admin/visuals/toggle-show-logo'), {
+                method: 'POST',
+                headers: adminHeaders({ 'Content-Type': 'application/json' }),
+                body: JSON.stringify({ enabled: !visualsShowLogo })
             });
             updateDashboard();
         }
@@ -2934,6 +2947,11 @@ async function verifyPassword() {
                     visualsShowVenueCode = !!data.visuals.showVenueCodeEnabled;
                     showVenueCodeBtn.innerText = visualsShowVenueCode ? "Show Venue Code: ON" : "Show Venue Code: OFF";
                     showVenueCodeBtn.className = visualsShowVenueCode ? "toggle-btn open-status" : "toggle-btn closed-status";
+
+                    const showLogoBtn = document.getElementById('toggle-show-logo');
+                    visualsShowLogo = !!data.visuals.showLogoEnabled;
+                    showLogoBtn.innerText = visualsShowLogo ? "Show Logo: ON" : "Show Logo: OFF";
+                    showLogoBtn.className = visualsShowLogo ? "toggle-btn open-status" : "toggle-btn closed-status";
 
                     const musicVideosBtn = document.getElementById('toggle-music-videos');
                     musicVideosEnabled = !!data.visuals.musicVideosEnabled;
