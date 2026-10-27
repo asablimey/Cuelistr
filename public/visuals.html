@@ -209,7 +209,7 @@
         #custom-overlay .cs-layer img { width: 100%; height: 100%; object-fit: contain; }
         #custom-overlay .cs-text { text-align: center; font-weight: 800; line-height: 1.15; overflow-wrap: anywhere; }
         #custom-overlay .cs-time { font-weight: 800; line-height: 1; white-space: nowrap; font-variant-numeric: tabular-nums; }
-        #custom-overlay .cs-qr { background: #fff; padding: 3%; }
+        #custom-overlay .cs-qr { background: #fff; }
         #custom-overlay .cs-qr img { width: 100% !important; height: 100% !important; object-fit: contain; }
 
         /* ---------- Music Video overlay: replaces ambient visuals when the
@@ -674,7 +674,7 @@
                 } else if (l.type === 'qr') {
                     box.classList.add('cs-qr');
                     const inner = document.createElement('div');
-                    inner.style.cssText = 'width:100%;height:100%;';
+                    inner.style.cssText = 'width:100%;height:100%;box-sizing:border-box;padding:3%;';
                     box.appendChild(inner);
                     const build = () => { try { new QRCode(inner, { text: location.origin + '/e/' + EVENT_SLUG, width: 512, height: 512, correctLevel: QRCode.CorrectLevel.M }); } catch (e) {} };
                     if (typeof QRCode !== 'undefined') build();
