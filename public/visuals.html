@@ -672,9 +672,11 @@
                     im.src = l.src; im.alt = '';
                     box.appendChild(im);
                 } else if (l.type === 'qr') {
-                    box.classList.add('cs-qr');
+                    // Square white tile, sized to fit the saved box whatever the screen's aspect ratio
                     const inner = document.createElement('div');
-                    inner.style.cssText = 'width:100%;height:100%;box-sizing:border-box;padding:3%;';
+                    inner.className = 'cs-qr';
+                    const side = `min(${l.w}cqw, ${l.h}cqh)`;
+                    inner.style.cssText = `width:${side};height:${side};box-sizing:border-box;padding:calc(${side} * 0.03);flex:none;`;
                     box.appendChild(inner);
                     const build = () => { try { new QRCode(inner, { text: location.origin + '/e/' + EVENT_SLUG, width: 512, height: 512, correctLevel: QRCode.CorrectLevel.M }); } catch (e) {} };
                     if (typeof QRCode !== 'undefined') build();
