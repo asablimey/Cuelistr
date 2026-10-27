@@ -1036,6 +1036,7 @@ button.switch { border: none; padding: 0; }
 #cs-props input[type=color] { width: 46px; height: 40px; padding: 2px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--panel-bg); }
 #cs-props .cs-pl { font-size: .72rem; text-transform: uppercase; letter-spacing: .5px; color: var(--text-muted); font-weight: 700; }
 #cs-props .utility-btn { width: auto; }
+#cs-props .cs-align .utility-btn { flex: 1 1 0; }
 .cs-status { margin-top: 10px; font-size: .8rem; color: var(--text-muted); min-height: 1em; }
 
 /* Playing / Mixing strip */
@@ -2598,7 +2599,9 @@ body.has-player { overflow: hidden; }
             } else {
                 h += `<div class="cs-prow"><span class="settings-card-hint" style="margin:0;">Drag and resize in the preview.</span></div>`;
             }
-            h += `<div class="cs-prow"><button type="button" class="utility-btn" onclick="csFront()">Bring to front</button></div>`;
+            h += `<div class="cs-prow cs-align"><button type="button" class="utility-btn" onclick="csAlign('x','left')">Left</button><button type="button" class="utility-btn" onclick="csAlign('x','centre')">Centre</button><button type="button" class="utility-btn" onclick="csAlign('x','right')">Right</button></div>
+                  <div class="cs-prow cs-align"><button type="button" class="utility-btn" onclick="csAlign('y','top')">Top</button><button type="button" class="utility-btn" onclick="csAlign('y','middle')">Middle</button><button type="button" class="utility-btn" onclick="csAlign('y','bottom')">Bottom</button></div>
+                  <div class="cs-prow"><button type="button" class="utility-btn" onclick="csFront()">Bring to front</button></div>`;
             box.innerHTML = h;
         }
 
@@ -2606,6 +2609,14 @@ body.has-player { overflow: hidden; }
             if (csGet(type)) { csLayers = csLayers.filter(l => l.type !== type); if (csSel === type) csSel = null; }
             else { csLayers.push(csDefault(type)); csSel = type; }
             csRebuild(); csQueueSave();
+        }
+        function csAlign(axis, pos) {
+            const l = csSel && csGet(csSel); if (!l) return;
+            if (axis === 'x') l.x = pos === 'left' ? 0 : pos === 'right' ? 100 - l.w : (100 - l.w) / 2;
+            else l.y = pos === 'top' ? 0 : pos === 'bottom' ? 100 - l.h : (100 - l.h) / 2;
+            csLastEdit = Date.now();
+            const el = $('cs-stage').querySelector(`[data-type="${l.type}"]`); if (el) csPlace(el, l);
+            csQueueSave();
         }
         function csFront() {
             const l = csSel && csGet(csSel); if (!l) return;
