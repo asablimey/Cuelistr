@@ -552,7 +552,7 @@
         function queueRowHtml(song, idx) {
             const art = safeImageUrl(song.artwork);
             return `
-                <div class="qv-row">
+                <div class="qv-row" data-id="${escapeHtml(song.id)}">
                     <div class="qv-row-rank">${idx + 1}</div>
                     ${art ? `<img src="${escapeHtml(art)}" alt="">` : '<div class="qv-row-art"></div>'}
                     <div class="qv-row-text">
@@ -587,12 +587,44 @@
             const rows = buildQueueRows(requests, upcoming);
             const sig = rows.map(r => [r.id, r.title, r.artist, r.isRequest ? 1 : 0].join('|')).join(';');
             if (listEl.dataset.sig !== sig) {
+                // FLIP: remember where each visible row is now, rebuild, then
+                // slide every surviving row from its old spot to its new one.
+                const prevTops = new Map();
+                listEl.querySelectorAll('.qv-row[data-id]').forEach(r => {
+                    if (r.style.display !== 'none') prevTops.set(r.dataset.id, r.getBoundingClientRect().top);
+                });
                 listEl.dataset.sig = sig;
                 listEl.innerHTML = rows.length === 0
                     ? '<div class="qv-empty">Nothing queued right now</div>'
                     : rows.map(queueRowHtml).join('');
+                fitQueueRows(listEl);
+                animateQueueRows(listEl, prevTops);
+                return;
             }
             fitQueueRows(listEl);
+        }
+
+        const QUEUE_SLIDE_MS = 700;
+        function animateQueueRows(listEl, prevTops) {
+            if (!prevTops.size || !listEl.animate) return; // first paint: no animation
+            listEl.querySelectorAll('.qv-row').forEach(row => {
+                if (row.style.display === 'none') return;
+                const was = prevTops.get(row.dataset.id);
+                if (was === undefined) {
+                    // Newly visible row (joins at the bottom): fade/slide in
+                    row.animate(
+                        [{ opacity: 0, transform: 'translateY(30px)' }, { opacity: 1, transform: 'none' }],
+                        { duration: QUEUE_SLIDE_MS, delay: 150, easing: 'cubic-bezier(0.22, 1, 0.36, 1)', fill: 'backwards' }
+                    );
+                    return;
+                }
+                const dy = was - row.getBoundingClientRect().top;
+                if (Math.abs(dy) < 1) return;
+                row.animate(
+                    [{ transform: `translateY(${dy}px)` }, { transform: 'none' }],
+                    { duration: QUEUE_SLIDE_MS, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' }
+                );
+            });
         }
 
         /* =========================================================
