@@ -3087,7 +3087,7 @@ body.has-player { overflow: hidden; }
             function queueRowHtml(song, idx) {
                 const art = safeImageUrl(song.artwork);
                 return `
-                    <div class="ss-row">
+                    <div class="ss-row" data-id="${escapeHtml(song.id)}">
                         <div class="ss-row-rank">${idx + 1}</div>
                         ${art ? `<img src="${escapeHtml(art)}" alt="">` : '<div class="ss-row-art"></div>'}
                         <div class="ss-row-text">
@@ -3126,8 +3126,30 @@ body.has-player { overflow: hidden; }
                 const rows = buildQueueRows(requests, upcoming);
                 const sig = rows.map(r => [r.id, r.title, r.artist, r.isRequest ? 1 : 0].join('|')).join(';');
                 if (listEl.dataset.sig !== sig) {
+                    // FLIP: note where visible rows are, rebuild, then slide survivors up to their new spot.
+                    const prevTops = new Map();
+                    listEl.querySelectorAll('.ss-row[data-id]').forEach(r => {
+                        if (r.style.display !== 'none') prevTops.set(r.dataset.id, r.getBoundingClientRect().top);
+                    });
                     listEl.dataset.sig = sig;
                     listEl.innerHTML = rows.length === 0 ? '<div class="ss-empty">Nothing queued right now</div>' : rows.map(queueRowHtml).join('');
+                    fitRows(listEl);
+                    if (prevTops.size && listEl.animate && el.classList.contains('is-visible')) {
+                        listEl.querySelectorAll('.ss-row').forEach(row => {
+                            if (row.style.display === 'none') return;
+                            const was = prevTops.get(row.dataset.id);
+                            if (was === undefined) {
+                                row.animate([{ opacity: 0, transform: 'translateY(30px)' }, { opacity: 1, transform: 'none' }],
+                                    { duration: 700, delay: 150, easing: 'cubic-bezier(0.22, 1, 0.36, 1)', fill: 'backwards' });
+                                return;
+                            }
+                            const dy = was - row.getBoundingClientRect().top;
+                            if (Math.abs(dy) < 1) return;
+                            row.animate([{ transform: `translateY(${dy}px)` }, { transform: 'none' }],
+                                { duration: 700, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' });
+                        });
+                    }
+                    return;
                 }
                 fitRows(listEl);
             }
