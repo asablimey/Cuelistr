@@ -942,6 +942,10 @@
 
     
             .video-tag { color: var(--spotify-green, #1DB954); font-size: 0.75rem; font-weight: 700; margin-left: 6px; white-space: nowrap; }
+            .pend-actions { display: flex; gap: 8px; flex-shrink: 0; }
+        .pend-btn { border: none; border-radius: 20px; padding: 8px 14px; font-weight: 700; font-size: 0.8rem; cursor: pointer; color: #fff; }
+        .pend-yes { background: var(--spotify-green, #1DB954); }
+        .pend-no { background: var(--red-action, #e91429); }
     </style>
     <style>
 
@@ -1273,6 +1277,7 @@ body.has-player { overflow: hidden; }
             <button class="sidebar-close-btn" onclick="closeSidebar()" aria-label="Close menu">&#10005;</button>
         </div>
         <button type="button" id="nav-play" class="sidebar-nav-item active-tab" onclick="go('play')">Playback and live queue</button>
+        <button type="button" id="nav-pen" class="sidebar-nav-item" onclick="go('pen')">Pending</button>
         <button type="button" id="nav-set" class="sidebar-nav-item" onclick="go('set')">Settings</button>
         <button type="button" id="nav-mus" class="sidebar-nav-item" onclick="go('mus')">Music</button>
         <button type="button" id="nav-blk" class="sidebar-nav-item" onclick="go('blk')">Blocked</button>
@@ -1313,6 +1318,19 @@ body.has-player { overflow: hidden; }
     <div class="page active" id="page-play">
         <div class="mix-strip idle" id="mix-strip"><i></i><span id="mix-strip-text">Connecting</span></div>
         <div id="queue-list"></div>
+    </div>
+
+    <!-- ============ PENDING (approval mode) ============ -->
+    <div class="page" id="page-pen">
+        <div class="panel">
+            <h2>Pending Requests</h2>
+            <div class="settings-card">
+                <p class="settings-card-hint" style="margin-top:0;">With approval mode on, guest requests wait here. Nothing shows in the queue or on any guest, kiosk or visuals screen until you accept it.</p>
+                <div class="row-set"><div><div class="rl">Approval mode</div></div><button type="button" class="switch" id="sw-approval" role="switch" aria-checked="false" aria-label="Approval mode" onclick="toggleSwitch('approval')"></button></div>
+                <button type="button" class="save-config-btn" id="pending-accept-all" style="display:none;margin-top:10px;" onclick="acceptAllPending()">Accept All</button>
+            </div>
+            <div id="pending-list"></div>
+        </div>
     </div>
 
     <!-- ============ SETTINGS ============ -->
@@ -1681,7 +1699,7 @@ body.has-player { overflow: hidden; }
         const svg = k => `<svg viewBox="0 0 24 24"><path d="${ICON[k]}"/></svg>`;
 
         // ---- Sidebar + views ----
-        const VIEWS = ['play', 'set', 'mus', 'blk', 'dsp', 'acc'];
+        const VIEWS = ['play', 'pen', 'set', 'mus', 'blk', 'dsp', 'acc'];
         let currentView = 'play';
         let managerBasicMode = false;
         function openSidebar() { $('sidebar-backdrop').classList.add('is-visible'); $('sidebar-panel').classList.add('is-visible'); }
@@ -1850,6 +1868,7 @@ body.has-player { overflow: hidden; }
             remix:    { el: 'sw-remix',    path: '/api/admin/toggle-remixes',        body: v => ({ blockRemixes: !v }) },   // on = remixes allowed
             live:     { el: 'sw-live',     path: '/api/admin/toggle-live-versions',  body: v => ({ blockLive: !v }) },       // on = live versions allowed
             radio:    { el: 'sw-radio',    path: '/api/admin/toggle-radio-edits',    body: v => ({ radioEditsOnly: v }) },
+            approval: { el: 'sw-approval', path: '/api/admin/toggle-approval-mode',    body: v => ({ enabled: v }) },
             qcap:     { el: 'sw-qcap',     path: '/api/admin/toggle-queue-cap',      body: v => ({ enabled: v }) },
             explicit: { el: 'sw-explicit', path: '/api/admin/toggle-explicit',                 body: v => ({ blockExplicit: !v }) }, // on = explicit allowed
             loclock:  { el: 'sw-loclock',  path: '/api/admin/toggle-location-lock',            body: v => ({ enabled: v }) },
@@ -1878,6 +1897,40 @@ body.has-player { overflow: hidden; }
             const lock = swLock[name];
             paintSwitch(name, lock && Date.now() < lock.until ? lock.value : S[name]);
         }
+        function renderPending(data) {
+            const list = data.pending || [];
+            $('nav-pen').textContent = list.length ? `Pending (${list.length})` : 'Pending';
+            $('pending-accept-all').style.display = list.length > 1 ? '' : 'none';
+            $('pending-list').innerHTML = list.length === 0
+                ? `<p class="empty-placeholder">${data.approvalMode ? 'No requests waiting.' : 'Approval mode is off - requests go straight to the queue.'}</p>`
+                : list.map(p => `
+                <div class="song-row">
+                    <div class="song-details">
+                        <img src="${safeImageUrl(p.artwork)}" alt="">
+                        <div class="text-container">
+                            <div class="title-wrapper"><p class="song-title">${escapeHtml(p.title)}</p>${p.explicit ? '<span class="explicit-badge">E</span>' : ''}</div>
+                            <p class="song-artist">${escapeHtml(artistWithYear(p.artist, p.year))}</p>
+                            <div class="length-requester-row"><span class="length-text plain">By ${escapeHtml((p.requesters || []).join(', '))}</span></div>
+                        </div>
+                    </div>
+                    <div class="pend-actions">
+                        <button type="button" class="pend-btn pend-yes" onclick="pendingAction('${escapeHtml(p.id)}','accept')">Accept</button>
+                        <button type="button" class="pend-btn pend-no" onclick="pendingAction('${escapeHtml(p.id)}','reject')">Reject</button>
+                    </div>
+                </div>`).join('');
+        }
+        async function pendingAction(id, action) {
+            if (!isAuthorized) return;
+            const res = await adminPost(`/api/admin/pending/${encodeURIComponent(id)}/${action}`, {});
+            if (!res.ok) { const d = await res.json().catch(() => ({})); showToast(d.error || 'Could not do that.', 'error'); }
+            updateDashboard();
+        }
+        async function acceptAllPending() {
+            if (!isAuthorized) return;
+            await adminPost('/api/admin/pending/accept-all', {});
+            updateDashboard();
+        }
+
         async function toggleSwitch(name) {
             if (!isAuthorized) return;
             const sw = SWITCHES[name];
@@ -2822,6 +2875,8 @@ body.has-player { overflow: hidden; }
 
                 lastGuestQueue = data.queue || [];
                 renderQueueList();
+                renderPending(data);
+                setSwitchFromServer('approval', !!data.approvalMode);
 
                 lastBlockedVoters = data.blockedVoters || [];
                 lastBlockedArtists = data.blockedArtists || [];
