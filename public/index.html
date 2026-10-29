@@ -420,6 +420,10 @@
             transition: all 0.2s ease, padding 0.15s ease;
         }
         .search-box:focus { border-color: var(--spotify-green); }
+        .reco-links { display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 8px; font-size: 0.85rem; }
+        .reco-link { background: none; border: none; padding: 4px 2px; color: var(--spotify-green); font-weight: 700; font-size: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+        .reco-link:hover { text-decoration: underline; }
+        .reco-sep { color: var(--text-muted, #a7a7a7); }
         .search-box.has-inline-btn { padding-right: 150px; }
 
         /* Disabled search state styling */
@@ -1166,6 +1170,11 @@
 
         <div class="search-bar-wrapper">
             <input type="text" id="search-input" class="search-box" placeholder="Search for songs or artists..." oninput="executeSearch()">
+            <div class="reco-links" id="reco-links">
+                <button type="button" class="reco-link" onclick="showRecommendations('popular')">Popular</button>
+                <span class="reco-sep">&middot;</span>
+                <button type="button" class="reco-link" onclick="showRecommendations('similar')">More like this</button>
+            </div>
         </div>
 
         <div class="section-title-row">
@@ -1957,7 +1966,10 @@
                 updateLocationCreditState();
                 if (locationBlocked && !isBlockedGuest) showVenueCodePopup();
                 else if (venueVerified) hideVenueCodePopup();
+                const recoEl = document.getElementById('reco-links');
+                if (recoEl) recoEl.style.display = effectivelyOpen ? '' : 'none';
                 if (!effectivelyOpen) {
+                    recoActive = null;
                     searchInput.disabled = true;
                     searchInput.value = "";
                     searchInput.placeholder = !hasUsername()
@@ -1977,7 +1989,7 @@
                         searchInput.placeholder = "Search for songs or artists...";
                     }
 
-                    if (searchInput.value.trim() === "") {
+                    if (searchInput.value.trim() === "" && !recoActive) {
                         document.getElementById('list-title').innerText = "Up Next";
                         renderQueue(data.queue);
                     }
@@ -2082,6 +2094,7 @@
             if (searchInput && searchInput.value.trim() !== '' && !searchInput.disabled) {
                 return;
             }
+            if (recoActive) return; // Popular / More like this list is on screen
 
             const display = document.getElementById('main-display-list');
 
@@ -2166,12 +2179,70 @@
             } catch (e) { console.log("Voting entry exception dropped."); }
         }
 
+        let recoActive = null;
+
+        function renderSearchTracks(tracks) {
+            globalSearchResults = tracks;
+            document.getElementById('main-display-list').innerHTML = tracks.map((track, index) => `
+                <div class="song-row">
+                    <div class="song-details">
+                        <img src="${safeImageUrl(track.artwork)}">
+                        <div class="text-block">
+                            <div class="title-wrapper">
+                                <p class="song-title">${escapeHtml(track.name)}</p>
+                                ${track.explicit ? '<span class="explicit-badge">E</span>' : ''}
+                            </div>
+                            <p class="song-artist">${escapeHtml(artistWithYear(track.artist, track.year))}</p>
+                        </div>
+                    </div>
+                    <div class="actions">
+                        <button class="btn-request" onclick="submitRequestAtIndex(${index})">Request</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // "Popular" and "More like this" links under the search box.
+        async function showRecommendations(mode) {
+            if (!hasVenueSelected()) return;
+            if (!hasUsername()) { promptForUsernameIfNeeded(); return; }
+            if (!systemRequestsAllowed || queueIsFull) return;
+            clearTimeout(searchTimeout);
+            document.getElementById('search-input').value = '';
+            recoActive = mode;
+            const title = document.getElementById('list-title');
+            const display = document.getElementById('main-display-list');
+            title.innerText = mode === 'popular' ? 'Popular' : 'More Like This';
+            display.innerHTML = '<p class="empty-placeholder">Loading suggestions...</p>';
+            try {
+                let url = `/api/search?mode=${mode}`;
+                if (mode === 'similar') {
+                    let seed = null;
+                    try { seed = localStorage.getItem('lastRequestedTrackId'); } catch (e) {}
+                    if (seed) url += `&seed=${encodeURIComponent(seed)}`;
+                }
+                const res = await fetch(eventUrl(url));
+                const data = await res.json();
+                if (recoActive !== mode) return; // guest typed or tapped something else meanwhile
+                if (data.label) title.innerText = data.label;
+                if (!data.tracks || data.tracks.length === 0) {
+                    globalSearchResults = [];
+                    display.innerHTML = '<p class="empty-placeholder">No suggestions right now - try searching instead.</p>';
+                    return;
+                }
+                renderSearchTracks(data.tracks);
+            } catch (e) {
+                if (recoActive === mode) display.innerHTML = '<p class="empty-placeholder">Could not load suggestions. Try again.</p>';
+            }
+        }
+
         function executeSearch() {
             if (!hasVenueSelected()) return;
             if (!hasUsername()) { promptForUsernameIfNeeded(); return; }
             if (!systemRequestsAllowed || queueIsFull) return; // Prevent querying if system is locked down
 
             clearTimeout(searchTimeout);
+            recoActive = null;
             const query = document.getElementById('search-input').value.trim();
 
             if (query === "") {
@@ -2193,25 +2264,7 @@
                         return;
                     }
 
-                    globalSearchResults = data.tracks;
-
-                    display.innerHTML = data.tracks.map((track, index) => `
-                        <div class="song-row">
-                            <div class="song-details">
-                                <img src="${safeImageUrl(track.artwork)}">
-                                <div class="text-block">
-                                    <div class="title-wrapper">
-                                        <p class="song-title">${escapeHtml(track.name)}</p>
-                                        ${track.explicit ? '<span class="explicit-badge">E</span>' : ''}
-                                    </div>
-                                    <p class="song-artist">${escapeHtml(artistWithYear(track.artist, track.year))}</p>
-                                </div>
-                            </div>
-                            <div class="actions">
-                                <button class="btn-request" onclick="submitRequestAtIndex(${index})">Request</button>
-                            </div>
-                        </div>
-                    `).join('');
+                    renderSearchTracks(data.tracks);
                 } catch (e) { console.log("Search extraction error"); }
             }, 300);
         }
@@ -2256,6 +2309,7 @@
                     localStorage.setItem(creditsStorageKey(), availableCredits);
                     updateCreditBadge(availableCredits);
                     restartLocalCountdown();
+                    try { if (track && track.id) localStorage.setItem('lastRequestedTrackId', track.id); } catch (e) {}
                     await fetchSystemState();
                     return true;
                 } else {
@@ -2279,6 +2333,7 @@
             const ok = await submitTrackRequest(track);
             if (ok) {
                 document.getElementById('search-input').value = "";
+                if (recoActive) { recoActive = null; fetchSystemState(); }
                 showToast("Song successfully added to the queue!", "success");
             }
         }
