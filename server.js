@@ -3001,8 +3001,8 @@ function buildSortedQueue(event) {
 
 // Admin queue shape: includes "requesters" so the DJ dashboard can show who added each song.
 // Adds hasVideo to each admin queue row: true when the curated catalog has a
-// playable video for the song, or (when the catalog has no opinion) when the
-// auto-matcher has already found one. Catalog lookups are in-memory once loaded.
+// playable video for the song. Auto-matched videos are deliberately ignored.
+// Catalog lookups are in-memory once loaded.
 async function annotateQueueVideo(event, queue) {
     const vcfg = ensureVisualsConfigs(event);
     return Promise.all(queue.map(async t => {
@@ -3011,8 +3011,7 @@ async function annotateQueueVideo(event, queue) {
             if (musicVideoDenylist.has(t.id)) { has = false; }
             else {
                 const r = await videoCatalog.lookup({ trackId: t.id, title: t.title, artist: t.artist }, { familyMode: !!vcfg.familyModeEnabled, preferVisualizers: !!vcfg.preferVisualizersEnabled });
-                if (r.status === 'hit') has = true;
-                else if (r.status === 'miss') { const c = verifiedMusicVideoCache.get(t.id); has = !!(c && c.videoId); }
+                has = r.status === 'hit'; // curated catalog only - auto-matched videos don't count
             }
         } catch (e) { has = false; }
         return { ...t, hasVideo: has };
