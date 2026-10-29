@@ -2309,6 +2309,7 @@
                     localStorage.setItem(creditsStorageKey(), availableCredits);
                     updateCreditBadge(availableCredits);
                     restartLocalCountdown();
+                    try { const okBody = await res.json(); lastRequestPending = !!(okBody && okBody.pending); } catch (e) { lastRequestPending = false; }
                     try { if (track && track.id) localStorage.setItem('lastRequestedTrackId', track.id); } catch (e) {}
                     await fetchSystemState();
                     return true;
@@ -2327,6 +2328,7 @@
             }
         }
 
+        let lastRequestPending = false;
         async function submitRequestAtIndex(index) {
             const track = globalSearchResults[index];
             if (!track) return;
@@ -2334,7 +2336,7 @@
             if (ok) {
                 document.getElementById('search-input').value = "";
                 if (recoActive) { recoActive = null; fetchSystemState(); }
-                showToast("Song successfully added to the queue!", "success");
+                showToast(lastRequestPending ? "Sent to the DJ for approval - it will show up once accepted." : "Song successfully added to the queue!", "success");
             }
         }
 
