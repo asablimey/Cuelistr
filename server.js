@@ -2879,6 +2879,31 @@ function isSongOnCooldown(event, trackId) {
     return (event.songDepartureCounter - lastDeparture) < gap;
 }
 
+// Per-artist spacing: no more than artistMaxSongs songs by the same (primary)
+// artist inside a window of artistWindow songs. The window covers the last
+// artistWindow songs that left the queue plus everything currently queued.
+// Either setting at 0 turns the rule off. Set in Manager -> Music.
+function getArtistSpacing(event) {
+    const c = (event && event.systemConfigs) || {};
+    const max = Number.isInteger(c.artistMaxSongs) && c.artistMaxSongs >= 0 && c.artistMaxSongs <= 100 ? c.artistMaxSongs : 0;
+    const win = Number.isInteger(c.artistWindow) && c.artistWindow >= 0 && c.artistWindow <= 500 ? c.artistWindow : 0;
+    return { max, win };
+}
+function primaryArtistKey(artistStr) {
+    return String(artistStr || '').split(', ')[0].trim().toLowerCase();
+}
+function isArtistOverSpacing(event, artistStr) {
+    const { max, win } = getArtistSpacing(event);
+    if (max === 0 || win === 0) return false;
+    const key = primaryArtistKey(artistStr);
+    if (!key) return false;
+    let count = 0;
+    const recent = (event.queueHistoryLog || []).slice(-win);
+    for (const h of recent) if (primaryArtistKey(h.artist) === key) count++;
+    for (const q of (event.activeQueue || [])) if (primaryArtistKey(q.artist) === key) count++;
+    return count >= max;
+}
+
 // Used only where user-supplied data (eventName) gets interpolated directly
 // into a server-rendered HTML response, rather than returned as JSON for the
 // client to render (where the client's own escapeHtml already handles it).
@@ -2975,6 +3000,25 @@ function buildSortedQueue(event) {
 }
 
 // Admin queue shape: includes "requesters" so the DJ dashboard can show who added each song.
+// Adds hasVideo to each admin queue row: true when the curated catalog has a
+// playable video for the song, or (when the catalog has no opinion) when the
+// auto-matcher has already found one. Catalog lookups are in-memory once loaded.
+async function annotateQueueVideo(event, queue) {
+    const vcfg = ensureVisualsConfigs(event);
+    return Promise.all(queue.map(async t => {
+        let has = false;
+        try {
+            if (musicVideoDenylist.has(t.id)) { has = false; }
+            else {
+                const r = await videoCatalog.lookup({ trackId: t.id, title: t.title, artist: t.artist }, { familyMode: !!vcfg.familyModeEnabled, preferVisualizers: !!vcfg.preferVisualizersEnabled });
+                if (r.status === 'hit') has = true;
+                else if (r.status === 'miss') { const c = verifiedMusicVideoCache.get(t.id); has = !!(c && c.videoId); }
+            }
+        } catch (e) { has = false; }
+        return { ...t, hasVideo: has };
+    }));
+}
+
 function buildSortedQueueForAdmin(event) {
     return event.activeQueue.map(t => ({
         id: t.id,
@@ -4107,6 +4151,7 @@ app.get('/e/:slug/api/search', publicActionLimiter, async (req, res) => {
         // filtered out of search too, so a guest never sees a song only to
         // have it rejected the moment they try to actually request it.
         tracks = tracks.filter(track => !isSongOnCooldown(event, track.id));
+        tracks = tracks.filter(track => !isArtistOverSpacing(event, track.artist));
 
         if (event.systemConfigs.decadeFilter && event.systemConfigs.decadeFilter.length > 0) {
             tracks = tracks.filter(track => {
@@ -4376,6 +4421,12 @@ function buildRequestHandler(isKiosk) {
             return res.status(403).json({ error: "That song was just played - it needs to sit out a while before it can be requested again." });
         }
 
+        // Existing queue entries are re-upvotes, not new songs, so they skip
+        // the per-artist spacing rule.
+        if (!event.activeQueue.some(t => t.id === verifiedTrack.id) && isArtistOverSpacing(event, verifiedTrack.artist)) {
+            return res.status(403).json({ error: "That artist has had enough songs lately - try a different artist or come back in a bit." });
+        }
+
         // Blocked tab: same track/artist block guest search already filters
         // out, re-checked here since a request can arrive with a track ID
         // the guest already had cached before it was blocked.
@@ -4611,7 +4662,7 @@ app.get('/e/:slug/kiosk-data', publicReadLimiter, voterIdentityMiddleware, (req,
     });
 });
 
-app.get('/e/:slug/api/admin/data', (req, res) => {
+app.get('/e/:slug/api/admin/data', async (req, res) => {
     const event = req.event;
     const vc = getCurrentVenueCode(event.slug);
     const cd = codeDisplayState.get(event.slug);
@@ -4635,6 +4686,8 @@ app.get('/e/:slug/api/admin/data', (req, res) => {
         remixBlockActive: !!event.systemConfigs.remixBlockActive,
         liveBlockActive: !!event.systemConfigs.liveBlockActive,
         songRepeatGap: getSongRepeatGap(event),
+        artistMaxSongs: getArtistSpacing(event).max,
+        artistWindow: getArtistSpacing(event).win,
         guestSpotifyConnectEnabled: event.systemConfigs.guestSpotifyConnectEnabled,
         spotifyAutoQueueEnabled: event.systemConfigs.spotifyAutoQueueEnabled,
         locationLockEnabled: event.systemConfigs.locationLockEnabled !== false,
@@ -4644,7 +4697,7 @@ app.get('/e/:slug/api/admin/data', (req, res) => {
         fallbackPlaylistUri: event.systemConfigs.fallbackPlaylistUri || '',
         kiosk: event.kioskConfigs,
         visuals: ensureVisualsConfigs(event),
-        queue: buildSortedQueueForAdmin(event),
+        queue: await annotateQueueVideo(event, buildSortedQueueForAdmin(event)),
         history: event.playedHistory,
         blockedVoters: Object.entries(event.blockedVoters || {}).map(([voterId, info]) => ({
             voterId,
@@ -4765,7 +4818,7 @@ app.get('/e/:slug/api/my-requests', publicReadLimiter, voterIdentityMiddleware, 
 
 app.post('/e/:slug/api/admin/config', (req, res) => {
     const event = req.event;
-    const { maxCredits, countdownLength, eventName, venueName, maxQueueLength, genreFilter, decadeFilter, songRepeatGap } = req.body;
+    const { maxCredits, countdownLength, eventName, venueName, maxQueueLength, genreFilter, decadeFilter, songRepeatGap, artistMaxSongs, artistWindow } = req.body;
     if (maxCredits !== undefined) event.systemConfigs.maxCredits = parseInt(maxCredits) || event.systemConfigs.maxCredits;
     if (countdownLength !== undefined) event.systemConfigs.countdownLength = parseInt(countdownLength) || event.systemConfigs.countdownLength;
     if (typeof eventName === 'string') event.systemConfigs.eventName = eventName.trim().slice(0, 60);
@@ -4780,6 +4833,14 @@ app.post('/e/:slug/api/admin/config', (req, res) => {
     if (songRepeatGap !== undefined) {
         const gap = parseInt(songRepeatGap, 10);
         if (Number.isInteger(gap) && gap >= 0 && gap <= 500) event.systemConfigs.songRepeatGap = gap;
+    }
+    if (artistMaxSongs !== undefined) {
+        const n = parseInt(artistMaxSongs, 10);
+        if (Number.isInteger(n) && n >= 0 && n <= 100) event.systemConfigs.artistMaxSongs = n;
+    }
+    if (artistWindow !== undefined) {
+        const n = parseInt(artistWindow, 10);
+        if (Number.isInteger(n) && n >= 0 && n <= 500) event.systemConfigs.artistWindow = n;
     }
     if (Array.isArray(genreFilter)) {
         event.systemConfigs.genreFilter = genreFilter.filter(key => Object.prototype.hasOwnProperty.call(GENRE_CATEGORIES, key));
