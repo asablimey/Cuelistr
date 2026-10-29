@@ -4060,64 +4060,6 @@ app.get('/e/:slug/api/public-config', (req, res) => {
     res.json({ spotifyClientId: CLIENT_ID });
 });
 
-// Guest "Popular" / "More like this" suggestions. Spotify's recommendations
-// endpoint is no longer available to new apps, so these are built from plain
-// search: Popular = the current era's top search hits (or the event's allowed
-// decades); More like this = songs sharing the seed artist's top genres in the
-// seed's decade. Returns a plan of search pages plus what to leave out.
-async function buildRecommendationPlan(event, mode, seedRaw) {
-    const cfg = event.systemConfigs || {};
-    const allowed = (cfg.decadeFilter || []).filter(Number.isInteger);
-    const idOk = v => typeof v === 'string' && /^[A-Za-z0-9]{22}$/.test(v);
-    const eraPlan = (label, from, to, extra) => ({
-        plan: [0, 10, 20].map(o => ({ q: `year:${from}-${to}`, offset: o, group: 0 })),
-        label, excludeTrackId: extra?.trackId || null, excludeArtistId: extra?.artistId || null
-    });
-    const popularPlan = (label) => {
-        if (!allowed.length) {
-            const y = new Date().getFullYear();
-            return eraPlan(label, y - 1, y);
-        }
-        const decades = allowed.slice(0, 4);
-        const pages = decades.length === 1 ? [0, 10, 20] : [0, 10];
-        const plan = [];
-        decades.forEach((d, gi) => pages.forEach(o => plan.push({ q: `year:${d}-${d + 9}`, offset: o, group: gi })));
-        return { plan, label, excludeTrackId: null, excludeArtistId: null };
-    };
-    if (mode === 'popular') return popularPlan('Popular');
-
-    let seedId = idOk(seedRaw) ? seedRaw : null;
-    if (!seedId) {
-        const np = event.cachedNowPlaying && event.cachedNowPlaying.trackId;
-        if (idOk(np)) seedId = np;
-    }
-    if (!seedId) return popularPlan('Popular');
-    try {
-        const r = await fetch(`https://api.spotify.com/v1/tracks/${seedId}`, { headers: { 'Authorization': `Bearer ${spotifyAccessToken}` } });
-        if (!r.ok) return popularPlan('Popular');
-        const t = await r.json();
-        const artistId = t.artists?.[0]?.id || null;
-        const year = parseInt((t.album?.release_date || '').slice(0, 4), 10) || null;
-        const genres = artistId ? ((await getArtistGenres([artistId])).get(artistId) || []) : [];
-        let from = null;
-        if (year) { from = Math.floor(year / 10) * 10; if (allowed.length && !allowed.includes(from)) from = allowed[0]; }
-        else if (allowed.length) from = allowed[0];
-        const label = `More like "${t.name}"`;
-        const extra = { trackId: seedId, artistId };
-        if (!genres.length) {
-            if (from) return eraPlan(label, from, from + 9, extra);
-            const p = popularPlan(label); p.excludeTrackId = seedId; p.excludeArtistId = artistId; return p;
-        }
-        const top = genres.slice(0, 2).map(g => g.replace(/"/g, ''));
-        const pages = top.length === 1 ? [0, 10, 20] : [0, 10];
-        const yearPart = from ? ` year:${from}-${from + 9}` : '';
-        const plan = top.flatMap((g, gi) => pages.map(o => ({ q: `genre:"${g}"${yearPart}`, offset: o, group: gi })));
-        return { plan, label, excludeTrackId: seedId, excludeArtistId: artistId };
-    } catch (e) {
-        return popularPlan('Popular');
-    }
-}
-
 // SEARCH ROUTE - Now strictly blocked if DJ turns off requests
 app.get('/e/:slug/api/search', publicActionLimiter, async (req, res) => {
     const event = req.event;
@@ -4126,8 +4068,7 @@ app.get('/e/:slug/api/search', publicActionLimiter, async (req, res) => {
     }
 
     const query = req.query.q;
-    const recoMode = (req.query.mode === 'popular' || req.query.mode === 'similar') ? req.query.mode : null;
-    if (!query && !recoMode) return res.json({ tracks: [] });
+    if (!query) return res.json({ tracks: [] });
     if (!spotifyAccessToken) await getSpotifyToken();
 
     // While a Karaoke block is active on the Music Scheduler, guests/kiosk
@@ -4145,17 +4086,11 @@ app.get('/e/:slug/api/search', publicActionLimiter, async (req, res) => {
         // parallel requests instead of one bigger one.
         const PAGE_SIZE = 10;
         const TOTAL_RESULTS = 25;
-        let plan = [];
-        let reco = null;
-        if (recoMode) {
-            reco = await buildRecommendationPlan(event, recoMode, req.query.seed);
-            plan = reco.plan.map(p => ({ ...p, q: karaokeMode ? `${p.q} karaoke` : p.q }));
-        } else {
-            for (let offset = 0; offset < TOTAL_RESULTS; offset += PAGE_SIZE) plan.push({ q: spotifyQuery, offset, group: 0 });
-        }
+        const offsets = [];
+        for (let offset = 0; offset < TOTAL_RESULTS; offset += PAGE_SIZE) offsets.push(offset);
 
-        const responses = await Promise.all(plan.map(p =>
-            fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(p.q)}&type=track&limit=${PAGE_SIZE}&offset=${p.offset}`, {
+        const responses = await Promise.all(offsets.map(offset =>
+            fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(spotifyQuery)}&type=track&limit=${PAGE_SIZE}&offset=${offset}`, {
                 headers: { 'Authorization': `Bearer ${spotifyAccessToken}` }
             })
         ));
@@ -4169,33 +4104,7 @@ app.get('/e/:slug/api/search', publicActionLimiter, async (req, res) => {
         }
 
         const pages = await Promise.all(responses.map(r => r.json()));
-        let trackItems;
-        if (reco) {
-            // Interleave the groups (e.g. two genres, or several decades) so the
-            // list is a mix rather than all of one first; drop the seed song and
-            // its artist; sort by popularity when Spotify provides it.
-            const groups = new Map();
-            pages.forEach((page, i) => {
-                const g = plan[i].group;
-                if (!groups.has(g)) groups.set(g, []);
-                groups.get(g).push(...(page.tracks?.items || []));
-            });
-            const lists = [...groups.values()];
-            const seen = new Set();
-            const merged = [];
-            for (let i = 0; lists.some(l => i < l.length); i++) {
-                for (const l of lists) {
-                    const t = l[i];
-                    if (t && t.id && !seen.has(t.id)) { seen.add(t.id); merged.push(t); }
-                }
-            }
-            if (merged.some(t => typeof t.popularity === 'number')) merged.sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
-            trackItems = merged
-                .filter(t => t.id !== reco.excludeTrackId && !(reco.excludeArtistId && t.artists?.[0]?.id === reco.excludeArtistId))
-                .slice(0, TOTAL_RESULTS);
-        } else {
-            trackItems = pages.flatMap(page => page.tracks?.items || []).slice(0, TOTAL_RESULTS);
-        }
+        const trackItems = pages.flatMap(page => page.tracks?.items || []).slice(0, TOTAL_RESULTS);
 
         let tracks = trackItems.map(track => {
             const releaseYear = parseInt((track.album?.release_date || '').slice(0, 4), 10) || null;
@@ -4267,7 +4176,7 @@ app.get('/e/:slug/api/search', publicActionLimiter, async (req, res) => {
 
         tracks = tracks.map(({ _releaseYear, _primaryArtistId, _albumName, ...publicFields }) => publicFields);
 
-        res.json({ tracks, label: reco ? reco.label : '' });
+        res.json({ tracks });
     } catch (err) {
         console.error('[SEARCH] Failed:', err.message);
         res.status(500).json({ error: "Search feature unavailable" });
