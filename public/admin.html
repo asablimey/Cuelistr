@@ -2778,6 +2778,7 @@ async function verifyPassword() {
                         <div class="text-container">
                             <div class="title-wrapper">
                                 <p class="song-title">${escapeHtml(t.title)}</p>
+                                ${t.hasVideo ? '<span class="video-tag">(Video)</span>' : ''}
                             </div>
                             <p class="song-artist">${escapeHtml(artistWithYear(t.artist, t.year))}</p>
                         </div>
