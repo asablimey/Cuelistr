@@ -941,6 +941,7 @@
         }
         body.has-now-playing-bar { padding-bottom: 76px; }
 
+            .video-tag { color: var(--spotify-green, #1DB954); font-size: 0.75rem; font-weight: 700; margin-left: 6px; white-space: nowrap; }
     </style>
 </head>
 <body>
@@ -2665,6 +2666,7 @@ async function verifyPassword() {
                         <div class="text-container">
                             <div class="title-wrapper">
                                 <p class="song-title">${escapeHtml(song.title)}</p>
+                                ${song.hasVideo ? '<span class="video-tag">(Video)</span>' : ''}
                                 ${song.explicit ? '<span class="explicit-badge">E</span>' : ''}
                             </div>
                             <p class="song-artist">${escapeHtml(artistWithYear(song.artist, song.year))}</p>
