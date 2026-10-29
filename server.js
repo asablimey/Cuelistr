@@ -4579,59 +4579,147 @@ function buildRequestHandler(isKiosk) {
 
         const trackId = verifiedTrack.id;
 
-        const existingTrack = event.activeQueue.find(t => t.id === trackId);
-        if (existingTrack) {
-            if (!existingTrack.upvoters.includes('system-generated')) {
-                existingTrack.upvoters.push('system-generated');
-            }
-            if (!existingTrack.requesters) existingTrack.requesters = [];
-            existingTrack.requesters.push(requesterName);
-        } else {
-            event.activeQueue.push({
-                id: trackId,
-                title: verifiedTrack.name,
-                artist: verifiedTrack.artist,
-                artwork: verifiedTrack.artwork,
-                explicit: verifiedTrack.explicit,
-                year: verifiedTrack.year || null,
-                duration: verifiedTrack.duration,
-                upvoters: [],
-                downvoters: [],
-                requesters: [requesterName],
-                order: nextQueueOrder(event)
-            });
-            // Don't push to Spotify's real queue here - only the one track
-            // that's actually next ever gets pushed, and that's decided by
-            // pushNextTrackToSpotifyIfNeeded (staged when a track finishes,
-            // or here if the queue was empty and nothing is staged yet).
-            pushNextTrackToSpotifyIfNeeded(event).catch(err => {
-                console.error(`[SPOTIFY QUEUE] (${event.slug}) Failed to stage next track:`, err.message);
-            });
-        }
-
-        // Item 1: this track is now guaranteed to be sitting in a queue -
-        // start music-video verification for it immediately rather than
-        // waiting for it to actually start playing. No-op if it's already
-        // resolved or already running (see triggerMusicVideoVerification).
-        triggerMusicVideoVerification(trackId, verifiedTrack.artist, verifiedTrack.name, verifiedTrack.durationMs);
-
-        event.requestLog.push({
+        const requestRecord = {
             trackId,
             title: verifiedTrack.name,
             artist: verifiedTrack.artist,
             artwork: verifiedTrack.artwork,
             explicit: verifiedTrack.explicit,
-            voterId,
-            username: requesterName,
-            status: 'queued',
-            requestedAt: Date.now()
-        });
-        if (event.requestLog.length > 2000) event.requestLog = event.requestLog.slice(-2000);
+            year: verifiedTrack.year || null,
+            duration: verifiedTrack.duration,
+            durationMs: verifiedTrack.durationMs || 0
+        };
+
+        // Approval mode: the request waits in the Pending list (admin and
+        // manager) and isn't queued, logged or shown anywhere else until the
+        // DJ accepts it. See enqueueApprovedRequest.
+        if (event.systemConfigs.approvalMode) {
+            const pending = ensurePendingRequests(event);
+            const who = { name: requesterName, voterId, requestedAt: Date.now() };
+            const dup = pending.find(p => p.trackId === trackId);
+            if (dup) {
+                dup.requesters.push(who);
+            } else {
+                if (pending.length >= 200) {
+                    creditState.available = Math.min(creditState.available + 1, modeConfig.maxCredits);
+                    return res.status(429).json({ error: "Too many requests are waiting for approval right now - try again in a bit." });
+                }
+                pending.push({ id: crypto.randomUUID(), ...requestRecord, requesters: [who], requestedAt: who.requestedAt });
+            }
+            events.scheduleSave(event.slug);
+            return res.json({ success: true, pending: true });
+        }
+
+        enqueueApprovedRequest(event, { ...requestRecord, requesters: [{ name: requesterName, voterId, requestedAt: Date.now() }] });
 
         events.scheduleSave(event.slug);
         res.json({ success: true });
     };
 }
+
+// =====================================================================
+// Approval mode: requests wait in event.pendingRequests until the DJ accepts
+// or rejects them (Pending tab in admin and manager). Nothing about a pending
+// request appears in the queue, request log, stats or guest views.
+// =====================================================================
+function ensurePendingRequests(event) {
+    if (!Array.isArray(event.pendingRequests)) event.pendingRequests = [];
+    return event.pendingRequests;
+}
+
+// Puts a request into the live queue (or upvotes the copy already there),
+// kicks off video verification and logs it. Shared by normal requests and
+// accepted pending ones. `p.requesters` is [{ name, voterId, requestedAt }].
+function enqueueApprovedRequest(event, p) {
+    const names = p.requesters.map(r => r.name);
+    const existingTrack = event.activeQueue.find(t => t.id === p.trackId);
+    if (existingTrack) {
+        if (!existingTrack.upvoters.includes('system-generated')) {
+            existingTrack.upvoters.push('system-generated');
+        }
+        if (!existingTrack.requesters) existingTrack.requesters = [];
+        existingTrack.requesters.push(...names);
+    } else {
+        event.activeQueue.push({
+            id: p.trackId,
+            title: p.title,
+            artist: p.artist,
+            artwork: p.artwork,
+            explicit: p.explicit,
+            year: p.year || null,
+            duration: p.duration,
+            upvoters: [],
+            downvoters: [],
+            requesters: names,
+            order: nextQueueOrder(event)
+        });
+        // Only the one track that's actually next ever gets pushed to
+        // Spotify (see pushNextTrackToSpotifyIfNeeded).
+        pushNextTrackToSpotifyIfNeeded(event).catch(err => {
+            console.error(`[SPOTIFY QUEUE] (${event.slug}) Failed to stage next track:`, err.message);
+        });
+    }
+
+    // This track is now sitting in a queue - start music-video verification now.
+    triggerMusicVideoVerification(p.trackId, p.artist, p.title, p.durationMs);
+
+    for (const r of p.requesters) {
+        event.requestLog.push({
+            trackId: p.trackId,
+            title: p.title,
+            artist: p.artist,
+            artwork: p.artwork,
+            explicit: p.explicit,
+            voterId: r.voterId,
+            username: r.name,
+            status: 'queued',
+            requestedAt: r.requestedAt || Date.now()
+        });
+    }
+    if (event.requestLog.length > 2000) event.requestLog = event.requestLog.slice(-2000);
+}
+
+app.post('/e/:slug/api/admin/toggle-approval-mode', (req, res) => {
+    const { enabled } = req.body;
+    if (typeof enabled === 'boolean') req.event.systemConfigs.approvalMode = enabled;
+    events.scheduleSave(req.event.slug);
+    res.json({ success: true });
+});
+
+app.post('/e/:slug/api/admin/pending/accept-all', (req, res) => {
+    const event = req.event;
+    const list = ensurePendingRequests(event).splice(0);
+    list.forEach(p => enqueueApprovedRequest(event, p));
+    events.scheduleSave(event.slug);
+    res.json({ success: true, accepted: list.length });
+});
+
+app.post('/e/:slug/api/admin/pending/:id/accept', (req, res) => {
+    const event = req.event;
+    const list = ensurePendingRequests(event);
+    const i = list.findIndex(p => p.id === req.params.id);
+    if (i < 0) return res.status(404).json({ error: 'That request was already handled.' });
+    const [p] = list.splice(i, 1);
+    enqueueApprovedRequest(event, p);
+    events.scheduleSave(event.slug);
+    res.json({ success: true });
+});
+
+app.post('/e/:slug/api/admin/pending/:id/reject', (req, res) => {
+    const event = req.event;
+    const list = ensurePendingRequests(event);
+    const i = list.findIndex(p => p.id === req.params.id);
+    if (i < 0) return res.status(404).json({ error: 'That request was already handled.' });
+    const [p] = list.splice(i, 1);
+    // A rejected request gives the guest their credit back.
+    const max = parseInt(event.systemConfigs.maxCredits, 10) || 3;
+    for (const r of p.requesters) {
+        const cs = getOrCreateVoterCreditState(event, r.voterId, max);
+        cs.available = Math.min(cs.available + 1, max);
+    }
+    events.scheduleSave(event.slug);
+    res.json({ success: true });
+});
 
 app.post('/e/:slug/api/request', publicActionLimiter, voterIdentityMiddleware, buildRequestHandler(false));
 app.post('/e/:slug/api/kiosk-request', publicActionLimiter, voterIdentityMiddleware, buildRequestHandler(true));
@@ -4789,6 +4877,12 @@ app.get('/e/:slug/api/admin/data', async (req, res) => {
         kiosk: event.kioskConfigs,
         visuals: ensureVisualsConfigs(event),
         queue: await annotateQueueVideo(event, buildSortedQueueForAdmin(event)),
+        approvalMode: !!event.systemConfigs.approvalMode,
+        pending: ensurePendingRequests(event).map(p => ({
+            id: p.id, trackId: p.trackId, title: p.title, artist: p.artist, artwork: p.artwork,
+            explicit: p.explicit, year: p.year || null, duration: p.duration,
+            requesters: p.requesters.map(r => r.name), requestedAt: p.requestedAt
+        })),
         history: event.playedHistory,
         blockedVoters: Object.entries(event.blockedVoters || {}).map(([voterId, info]) => ({
             voterId,
