@@ -942,6 +942,10 @@
         body.has-now-playing-bar { padding-bottom: 76px; }
 
             .video-tag { color: var(--spotify-green, #1DB954); font-size: 0.75rem; font-weight: 700; margin-left: 6px; white-space: nowrap; }
+            .pend-actions { display: flex; gap: 8px; flex-shrink: 0; }
+        .pend-btn { border: none; border-radius: 20px; padding: 8px 14px; font-weight: 700; font-size: 0.8rem; cursor: pointer; color: #fff; }
+        .pend-yes { background: var(--spotify-green, #1DB954); }
+        .pend-no { background: var(--red-action, #e91429); }
     </style>
 </head>
 <body>
@@ -964,6 +968,7 @@
         </div>
         <button type="button" id="sidebar-nav-playback" class="sidebar-nav-item" onclick="switchTab('playback')">Playback</button>
         <button type="button" id="sidebar-nav-queue" class="sidebar-nav-item active-tab" onclick="switchTab('queue')">Up Next</button>
+        <button type="button" id="sidebar-nav-pending" class="sidebar-nav-item" onclick="switchTab('pending')">Pending</button>
         <button type="button" id="sidebar-nav-history" class="sidebar-nav-item" onclick="switchTab('history')">Song History</button>
         <button type="button" id="sidebar-nav-settings" class="sidebar-nav-item" onclick="switchTab('settings')">Settings</button>
         <button type="button" id="sidebar-nav-stats" class="sidebar-nav-item" onclick="switchTab('stats')">Stats</button>
@@ -1087,6 +1092,18 @@
             </div>
 
             <div id="queue-list"></div>
+        </div>
+    </div>
+
+    <div id="tab-panel-pending" class="tab-content">
+        <div class="panel">
+            <h2>Pending Requests</h2>
+            <p class="settings-card-hint" style="margin-top:0;">With approval mode on, guest requests wait here. Nothing shows in the queue or on any guest, kiosk or visuals screen until you accept it.</p>
+            <div class="control-bar" style="margin-bottom:14px;">
+                <button id="toggle-approval" class="toggle-btn open-status" onclick="toggleApprovalMode()">Approval Mode: OFF</button>
+                <button id="pending-accept-all" class="toggle-btn open-status" onclick="acceptAllPending()" style="display:none;">Accept All</button>
+            </div>
+            <div id="pending-list"></div>
         </div>
     </div>
 
@@ -1702,7 +1719,7 @@
         // chip selection before they hit "Save Filters".
         let filtersInitialized = false;
 
-        const TAB_NAMES = ['playback', 'queue', 'history', 'settings', 'stats', 'blocked'];
+        const TAB_NAMES = ['playback', 'queue', 'pending', 'history', 'settings', 'stats', 'blocked'];
 
         // --- Sidebar (hamburger menu) ---
         function openSidebar() {
@@ -1715,6 +1732,57 @@
         }
 
         // Tab selection switching algorithm
+        let approvalMode = false;
+        function renderPending(data) {
+            approvalMode = !!data.approvalMode;
+            const list = data.pending || [];
+            document.getElementById('sidebar-nav-pending').textContent = list.length ? `Pending (${list.length})` : 'Pending';
+            const btn = document.getElementById('toggle-approval');
+            btn.innerText = `Approval Mode: ${approvalMode ? 'ON' : 'OFF'}`;
+            btn.className = approvalMode ? 'toggle-btn closed-status' : 'toggle-btn open-status';
+            document.getElementById('pending-accept-all').style.display = list.length > 1 ? '' : 'none';
+            document.getElementById('pending-list').innerHTML = list.length === 0
+                ? `<p class="empty-placeholder">${approvalMode ? 'No requests waiting.' : 'Approval mode is off - requests go straight to the queue.'}</p>`
+                : list.map(p => `
+                <div class="song-row">
+                    <div class="song-details">
+                        <img src="${safeImageUrl(p.artwork)}">
+                        <div class="text-container">
+                            <div class="title-wrapper">
+                                <p class="song-title">${escapeHtml(p.title)}</p>
+                                ${p.explicit ? '<span class="explicit-badge">E</span>' : ''}
+                            </div>
+                            <p class="song-artist">${escapeHtml(artistWithYear(p.artist, p.year))}</p>
+                            <div class="length-requester-row"><span class="length-text">By ${escapeHtml((p.requesters || []).join(', '))}</span></div>
+                        </div>
+                    </div>
+                    <div class="pend-actions">
+                        <button type="button" class="pend-btn pend-yes" onclick="pendingAction('${escapeHtml(p.id)}','accept')">Accept</button>
+                        <button type="button" class="pend-btn pend-no" onclick="pendingAction('${escapeHtml(p.id)}','reject')">Reject</button>
+                    </div>
+                </div>`).join('');
+        }
+        async function toggleApprovalMode() {
+            if (!isAuthorized) return;
+            await fetch(eventUrl('/api/admin/toggle-approval-mode'), {
+                method: 'POST',
+                headers: adminHeaders({ 'Content-Type': 'application/json' }),
+                body: JSON.stringify({ enabled: !approvalMode })
+            });
+            updateDashboard();
+        }
+        async function pendingAction(id, action) {
+            if (!isAuthorized) return;
+            const res = await fetch(eventUrl(`/api/admin/pending/${encodeURIComponent(id)}/${action}`), { method: 'POST', headers: adminHeaders({ 'Content-Type': 'application/json' }), body: '{}' });
+            if (!res.ok) { const d = await res.json().catch(() => ({})); showToast(d.error || 'Could not do that.', 'error'); }
+            updateDashboard();
+        }
+        async function acceptAllPending() {
+            if (!isAuthorized) return;
+            await fetch(eventUrl('/api/admin/pending/accept-all'), { method: 'POST', headers: adminHeaders({ 'Content-Type': 'application/json' }), body: '{}' });
+            updateDashboard();
+        }
+
         function switchTab(targetTab) {
             TAB_NAMES.forEach(name => {
                 const isActive = name === targetTab;
@@ -2993,6 +3061,7 @@ async function verifyPassword() {
 
                 const queueList = document.getElementById('queue-list');
                 lastGuestQueue = data.queue || [];
+                renderPending(data);
                 renderQueueList();
 
                 lastBlockedVoters = data.blockedVoters || [];
