@@ -420,10 +420,11 @@
             transition: all 0.2s ease, padding 0.15s ease;
         }
         .search-box:focus { border-color: var(--spotify-green); }
-        .reco-links { display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 8px; font-size: 0.85rem; }
+        .reco-links { display: flex; justify-content: center; align-items: center; gap: 10px; margin: 28px 0 12px; font-size: 0.85rem; }
         .reco-link { background: none; border: none; padding: 4px 2px; color: var(--spotify-green); font-weight: 700; font-size: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
         .reco-link:hover { text-decoration: underline; }
-        .reco-sep { color: var(--text-muted, #a7a7a7); }
+        .reco-link.is-active { text-decoration: underline; }
+        .reco-sep { color: var(--text-muted); }
         .search-box.has-inline-btn { padding-right: 150px; }
 
         /* Disabled search state styling */
@@ -1170,11 +1171,6 @@
 
         <div class="search-bar-wrapper">
             <input type="text" id="search-input" class="search-box" placeholder="Search for songs or artists..." oninput="executeSearch()">
-            <div class="reco-links" id="reco-links">
-                <button type="button" class="reco-link" onclick="showRecommendations('popular')">Popular</button>
-                <span class="reco-sep">&middot;</span>
-                <button type="button" class="reco-link" onclick="showRecommendations('similar')">More like this</button>
-            </div>
         </div>
 
         <div class="section-title-row">
@@ -1182,6 +1178,11 @@
         </div>
         </div>
         <div id="main-display-list"></div>
+        <div class="reco-links" id="reco-links">
+            <button type="button" class="reco-link" data-mode="popular" onclick="showRecommendations('popular')">Popular</button>
+            <span class="reco-sep">&middot;</span>
+            <button type="button" class="reco-link" data-mode="similar" onclick="showRecommendations('similar')">More like this</button>
+        </div>
     </div>
 
     <!-- MY REQUESTS MODAL -->
@@ -1969,7 +1970,7 @@
                 const recoEl = document.getElementById('reco-links');
                 if (recoEl) recoEl.style.display = effectivelyOpen ? '' : 'none';
                 if (!effectivelyOpen) {
-                    recoActive = null;
+                    setRecoActive(null);
                     searchInput.disabled = true;
                     searchInput.value = "";
                     searchInput.placeholder = !hasUsername()
@@ -2180,6 +2181,10 @@
         }
 
         let recoActive = null;
+        function setRecoActive(v) {
+            recoActive = v;
+            document.querySelectorAll('.reco-link').forEach(b => b.classList.toggle('is-active', b.dataset.mode === v));
+        }
 
         function renderSearchTracks(tracks) {
             globalSearchResults = tracks;
@@ -2209,7 +2214,7 @@
             if (!systemRequestsAllowed || queueIsFull) return;
             clearTimeout(searchTimeout);
             document.getElementById('search-input').value = '';
-            recoActive = mode;
+            setRecoActive(mode);
             const title = document.getElementById('list-title');
             const display = document.getElementById('main-display-list');
             title.innerText = mode === 'popular' ? 'Popular' : 'More Like This';
@@ -2242,7 +2247,7 @@
             if (!systemRequestsAllowed || queueIsFull) return; // Prevent querying if system is locked down
 
             clearTimeout(searchTimeout);
-            recoActive = null;
+            setRecoActive(null);
             const query = document.getElementById('search-input').value.trim();
 
             if (query === "") {
@@ -2335,7 +2340,7 @@
             const ok = await submitTrackRequest(track);
             if (ok) {
                 document.getElementById('search-input').value = "";
-                if (recoActive) { recoActive = null; fetchSystemState(); }
+                if (recoActive) { setRecoActive(null); fetchSystemState(); }
                 showToast(lastRequestPending ? "Sent to the DJ for approval - it will show up once accepted." : "Song successfully added to the queue!", "success");
             }
         }
