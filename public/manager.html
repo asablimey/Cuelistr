@@ -941,6 +941,7 @@
         body.has-now-playing-bar { padding-bottom: 76px; }
 
     
+            .video-tag { color: var(--spotify-green, #1DB954); font-size: 0.75rem; font-weight: 700; margin-left: 6px; white-space: nowrap; }
     </style>
     <style>
 
@@ -1465,6 +1466,18 @@ body.has-player { overflow: hidden; }
                 </div>
             </div>
 
+            <div class="settings-card full-only">
+                <div class="settings-section-label">Artist Spacing</div>
+                <p class="settings-card-hint" style="margin-top:0;">Limit how often one artist can show up. No more than the first number of songs by the same artist within the last-and-upcoming number of songs. Either one at 0 turns the rule off.</p>
+                <div class="field-row">
+                    <div class="input-group"><label>Max Songs Per Artist</label><input type="number" id="input-artist-max" min="0" max="100" style="width:100%;"></div>
+                </div>
+                <div class="field-row">
+                    <div class="input-group"><label>Within This Many Songs</label><input type="number" id="input-artist-window" min="0" max="500" style="width:100%;"></div>
+                    <button class="save-config-btn" onclick="saveArtistSpacing()">Update</button>
+                </div>
+            </div>
+
             <p class="settings-card-hint" style="margin:4px 4px 0;">Blocking whole genres, specific songs or artists is on the Blocked page.</p>
         </div>
     </div>
@@ -1944,6 +1957,16 @@ body.has-player { overflow: hidden; }
             if (res.ok) showToast(n === 0 ? 'Repeat gap turned off.' : 'Repeat gap updated.', 'success'); else showToast('Could not update the repeat gap.', 'error');
             updateDashboard();
         }
+        async function saveArtistSpacing() {
+            if (!isAuthorized) return;
+            const m = parseInt($('input-artist-max').value, 10);
+            const w = parseInt($('input-artist-window').value, 10);
+            if (!Number.isInteger(m) || m < 0 || m > 100) return showToast('Max songs per artist: enter 0 to 100.', 'error');
+            if (!Number.isInteger(w) || w < 0 || w > 500) return showToast('Window: enter 0 to 500.', 'error');
+            const res = await adminPost('/api/admin/config', { artistMaxSongs: m, artistWindow: w });
+            if (res.ok) showToast((m === 0 || w === 0) ? 'Artist spacing turned off.' : 'Artist spacing updated.', 'success'); else showToast('Could not update artist spacing.', 'error');
+            updateDashboard();
+        }
         renderDecadeChips();
 
         // ---- Settings saves ----
@@ -2042,6 +2065,7 @@ body.has-player { overflow: hidden; }
                                 <div class="text-container">
                                     <div class="title-wrapper">
                                         <p class="song-title">${escapeHtml(song.title)}</p>
+                                        ${song.hasVideo ? '<span class="video-tag">(Video)</span>' : ''}
                                         ${song.explicit ? '<span class="explicit-badge">E</span>' : ''}
                                     </div>
                                     <p class="song-artist">${escapeHtml(artistWithYear(song.artist, song.year))}</p>
@@ -2767,6 +2791,8 @@ body.has-player { overflow: hidden; }
                 setSwitchFromServer('qcap', !!data.queueCapEnabled);
                 setIfIdle('input-max-queue', data.maxQueueLength);
                 setIfIdle('input-repeat-gap', data.songRepeatGap);
+                setIfIdle('input-artist-max', data.artistMaxSongs || 0);
+                setIfIdle('input-artist-window', data.artistWindow || 0);
                 $('queue-cap-status-text').textContent = data.queueCapEnabled
                     ? `Current queue: ${(data.queue || []).length} / ${data.maxQueueLength}${data.queueFull ? ' - FULL, requests auto-closed until it drains' : ''}`
                     : 'Queue limit is off - guests can keep adding songs.';
