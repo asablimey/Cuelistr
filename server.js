@@ -6633,11 +6633,15 @@ setInterval(syncAllLoadedEvents, SCHEDULER_FAST_POLL_MS);
 // Public (no admin auth) - the guest, kiosk, and admin pages all poll this for
 // the live "Now Playing" bar. Only ever exposes playback state, nothing about
 // the connected account itself.
-app.get('/e/:slug/api/now-playing', publicReadLimiter, (req, res) => {
+app.get('/e/:slug/api/now-playing', publicReadLimiter, async (req, res) => {
     // spotifyLinked / lastPolledAt / serverNow are diagnostics: they show whether this
     // event has a saved Spotify login and whether the background sync is actually running.
+    const np = req.event.cachedNowPlaying || {};
+    // hasVideo on each upcoming row feeds the "(Video)" tag in admin/manager.
+    const upcoming = Array.isArray(np.upcoming) ? await annotateQueueVideo(req.event, np.upcoming) : np.upcoming;
     res.json({
-        ...req.event.cachedNowPlaying,
+        ...np,
+        upcoming,
         spotifyLinked: !!(req.event.spotify && req.event.spotify.djRefreshToken),
         lastPolledAt: nowPlayingLastSyncedAt.get(req.event.slug) || null,
         serverNow: Date.now()
