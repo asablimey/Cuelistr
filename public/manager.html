@@ -2140,7 +2140,7 @@ body.has-player { overflow: hidden; }
                         <div class="song-details">
                             <img src="${safeImageUrl(t.artwork)}" alt="" draggable="false">
                             <div class="text-container">
-                                <div class="title-wrapper"><p class="song-title">${escapeHtml(t.title)}</p></div>
+                                <div class="title-wrapper"><p class="song-title">${escapeHtml(t.title)}</p>${t.hasVideo ? '<span class="video-tag">(Video)</span>' : ''}</div>
                                 <p class="song-artist">${escapeHtml(artistWithYear(t.artist, t.year))}</p>
                                 <div class="length-requester-row"><span class="length-text plain">Playlist</span></div>
                             </div>
