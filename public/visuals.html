@@ -360,6 +360,46 @@
         }
         .mv-logo.is-visible { opacity: 0.55; }
 
+        /* ---------- On-screen lyrics (replace YouTube's own subtitles when the admin's
+           Subtitles toggle is on). Lives in #video-view, ABOVE the video and independent of
+           how the video is cropped, so the video formatting is untouched. Move it with
+           --lyr-bottom. The look is chosen in admin (musicVideoLyricsStyle) or, for testing,
+           with ?lyricsStyle=classic|karaoke|subtitle|bold|soft on this page's URL. ---------- */
+        #mv-lyrics {
+            --lyr-bottom: 13vh;
+            position: absolute; left: 0; right: 0; bottom: var(--lyr-bottom); z-index: 4;
+            padding: 0 8vw; text-align: center; pointer-events: none;
+            font-family: 'Khula', sans-serif; color: #fff;
+            opacity: 0; transition: opacity 0.25s ease;
+        }
+        #mv-lyrics.is-on { opacity: 1; }
+        #mv-lyrics .lyr-prev, #mv-lyrics .lyr-next, #mv-lyrics .lyr-cur { display: block; margin: 0 auto; max-width: 84vw; line-height: 1.2; text-shadow: 0 2px 6px rgba(0,0,0,0.85), 0 0 18px rgba(0,0,0,0.55); }
+        #mv-lyrics .lyr-cur { font-weight: 700; font-size: clamp(1.7rem, 4.6vh, 3.4rem); min-height: 1.2em; }
+        #mv-lyrics .lyr-cur.lyr-in { animation: lyrIn 0.22s ease-out; }
+        @keyframes lyrIn { from { opacity: 0; transform: translateY(0.25em); } to { opacity: 1; transform: none; } }
+        #mv-lyrics .lyr-prev, #mv-lyrics .lyr-next { font-weight: 600; font-size: clamp(1rem, 2.6vh, 1.9rem); opacity: 0.55; }
+        #mv-lyrics .lyr-prev { margin-bottom: 0.45em; }
+        #mv-lyrics .lyr-next { margin-top: 0.45em; }
+        /* classic: previous / current / next stacked (the base look above) */
+        /* karaoke: current line fills in left to right across its length; next line below */
+        #mv-lyrics.lyr-style-karaoke .lyr-prev { display: none; }
+        #mv-lyrics.lyr-style-karaoke .lyr-cur {
+            --p: 0%;
+            color: transparent; text-shadow: none; filter: drop-shadow(0 2px 5px rgba(0,0,0,0.85));
+            background: linear-gradient(90deg, #ffd54a var(--p), rgba(255,255,255,0.55) var(--p));
+            -webkit-background-clip: text; background-clip: text;
+        }
+        /* subtitle: one line in a dark rounded box, like movie subtitles */
+        #mv-lyrics.lyr-style-subtitle .lyr-prev, #mv-lyrics.lyr-style-subtitle .lyr-next { display: none; }
+        #mv-lyrics.lyr-style-subtitle .lyr-cur { display: inline-block; font-weight: 600; font-size: clamp(1.4rem, 3.6vh, 2.6rem); background: rgba(0,0,0,0.62); padding: 0.18em 0.6em; border-radius: 0.35em; text-shadow: none; }
+        #mv-lyrics.lyr-style-subtitle .lyr-cur:empty { display: none; }
+        /* bold: huge uppercase single line */
+        #mv-lyrics.lyr-style-bold .lyr-prev, #mv-lyrics.lyr-style-bold .lyr-next { display: none; }
+        #mv-lyrics.lyr-style-bold .lyr-cur { font-weight: 800; font-size: clamp(2.2rem, 6.4vh, 4.8rem); text-transform: uppercase; letter-spacing: 0.04em; text-shadow: 0 3px 8px rgba(0,0,0,0.9), 0 0 28px rgba(0,0,0,0.6); }
+        /* soft: light italic with a gentle glow */
+        #mv-lyrics.lyr-style-soft .lyr-prev, #mv-lyrics.lyr-style-soft .lyr-next { display: none; }
+        #mv-lyrics.lyr-style-soft .lyr-cur { font-weight: 400; font-style: italic; font-size: clamp(1.7rem, 4.4vh, 3.2rem); color: rgba(255,255,255,0.94); text-shadow: 0 0 14px rgba(255,255,255,0.45), 0 2px 8px rgba(0,0,0,0.9); }
+
         .mv-info-pop {
             position: absolute; left: 40px; bottom: 26px; z-index: 8;
             max-width: 60%; pointer-events: none; opacity: 0;
@@ -431,6 +471,7 @@
             <div class="mv-info-title" id="mv-info-title"></div>
             <div class="mv-info-artist" id="mv-info-artist"></div>
         </div>
+        <div id="mv-lyrics" class="lyr-style-classic"><span class="lyr-prev"></span><span class="lyr-cur"></span><span class="lyr-next"></span></div>
         <img class="mv-logo" id="mv-logo" src="/assets/cuelistr-logo-dark.svg" alt="">
     </div>
 
@@ -1168,6 +1209,9 @@
         let mvDriftInterval = null;
         let mvConsecutiveBigDrifts = 0;
         let mvSubtitlesEnabled = false;
+        // YouTube's own captions are always OFF now: the Subtitles toggle shows our own synced lyrics
+        // layer instead (see lyrTick). Set true to go back to YouTube's captions.
+        const MV_USE_YOUTUBE_CAPTIONS = false;
         // RULE: once a video is on screen and playing, it finishes. These
         // support that: a video is never torn down for drift or a passing
         // "no match" reading - only for an admin override, a genuinely new
@@ -1924,7 +1968,7 @@
             st.capRun = (st.capRun || 0) + 1;
             const run = st.capRun;
             try {
-                if (mvSubtitlesEnabled) {
+                if (mvSubtitlesEnabled && MV_USE_YOUTUBE_CAPTIONS) {
                     st.yt.loadModule('captions');
                     let tries = 0;
                     const attempt = () => {
@@ -1944,7 +1988,7 @@
         // true once a track is selected (or already was), false if it isn't
         // available yet. Safe to call speculatively any number of times.
         function trySetCaptionsTrack(slot) {
-            if (!mvSubtitlesEnabled) return true;
+            if (!mvSubtitlesEnabled || !MV_USE_YOUTUBE_CAPTIONS) return true;
             const st = players[slot];
             if (!st.ready) return false;
             try {
@@ -2628,6 +2672,89 @@
             return true;
         }
 
+        /* =========================================================
+           On-screen synced lyrics. Shown only while a music video is on
+           screen AND the admin's Subtitles toggle is on, in place of YouTube's
+           own captions. Entirely separate from the video sync: it only READS
+           the song clock (mvClock) and never changes it, so nothing about how
+           the video is timed, cropped or positioned is touched.
+           Lyrics come from /api/music-video/lyrics (time-synced, cached on
+           the server); a song with none just shows no lyrics.
+           ========================================================= */
+        const MV_LYRICS_LEAD_MS = 250;        // show each line this much early (+ = earlier); tweak if lyrics feel late/early
+        const MV_LYRICS_MAX_LINE_MS = 10000;  // hide a line this long after it starts if nothing follows (instrumental break)
+        const MV_LYRICS_STYLES = ['classic', 'karaoke', 'subtitle', 'bold', 'soft'];
+        const lyrUrlStyle = (() => { try { const v = (new URLSearchParams(location.search).get('lyricsStyle') || '').toLowerCase(); return MV_LYRICS_STYLES.includes(v) ? v : ''; } catch (e) { return ''; } })();
+        const lyrEl = document.getElementById('mv-lyrics');
+        const lyrPrevEl = lyrEl.querySelector('.lyr-prev'), lyrCurEl = lyrEl.querySelector('.lyr-cur'), lyrNextEl = lyrEl.querySelector('.lyr-next');
+        let lyrStyle = 'classic';
+        const lyr = { key: null, lines: null, status: 'idle', idx: -2 };
+
+        function lyrSetStyle(name) {
+            name = MV_LYRICS_STYLES.includes(name) ? name : 'classic';
+            if (name === lyrStyle) return;
+            lyrStyle = name;
+            lyrEl.className = 'lyr-style-' + name + (lyrEl.classList.contains('is-on') ? ' is-on' : '');
+        }
+        function lyrHide() { lyrEl.classList.remove('is-on'); }
+
+        async function lyrLoad(key, meta) {
+            try {
+                const url = eventUrl('/api/music-video/lyrics') + '?title=' + encodeURIComponent(meta.title || '')
+                    + '&artist=' + encodeURIComponent(meta.artist || '') + '&durationMs=' + (meta.durationMs || 0);
+                const res = await fetch(url);
+                if (!res.ok) throw new Error('lyrics ' + res.status);
+                const d = await res.json();
+                if (lyr.key !== key) return;
+                lyr.lines = (d && Array.isArray(d.lines) && d.lines.length) ? d.lines : null;
+                lyr.status = lyr.lines ? 'ready' : 'none';
+            } catch (e) {
+                if (lyr.key !== key) return;
+                lyr.status = 'none';
+                setTimeout(() => { if (lyr.key === key && !lyr.lines) lyr.key = null; }, 15000);   // network hiccup: try again later
+            }
+        }
+
+        function lyrIndexAt(lines, pos) {            // last line whose start <= pos, or -1
+            let lo = 0, hi = lines.length - 1, ans = -1;
+            while (lo <= hi) { const mid = (lo + hi) >> 1; if (lines[mid].t <= pos) { ans = mid; lo = mid + 1; } else hi = mid - 1; }
+            return ans;
+        }
+
+        function lyrTick() {
+            const tid = currentVideoTrackId;
+            const canLoad = mvSubtitlesEnabled && musicVideoActive && tid && mvLastPoll && mvLastPoll.trackId === tid && mvLastPoll.title;
+            if (!canLoad) { lyrHide(); return; }
+            if (lyr.key !== tid) {                    // new song: fetch its lyrics now so they're ready at reveal
+                lyr.key = tid; lyr.lines = null; lyr.status = 'loading'; lyr.idx = -2;
+                lyrLoad(tid, mvLastPoll);
+            }
+            if (!lyr.lines || !mvRevealed || !mvClock || mvClock.trackId !== tid) { lyrHide(); return; }
+
+            const lines = lyr.lines;
+            const pos = (mvClock.isPlaying ? (Date.now() - mvClock.base) : mvClock.pausedPosMs) + MV_LYRICS_LEAD_MS;
+            const idx = lyrIndexAt(lines, pos);
+            const cur = idx >= 0 ? lines[idx] : null;
+            if (!cur || !cur.text || pos - cur.t > MV_LYRICS_MAX_LINE_MS) { lyrHide(); lyr.idx = -2; return; }
+
+            if (idx !== lyr.idx) {
+                lyr.idx = idx;
+                const prev = idx > 0 ? lines[idx - 1] : null, next = idx + 1 < lines.length ? lines[idx + 1] : null;
+                lyrPrevEl.textContent = (prev && prev.text && cur.t - prev.t < 8000) ? prev.text : '';
+                lyrNextEl.textContent = (next && next.text && next.t - cur.t < 8000) ? next.text : '';
+                lyrCurEl.textContent = cur.text;
+                lyrCurEl.classList.remove('lyr-in'); void lyrCurEl.offsetWidth; lyrCurEl.classList.add('lyr-in');
+            }
+            if (lyrStyle === 'karaoke') {
+                const next = idx + 1 < lines.length ? lines[idx + 1] : null;
+                const end = Math.min(next ? next.t : cur.t + 4000, cur.t + MV_LYRICS_MAX_LINE_MS);
+                const p = Math.max(0, Math.min(1, (pos - cur.t) / Math.max(400, end - cur.t)));
+                lyrCurEl.style.setProperty('--p', (p * 100).toFixed(1) + '%');
+            }
+            lyrEl.classList.add('is-on');
+        }
+        setInterval(lyrTick, 100);
+
         async function pollMusicVideo() {
             try {
                 const res = await fetch(eventUrl('/api/music-video') + '?d=1');
@@ -2637,6 +2764,7 @@
 
                 const subtitlesChanged = !!data.subtitlesEnabled !== mvSubtitlesEnabled;
                 mvSubtitlesEnabled = !!data.subtitlesEnabled;
+                lyrSetStyle(lyrUrlStyle || data.lyricsStyle);
                 if (subtitlesChanged && musicVideoActive) {
                     applySubtitlesSetting(activeSlot);
                     if (pendingSlot) applySubtitlesSetting(pendingSlot);
