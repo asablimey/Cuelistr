@@ -186,6 +186,19 @@
             box-sizing: border-box;
         }
 
+        .input-group select {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-strong);
+            padding: 10px 14px;
+            color: var(--text);
+            border-radius: 6px;
+            font-size: 1rem;
+            font-weight: bold;
+            box-sizing: border-box;
+            max-width: 100%;
+        }
+        .input-group select:focus { outline: none; border-color: var(--spotify-green); }
+
         .join-row { display: flex; gap: 10px; flex-wrap: wrap; }
         .join-row input[type="text"] {
             background-color: var(--card-bg);
@@ -1451,9 +1464,22 @@
                                 Suggestive = NO are considered.
                             </p>
                             <p class="settings-card-hint" style="margin-top: 16px; margin-bottom: 0;">
-                                <strong>Subtitles</strong> turns on YouTube's caption track for whatever video is
-                                currently showing, when that video has one available.
+                                <strong>Subtitles</strong> shows time-synced lyrics over whatever video is currently
+                                showing (in place of YouTube's own captions), when lyrics are available for the song.
+                                Pick how they look below.
                             </p>
+                            <div class="config-dashboard" style="margin-top: 16px;">
+                                <div class="input-group">
+                                    <label for="select-music-video-lyrics-style">Subtitle Style</label>
+                                    <select id="select-music-video-lyrics-style" onchange="saveMusicVideoLyricsStyle(this.value)">
+                                        <option value="classic">Classic (3 lines)</option>
+                                        <option value="karaoke">Karaoke (fills as sung)</option>
+                                        <option value="subtitle">Subtitle box</option>
+                                        <option value="bold">Bold caps</option>
+                                        <option value="soft">Soft italic</option>
+                                    </select>
+                                </div>
+                            </div>
                             <div class="config-dashboard" style="margin-top: 16px;">
                                 <div class="input-group">
                                     <label>Video Timing Offset (ms)</label>
@@ -2416,6 +2442,27 @@ async function verifyPassword() {
             updateDashboard();
         }
 
+        // Subtitle style dropdown. Held for a few seconds after a change so the next background
+        // refresh can't flip it back before the server has saved it.
+        let lyricsStyleLockUntil = 0;
+        async function saveMusicVideoLyricsStyle(style) {
+            if (!isAuthorized) return;
+            lyricsStyleLockUntil = Date.now() + 3000;
+            try {
+                const res = await fetch(eventUrl('/api/admin/visuals/music-video-lyrics-style'), {
+                    method: 'POST',
+                    headers: adminHeaders({ 'Content-Type': 'application/json' }),
+                    body: JSON.stringify({ style })
+                });
+                if (res.ok) showToast("Subtitle style updated.", "success");
+                else { lyricsStyleLockUntil = 0; showToast("Could not update the subtitle style.", "error"); }
+            } catch (e) {
+                lyricsStyleLockUntil = 0;
+                showToast("Could not reach the server.", "error");
+            }
+            updateDashboard();
+        }
+
         async function saveMusicVideoInfoSeconds() {
             if (!isAuthorized) return;
             const val = document.getElementById('input-music-video-info-seconds').value;
@@ -3038,6 +3085,11 @@ async function verifyPassword() {
                     preferVisualizersEnabled = !!data.visuals.preferVisualizersEnabled;
                     preferVizBtn.innerText = preferVisualizersEnabled ? "Prefer Visualisers/Lyric Vids: ON" : "Prefer Visualisers/Lyric Vids: OFF";
                     preferVizBtn.className = preferVisualizersEnabled ? "toggle-btn open-status" : "toggle-btn closed-status";
+
+                    const lyricsStyleSel = document.getElementById('select-music-video-lyrics-style');
+                    if (Date.now() > lyricsStyleLockUntil && document.activeElement !== lyricsStyleSel) {
+                        lyricsStyleSel.value = data.visuals.musicVideoLyricsStyle || 'classic';
+                    }
 
                     if (document.activeElement !== document.getElementById('input-music-video-offset')) {
                         document.getElementById('input-music-video-offset').value = data.visuals.musicVideoOffsetMs;
