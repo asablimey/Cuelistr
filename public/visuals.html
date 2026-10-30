@@ -364,9 +364,9 @@
            Subtitles toggle is on). Lives in #video-view, ABOVE the video and independent of
            how the video is cropped, so the video formatting is untouched. Move it with
            --lyr-bottom. The look is chosen in admin (musicVideoLyricsStyle) or, for testing,
-           with ?lyricsStyle=classic|karaoke|subtitle|bold|soft on this page's URL. ---------- */
+           with ?lyricsStyle=<style name> on this page's URL. ---------- */
         #mv-lyrics {
-            --lyr-bottom: 13vh;
+            --lyr-bottom: 8vh;
             position: absolute; left: 0; right: 0; bottom: var(--lyr-bottom); z-index: 4;
             padding: 0 8vw; text-align: center; pointer-events: none;
             font-family: 'Khula', sans-serif; color: #fff;
@@ -399,6 +399,28 @@
         /* soft: light italic with a gentle glow */
         #mv-lyrics.lyr-style-soft .lyr-prev, #mv-lyrics.lyr-style-soft .lyr-next { display: none; }
         #mv-lyrics.lyr-style-soft .lyr-cur { font-weight: 400; font-style: italic; font-size: clamp(1.7rem, 4.4vh, 3.2rem); color: rgba(255,255,255,0.94); text-shadow: 0 0 14px rgba(255,255,255,0.45), 0 2px 8px rgba(0,0,0,0.9); }
+        /* neon: glowing pink/violet tube lettering */
+        #mv-lyrics.lyr-style-neon .lyr-prev, #mv-lyrics.lyr-style-neon .lyr-next { display: none; }
+        #mv-lyrics.lyr-style-neon .lyr-cur { font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #fff; text-shadow: 0 0 5px #fff, 0 0 14px #ff2fd2, 0 0 28px #ff2fd2, 0 0 48px #8a2bff; }
+        /* outline: hollow white lettering */
+        #mv-lyrics.lyr-style-outline .lyr-prev, #mv-lyrics.lyr-style-outline .lyr-next { display: none; }
+        #mv-lyrics.lyr-style-outline .lyr-cur { font-weight: 800; font-size: clamp(2.2rem, 6vh, 4.5rem); letter-spacing: 0.03em; color: rgba(0,0,0,0.25); -webkit-text-stroke: 2px #fff; text-shadow: none; filter: drop-shadow(0 2px 6px rgba(0,0,0,0.85)); }
+        /* gradient: warm sunset-coloured lettering */
+        #mv-lyrics.lyr-style-gradient .lyr-prev, #mv-lyrics.lyr-style-gradient .lyr-next { display: none; }
+        #mv-lyrics.lyr-style-gradient .lyr-cur { font-weight: 800; font-size: clamp(2rem, 5.6vh, 4.2rem); color: transparent; text-shadow: none; filter: drop-shadow(0 2px 5px rgba(0,0,0,0.85)); background: linear-gradient(90deg, #ff5f6d, #ffc371, #ffe66d); -webkit-background-clip: text; background-clip: text; }
+        /* reveal: the line wipes in from the left over its length (stays fully visible after) */
+        #mv-lyrics.lyr-style-reveal .lyr-prev, #mv-lyrics.lyr-style-reveal .lyr-next { display: none; }
+        #mv-lyrics.lyr-style-reveal .lyr-cur { --p: 0%; font-weight: 700; padding: 0.1em 0.3em; clip-path: inset(-0.2em calc(100% - var(--p)) -0.2em 0); animation: none; }
+        /* lowerthird: left-aligned broadcast-style bar, next line small underneath */
+        #mv-lyrics.lyr-style-lowerthird { text-align: left; padding: 0 6vw; }
+        #mv-lyrics.lyr-style-lowerthird .lyr-prev { display: none; }
+        #mv-lyrics.lyr-style-lowerthird .lyr-cur { display: inline-block; margin: 0; text-align: left; font-size: clamp(1.5rem, 3.8vh, 2.7rem); background: rgba(0,0,0,0.72); border-left: 0.3em solid #1DB954; padding: 0.2em 0.7em; text-shadow: none; }
+        #mv-lyrics.lyr-style-lowerthird .lyr-cur:empty { display: none; }
+        #mv-lyrics.lyr-style-lowerthird .lyr-next { margin: 0.5em 0 0; text-align: left; font-size: clamp(0.95rem, 2.2vh, 1.6rem); }
+        /* centre: one big line in the middle of the screen */
+        #mv-lyrics.lyr-style-centre { --lyr-bottom: 38vh; }
+        #mv-lyrics.lyr-style-centre .lyr-prev, #mv-lyrics.lyr-style-centre .lyr-next { display: none; }
+        #mv-lyrics.lyr-style-centre .lyr-cur { font-weight: 800; font-size: clamp(2.4rem, 7vh, 5.5rem); }
 
         .mv-info-pop {
             position: absolute; left: 40px; bottom: 26px; z-index: 8;
@@ -2683,7 +2705,7 @@
            ========================================================= */
         const MV_LYRICS_LEAD_MS = 250;        // show each line this much early (+ = earlier); tweak if lyrics feel late/early
         const MV_LYRICS_MAX_LINE_MS = 10000;  // hide a line this long after it starts if nothing follows (instrumental break)
-        const MV_LYRICS_STYLES = ['classic', 'karaoke', 'subtitle', 'bold', 'soft'];
+        const MV_LYRICS_STYLES = ['classic', 'karaoke', 'subtitle', 'bold', 'soft', 'neon', 'outline', 'gradient', 'reveal', 'lowerthird', 'centre'];
         const lyrUrlStyle = (() => { try { const v = (new URLSearchParams(location.search).get('lyricsStyle') || '').toLowerCase(); return MV_LYRICS_STYLES.includes(v) ? v : ''; } catch (e) { return ''; } })();
         const lyrEl = document.getElementById('mv-lyrics');
         const lyrPrevEl = lyrEl.querySelector('.lyr-prev'), lyrCurEl = lyrEl.querySelector('.lyr-cur'), lyrNextEl = lyrEl.querySelector('.lyr-next');
@@ -2745,10 +2767,11 @@
                 lyrCurEl.textContent = cur.text;
                 lyrCurEl.classList.remove('lyr-in'); void lyrCurEl.offsetWidth; lyrCurEl.classList.add('lyr-in');
             }
-            if (lyrStyle === 'karaoke') {
+            if (lyrStyle === 'karaoke' || lyrStyle === 'reveal') {
                 const next = idx + 1 < lines.length ? lines[idx + 1] : null;
                 const end = Math.min(next ? next.t : cur.t + 4000, cur.t + MV_LYRICS_MAX_LINE_MS);
-                const p = Math.max(0, Math.min(1, (pos - cur.t) / Math.max(400, end - cur.t)));
+                let p = Math.max(0, Math.min(1, (pos - cur.t) / Math.max(400, end - cur.t)));
+                if (lyrStyle === 'reveal') p = Math.min(1, p / 0.7);   // fully shown by 70% of the line
                 lyrCurEl.style.setProperty('--p', (p * 100).toFixed(1) + '%');
             }
             lyrEl.classList.add('is-on');
