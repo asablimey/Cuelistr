@@ -2378,6 +2378,9 @@ const MUSIC_VIDEO_OFFSET_DEFAULT_MS = 0;
 const MUSIC_VIDEO_INFO_SECONDS_DEFAULT = 30;
 const MUSIC_VIDEO_INFO_SECONDS_MIN = 5;
 const MUSIC_VIDEO_INFO_SECONDS_MAX = 120;
+// Lyric looks the display knows how to draw (names must match visuals.html's .lyr-style-* CSS).
+const MUSIC_VIDEO_LYRICS_STYLES = ['classic', 'karaoke', 'subtitle', 'bold', 'soft'];
+const MUSIC_VIDEO_LYRICS_STYLE_DEFAULT = 'classic';
 const MUSIC_VIDEO_OFFSET_MIN_MS = -5000;
 const MUSIC_VIDEO_OFFSET_MAX_MS = 5000;
 function ensureVisualsConfigs(event) {
@@ -2402,6 +2405,8 @@ function ensureVisualsConfigs(event) {
     if (typeof v.musicVideoInfoSeconds !== 'number' || !Number.isFinite(v.musicVideoInfoSeconds)) {
         v.musicVideoInfoSeconds = MUSIC_VIDEO_INFO_SECONDS_DEFAULT;
     }
+    // Look of the on-screen lyrics that replace YouTube's own subtitles (see visuals.html).
+    if (!MUSIC_VIDEO_LYRICS_STYLES.includes(v.musicVideoLyricsStyle)) v.musicVideoLyricsStyle = MUSIC_VIDEO_LYRICS_STYLE_DEFAULT;
     return v;
 }
 
@@ -5687,6 +5692,15 @@ app.post('/e/:slug/api/admin/visuals/music-video-offset', (req, res) => {
     res.json({ success: true, offsetMs: clamped });
 });
 
+// Look of the on-screen lyrics (classic | karaoke | subtitle | bold | soft).
+app.post('/e/:slug/api/admin/visuals/music-video-lyrics-style', (req, res) => {
+    const style = String((req.body || {}).style || '').toLowerCase();
+    if (!MUSIC_VIDEO_LYRICS_STYLES.includes(style)) return res.status(400).json({ error: 'style must be one of: ' + MUSIC_VIDEO_LYRICS_STYLES.join(', ') });
+    ensureVisualsConfigs(req.event).musicVideoLyricsStyle = style;
+    events.scheduleSave(req.event.slug);
+    res.json({ success: true, style });
+});
+
 // How many seconds the song info popup shows at each end of a music video.
 app.post('/e/:slug/api/admin/visuals/music-video-info-seconds', (req, res) => {
     const parsed = Number((req.body || {}).seconds);
@@ -6215,6 +6229,7 @@ app.post('/e/:slug/api/admin/action', (req, res) => {
         vcfg.showLogoEnabled = false;
         vcfg.musicVideoOffsetMs = MUSIC_VIDEO_OFFSET_DEFAULT_MS;
         vcfg.musicVideoInfoSeconds = MUSIC_VIDEO_INFO_SECONDS_DEFAULT;
+        vcfg.musicVideoLyricsStyle = MUSIC_VIDEO_LYRICS_STYLE_DEFAULT;
         events.scheduleSave(event.slug);
         return res.json({ success: true });
     }
@@ -6680,7 +6695,7 @@ app.get('/e/:slug/api/music-video', publicReadLimiter, async (req, res) => {
     const event = req.event;
     if (req.query.d === '1') ensureMusicVideoRuntime(event).displayLastPolledAt = Date.now();
     const vcfg = ensureVisualsConfigs(event);
-    const emptyResponse = { enabled: false, matched: false, videoId: null, introOffsetMs: 0, trackId: (event.cachedNowPlaying && event.cachedNowPlaying.trackId) || null, progressMs: 0, durationMs: 0, isPlaying: false, updatedAt: Date.now(), subtitlesEnabled: !!vcfg.musicVideoSubtitlesEnabled, videoOffsetMs: vcfg.musicVideoOffsetMs, infoPopupSeconds: vcfg.musicVideoInfoSeconds };
+    const emptyResponse = { enabled: false, matched: false, videoId: null, introOffsetMs: 0, trackId: (event.cachedNowPlaying && event.cachedNowPlaying.trackId) || null, progressMs: 0, durationMs: 0, isPlaying: false, updatedAt: Date.now(), subtitlesEnabled: !!vcfg.musicVideoSubtitlesEnabled, lyricsStyle: vcfg.musicVideoLyricsStyle, videoOffsetMs: vcfg.musicVideoOffsetMs, infoPopupSeconds: vcfg.musicVideoInfoSeconds };
 
     // Mute / Show Queue from Admin -> Settings -> Content win over videos:
     // returning nothing makes the display drop the video, after which its
@@ -6757,7 +6772,7 @@ app.get('/e/:slug/api/music-video', publicReadLimiter, async (req, res) => {
                 isPlaying: false,
                 updatedAt: np.progressCapturedAt || np.updatedAt,
                 serverNow: Date.now(),
-                subtitlesEnabled: !!vcfg.musicVideoSubtitlesEnabled,
+                subtitlesEnabled: !!vcfg.musicVideoSubtitlesEnabled, lyricsStyle: vcfg.musicVideoLyricsStyle,
                 videoOffsetMs: vcfg.musicVideoOffsetMs, infoPopupSeconds: vcfg.musicVideoInfoSeconds
             });
         }
@@ -6994,9 +7009,102 @@ app.get('/e/:slug/api/music-video', publicReadLimiter, async (req, res) => {
         // two (both server clock) so its own clock being off can't skew sync.
         updatedAt: np.progressCapturedAt || np.updatedAt,
         serverNow: Date.now(),
-        subtitlesEnabled: !!vcfg.musicVideoSubtitlesEnabled,
+        subtitlesEnabled: !!vcfg.musicVideoSubtitlesEnabled, lyricsStyle: vcfg.musicVideoLyricsStyle,
         videoOffsetMs: vcfg.musicVideoOffsetMs, infoPopupSeconds: vcfg.musicVideoInfoSeconds
     });
+});
+
+// ---------------------------------------------------------------------------
+// Synced lyrics for the on-screen lyrics layer (replaces YouTube's own subtitles).
+// Looked up on LRCLIB (free, no key) by artist / title / length and cached in
+// memory (hits for a week, misses for an hour). Only TIME-SYNCED lyrics are used;
+// a song with only plain lyrics, or none, simply shows nothing. This never touches
+// the video sync - the display just reads the song clock it already has.
+// ---------------------------------------------------------------------------
+const LYRICS_CACHE = new Map();               // key -> { at, ttl, lines }
+const LYRICS_HIT_TTL_MS = 7 * 24 * 3600 * 1000;
+const LYRICS_MISS_TTL_MS = 3600 * 1000;
+const LYRICS_CACHE_MAX = 2000;
+const LYRICS_UA = 'dj-request-station (synced lyrics for the visuals display)';
+
+// "[01:23.45] text" (also [mm:ss] and [mm:ss.xxx], and several stamps on one line) -> [{ t (ms), text }] sorted.
+function parseLrc(lrc) {
+    const out = [];
+    for (const raw of String(lrc || '').split(/\r?\n/)) {
+        const stamps = [];
+        let rest = raw;
+        let m;
+        while ((m = rest.match(/^\s*\[(\d{1,3}):(\d{2})(?:[.:](\d{1,3}))?\]/))) {
+            const frac = m[3] ? Number((m[3] + '00').slice(0, 3)) : 0;
+            stamps.push(Number(m[1]) * 60000 + Number(m[2]) * 1000 + frac);
+            rest = rest.slice(m[0].length);
+        }
+        if (!stamps.length) continue;                       // [ar:..] [ti:..] style tags, blanks
+        const text = rest.replace(/<\d{1,3}:\d{2}(?:[.:]\d{1,3})?>/g, '').replace(/\s+/g, ' ').trim();   // drop word-level <mm:ss> stamps
+        for (const t of stamps) out.push({ t, text });
+    }
+    out.sort((a, b) => a.t - b.t);
+    return out;
+}
+
+// Spotify titles carry extras LRCLIB doesn't ("- Remastered 2011", "(feat. X)").
+function lyricsCleanTitle(title) {
+    return String(title || '')
+        .replace(/\s+-\s+(?:\d{4}\s+)?(?:remaster(?:ed)?|live|mono|stereo|single|radio|album|deluxe|bonus|version|edit|mix).*$/i, '')
+        .replace(/\s*[\(\[]\s*(?:feat\.?|ft\.?|featuring|with)\b[^\)\]]*[\)\]]/ig, '')
+        .replace(/\s*[\(\[]\s*(?:remaster(?:ed)?|live|mono|stereo|radio edit|single version|album version|deluxe)[^\)\]]*[\)\]]/ig, '')
+        .replace(/\s+/g, ' ').trim();
+}
+function lyricsPrimaryArtist(artist) {
+    return String(artist || '').split(/\s*(?:,|&|;|\bfeat\.?\b|\bft\.?\b|\bfeaturing\b|\bx\b|\band\b)\s*/i)[0].trim() || String(artist || '').trim();
+}
+
+async function lrclibJson(url) {
+    try {
+        const r = await fetch(url, { timeout: 6000, headers: { 'User-Agent': LYRICS_UA, 'Accept': 'application/json' } });
+        if (!r.ok) return null;
+        return await r.json();
+    } catch (e) { return null; }
+}
+
+async function fetchSyncedLyrics(title, artist, durationMs) {
+    const dur = Math.round((Number(durationMs) || 0) / 1000);
+    const titles = [...new Set([String(title || '').trim(), lyricsCleanTitle(title)].filter(Boolean))];
+    const artists = [...new Set([String(artist || '').trim(), lyricsPrimaryArtist(artist)].filter(Boolean))];
+    const closeEnough = r => !dur || !r || !Number.isFinite(Number(r.duration)) || Math.abs(Number(r.duration) - dur) <= 6;
+    const usable = r => r && r.syncedLyrics && !r.instrumental && closeEnough(r);
+
+    // 1) exact signature (fast, precise)
+    for (const t of titles) for (const a of artists) {
+        const q = `track_name=${encodeURIComponent(t)}&artist_name=${encodeURIComponent(a)}` + (dur ? `&duration=${dur}` : '');
+        const r = await lrclibJson(`https://lrclib.net/api/get?${q}`);
+        if (usable(r)) return parseLrc(r.syncedLyrics);
+    }
+    // 2) fuzzy search, best length match that has synced lyrics
+    for (const t of titles) for (const a of artists) {
+        const list = await lrclibJson(`https://lrclib.net/api/search?track_name=${encodeURIComponent(t)}&artist_name=${encodeURIComponent(a)}`);
+        if (!Array.isArray(list)) continue;
+        const best = list.filter(usable)
+            .sort((x, y) => Math.abs((Number(x.duration) || dur) - dur) - Math.abs((Number(y.duration) || dur) - dur))[0];
+        if (best) return parseLrc(best.syncedLyrics);
+    }
+    return null;
+}
+
+app.get('/e/:slug/api/music-video/lyrics', publicReadLimiter, async (req, res) => {
+    const title = String(req.query.title || '').slice(0, 200);
+    const artist = String(req.query.artist || '').slice(0, 200);
+    const durationMs = Number(req.query.durationMs) || 0;
+    if (!title) return res.json({ lines: null });
+    const key = (lyricsCleanTitle(title) + '|' + lyricsPrimaryArtist(artist) + '|' + Math.round(durationMs / 4000)).toLowerCase();
+    const hit = LYRICS_CACHE.get(key);
+    if (hit && Date.now() - hit.at < hit.ttl) return res.json({ lines: hit.lines });
+    let lines = null;
+    try { lines = await fetchSyncedLyrics(title, artist, durationMs); } catch (e) { lines = null; }
+    if (lines && !lines.some(l => l.text)) lines = null;
+    if (LYRICS_CACHE.size >= LYRICS_CACHE_MAX) LYRICS_CACHE.delete(LYRICS_CACHE.keys().next().value);
+    LYRICS_CACHE.set(key, { at: Date.now(), ttl: lines ? LYRICS_HIT_TTL_MS : LYRICS_MISS_TTL_MS, lines });
+    res.json({ lines });
 });
 
 // The display tells the server what the YouTube player actually said (error
