@@ -2767,7 +2767,8 @@
 
         function lyrTick() {
             const tid = currentVideoTrackId;
-            const canLoad = mvSubtitlesEnabled && musicVideoActive && tid && mvLastPoll && mvLastPoll.trackId === tid && mvLastPoll.title;
+            // No lyrics over a video the catalog marks as a Lyric video: it already has them on screen.
+            const canLoad = mvSubtitlesEnabled && musicVideoActive && tid && mvLastPoll && mvLastPoll.trackId === tid && mvLastPoll.title && mvLastPoll.videoKind !== 'lyric';
             if (!canLoad) { lyrHide(); return; }
             if (lyr.key !== tid) {                    // new song: fetch its lyrics now so they're ready at reveal
                 lyr.key = tid; lyr.lines = null; lyr.status = 'loading'; lyr.idx = -2;
