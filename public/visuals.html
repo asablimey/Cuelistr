@@ -2468,19 +2468,41 @@
             const oldSlot = activeSlot;
             const newSlot = pendingSlot;
             clearTimeout(pendingLoadTimeout); pendingLoadTimeout = null;
+            // A re-sync (same song, fresh copy) dissolves; a song-to-song change always hard-cuts as before.
+            const fade = mvResyncFade && pendingTrackId === currentVideoTrackId;
+            mvResyncFade = false;
 
             activeSlot = newSlot;
             currentVideoTrackId = pendingTrackId;
             currentVideoId = pendingVideoId;
             pendingSlot = null; pendingVideoId = null; pendingTrackId = null; pendingReadySince = null;
 
-            document.getElementById(`video-slot-${oldSlot}`).classList.remove('is-active');
-            document.getElementById(`video-slot-${newSlot}`).classList.add('is-active');
+            const oldEl = document.getElementById(`video-slot-${oldSlot}`);
+            const newEl = document.getElementById(`video-slot-${newSlot}`);
+            const stopOldSlot = () => {
+                document.getElementById(`video-loading-cover-${oldSlot}`).classList.remove('is-hidden', 'is-hidden-instant');
+                if (players[oldSlot].ready) {
+                    try { players[oldSlot].yt.stopVideo(); } catch (e) { /* ignore */ }
+                }
+            };
             document.getElementById(`video-loading-cover-${newSlot}`).classList.add('is-hidden-instant');
-            document.getElementById(`video-loading-cover-${oldSlot}`).classList.remove('is-hidden', 'is-hidden-instant');
-
-            if (players[oldSlot].ready) {
-                try { players[oldSlot].yt.stopVideo(); } catch (e) { /* ignore */ }
+            if (fade) {
+                // The old copy stays on screen underneath while the fresh one fades in over it; only then is it stopped.
+                oldEl.classList.remove('is-active');
+                oldEl.style.opacity = '1'; oldEl.style.zIndex = '0';
+                newEl.style.transition = `opacity ${MV_RESYNC_FADE_MS}ms ease`;
+                void newEl.offsetWidth;
+                newEl.classList.add('is-active');
+                setTimeout(() => {
+                    newEl.style.transition = '';
+                    oldEl.style.opacity = ''; oldEl.style.zIndex = '';
+                    // Don't stop it if something else has meanwhile claimed that player.
+                    if (activeSlot !== oldSlot && pendingSlot !== oldSlot && !(standby && standby.slot === oldSlot)) stopOldSlot();
+                }, MV_RESYNC_FADE_MS + 60);
+            } else {
+                oldEl.classList.remove('is-active');
+                newEl.classList.add('is-active');
+                stopOldSlot();
             }
 
             // Give the freshly-activated slot the usual settle grace period
@@ -2778,6 +2800,50 @@
         }
         setInterval(lyrTick, 100);
 
+        /* =========================================================
+           Re-sync from scratch after a change.
+           A page reload lines the video up perfectly because it loads the video fresh, at the catalog start
+           time. This does the same thing WITHOUT a reload whenever (a) any visuals setting changes, or (b) the
+           song is resumed after a pause: once things have settled it re-runs the normal load for the video that
+           is on screen - startMusicVideo()'s existing "video already on screen" path, which preloads it in the
+           other player, waits until it is confirmed playing in sync, then hard-cuts to it (no black gap).
+           No sync maths is touched (mvTargetSec, offsets, nudging, handoff checks all stay exactly as they were);
+           this only decides WHEN to start that existing fresh load.
+           ========================================================= */
+        const MV_RESYNC_SETTLE_MS = 1500;          // wait this long after a change/resume so Spotify's clock has settled; more changes restart the wait
+        const MV_RESYNC_MIN_REMAINING_MS = 12000;  // not worth it this close to the song's end - the next video loads fresh anyway
+        let mvVisualsSig = null;                   // fingerprint of the visuals settings, from the server
+        let mvResyncWanted = null;                 // { reason, notBefore }
+        const MV_RESYNC_FADE_MS = 500;             // a re-sync dissolves into the fresh copy over this long instead of cutting (song-to-song changes still hard-cut)
+        let mvResyncFade = false;                  // set while a re-sync's fresh copy is loading; completeHandoff reads it
+        let mvPlaySeen = { trackId: null, playing: null };
+        function mvWantResync(reason) { mvResyncWanted = { reason, notBefore: Date.now() + MV_RESYNC_SETTLE_MS }; }
+        function mvNotePollForResync(data) {
+            if (typeof data.visualsSig === 'string') {
+                if (mvVisualsSig !== null && data.visualsSig !== mvVisualsSig) mvWantResync('visuals settings changed');
+                mvVisualsSig = data.visualsSig;
+            }
+            const playing = !!data.isPlaying;
+            if (mvPlaySeen.trackId === data.trackId && mvPlaySeen.playing === false && playing) mvWantResync('resumed after pause');
+            mvPlaySeen = { trackId: data.trackId, playing };
+        }
+        function mvMaybeResync(data) {
+            const w = mvResyncWanted;
+            if (!w) return;
+            if (Date.now() > w.notBefore + 20000) { mvResyncWanted = null; return; }   // couldn't act for 20s: drop it
+            if (Date.now() < w.notBefore) return;
+            // Nothing revealed yet = a fresh load is already in progress, which is exactly what we'd do.
+            if (!musicVideoActive || !mvRevealed || !currentVideoId || currentVideoTrackId !== data.trackId) { mvResyncWanted = null; return; }
+            if (!data.isPlaying || !mvClock || !mvClock.isPlaying) return;              // only while playing; waits for resume
+            if (pendingSlot || standby || mvExpectedSwitch) return;                     // another handoff owns the second player: try again next poll
+            const rem = songRemainingMs();
+            if (rem !== null && rem < MV_RESYNC_MIN_REMAINING_MS) { mvResyncWanted = null; return; }
+            mvResyncWanted = null;
+            reportPlayerEvent('resync', w.reason, currentVideoId, currentVideoTrackId);
+            mvResyncFade = true;
+            startMusicVideo(currentVideoId, currentVideoTrackId);
+        }
+
         async function pollMusicVideo() {
             try {
                 const res = await fetch(eventUrl('/api/music-video') + '?d=1');
@@ -2788,6 +2854,7 @@
                 const subtitlesChanged = !!data.subtitlesEnabled !== mvSubtitlesEnabled;
                 mvSubtitlesEnabled = !!data.subtitlesEnabled;
                 lyrSetStyle(lyrUrlStyle || data.lyricsStyle);
+                mvNotePollForResync(data);
                 if (subtitlesChanged && musicVideoActive) {
                     applySubtitlesSetting(activeSlot);
                     if (pendingSlot) applySubtitlesSetting(pendingSlot);
@@ -2853,6 +2920,7 @@
                     mvSoftMissSince = null;
                     const inProgressForThisTrack = musicVideoActive &&
                         (currentVideoTrackId === data.trackId || pendingTrackId === data.trackId);
+                    if (inProgressForThisTrack) mvMaybeResync(data);
                     if (!inProgressForThisTrack) {
                         // Negative start time (e.g. -0:05): nothing to show yet, so the queue /
                         // ambient screen carries on until the video's moment arrives.
