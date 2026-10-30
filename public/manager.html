@@ -978,6 +978,8 @@
 .pc.big{width:52px;height:52px;background:var(--text);color:var(--panel-bg)}.pc.big:hover{background:var(--spotify-green);color:#fff}.pc.big svg{width:28px;height:28px}
 .row-set{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 0;border-top:1px solid var(--border)}
 .settings-card .row-set:first-of-type{border-top:none;padding-top:0}
+.row-select{flex:0 0 auto;max-width:55%;background-color:var(--card-bg);border:1px solid var(--border-strong);color:var(--text);padding:10px 10px;border-radius:6px;font-size:.95rem}
+.row-select:focus{outline:none;border-color:var(--spotify-green)}
 .row-set .rl{font-weight:600}.row-set .rs{font-size:.8rem;color:#888;margin-top:2px}
 .switch{width:46px;height:26px;border-radius:13px;background:#535353;position:relative;flex:none;cursor:pointer;transition:background .15s}
 .switch::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:left .15s}
@@ -1539,6 +1541,7 @@ body.has-player { overflow: hidden; }
                 <div class="row-set"><div><div class="rl">Music videos</div></div><button type="button" class="switch" id="sw-vmv" role="switch" aria-checked="false" aria-label="Music videos" onclick="toggleSwitch('vmv')"></button></div>
                 <div class="row-set"><div><div class="rl">Prefer Visualisers/Lyric Vids</div></div><button type="button" class="switch" id="sw-vviz" role="switch" aria-checked="false" aria-label="Prefer Visualisers/Lyric Vids" onclick="toggleSwitch('vviz')"></button></div>
                 <div class="row-set"><div><div class="rl">Subtitles</div></div><button type="button" class="switch" id="sw-vsub" role="switch" aria-checked="false" aria-label="Subtitles" onclick="toggleSwitch('vsub')"></button></div>
+                <div class="row-set"><div><div class="rl">Subtitle style</div><div class="rs">Look of the lyrics shown when Subtitles is on</div></div><select id="sel-vlyr" class="row-select" aria-label="Subtitle style" onchange="setLyricsStyle(this.value)"><option value="classic">Classic (3 lines)</option><option value="karaoke">Karaoke (fills as sung)</option><option value="subtitle">Subtitle box</option><option value="bold">Bold caps</option><option value="soft">Soft italic</option></select></div>
                 <div class="row-set"><div><div class="rl">Family mode</div></div><button type="button" class="switch" id="sw-vfam" role="switch" aria-checked="false" aria-label="Family mode" onclick="toggleSwitch('vfam')"></button></div>
             </div>
             <div class="settings-card" id="custom-card">
@@ -1929,6 +1932,25 @@ body.has-player { overflow: hidden; }
             if (!isAuthorized) return;
             await adminPost('/api/admin/pending/accept-all', {});
             updateDashboard();
+        }
+
+        // Subtitle style dropdown (Display Controls -> Music Videos). Held for a few seconds after a
+        // change so the next background sync can't flip it back before the server has saved it.
+        let vlyrLock = 0;
+        async function setLyricsStyle(style) {
+            if (!isAuthorized) return;
+            vlyrLock = Date.now() + 3000;
+            try {
+                const res = await adminPost('/api/admin/visuals/music-video-lyrics-style', { style });
+                if (!res.ok) {
+                    const d = await res.json().catch(() => ({}));
+                    vlyrLock = 0;
+                    showToast(d.error || 'Could not change the subtitle style.', 'error');
+                }
+            } catch (e) {
+                vlyrLock = 0;
+                showToast('Could not reach the server.', 'error');
+            }
         }
 
         async function toggleSwitch(name) {
@@ -2868,6 +2890,7 @@ body.has-player { overflow: hidden; }
                     setSwitchFromServer('vmv', !!data.visuals.musicVideosEnabled);
                     setSwitchFromServer('vviz', !!data.visuals.preferVisualizersEnabled);
                     setSwitchFromServer('vsub', !!data.visuals.musicVideoSubtitlesEnabled);
+                    if (Date.now() > vlyrLock) setIfIdle('sel-vlyr', data.visuals.musicVideoLyricsStyle || 'classic');
                     setSwitchFromServer('vfam', !!data.visuals.familyModeEnabled);
                     setSwitchFromServer('vcustom', !!data.visuals.showCustom);
                     csSync(data.visuals.customSlide);
