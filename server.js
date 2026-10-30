@@ -6779,6 +6779,7 @@ app.get('/e/:slug/api/music-video', publicReadLimiter, async (req, res) => {
                 matched: true,
                 videoId: runtime.cache.videoId,
                 introOffsetMs: runtime.cache.introOffsetMs || 0,
+                videoKind: runtime.cache.kind || '',
                 trackId: np.trackId,
                 progressMs: np.progressMs,
                 durationMs: np.durationMs,
@@ -6855,7 +6856,7 @@ app.get('/e/:slug/api/music-video', publicReadLimiter, async (req, res) => {
             // applied exactly as it was - changing the sync maths (mvTargetSec, mvVideoLeadMs, latency or
             // drift handling, the startMs -> introOffsetMs hand-off) shifts every video at once.
             // If a change touches any of that, stop and ask first.
-            runtime.cache = { trackId: np.trackId, searchedTrackId: np.trackId, matched: true, videoId: row.youtubeId, introOffsetMs: row.startMs || 0, source: 'catalog', rowId: row.id };
+            runtime.cache = { trackId: np.trackId, searchedTrackId: np.trackId, matched: true, videoId: row.youtubeId, introOffsetMs: row.startMs || 0, source: 'catalog', rowId: row.id, kind: row.kind || '' };
             if (!(runtime.catalogServed instanceof Set)) runtime.catalogServed = new Set();
             runtime.catalogServed.add(`${np.trackId}|${row.youtubeId}`);
         }
@@ -7013,6 +7014,7 @@ app.get('/e/:slug/api/music-video', publicReadLimiter, async (req, res) => {
         title: np.title, artist: np.artist, year: np.year || null,
         introOffsetMs: mvOffsetNow,
         source: runtime.cache.source || null,
+        videoKind: runtime.cache.kind || '',   // catalog "Video type" (video | visualizer | lyric | audio | blank)
         trackId: np.trackId,
         progressMs: np.progressMs,
         durationMs: np.durationMs,
