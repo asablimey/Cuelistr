@@ -2410,6 +2410,19 @@ function ensureVisualsConfigs(event) {
     return v;
 }
 
+// Short fingerprint of every visuals setting that can change what the screens show (everything except the custom
+// slide layout and the pausedByMuteAll runtime flag). Sent with each /api/music-video reply so a display can tell
+// that "something about the visuals changed" and re-sync its video from scratch (see mvNotePollForResync in
+// visuals.html).
+function visualsConfigSig(vcfg) {
+    const o = {};
+    for (const k of Object.keys(vcfg).sort()) {
+        if (k === 'customSlide' || k === 'pausedByMuteAll') continue;
+        o[k] = vcfg[k];
+    }
+    return crypto.createHash('md5').update(JSON.stringify(o)).digest('hex').slice(0, 12);
+}
+
 function ensureMusicVideoRuntime(event) {
     // Guard against a Set that got flattened to {} by JSON.stringify on a
     // Redis save (Sets don't survive round-tripping through JSON) - treat
@@ -6695,7 +6708,7 @@ app.get('/e/:slug/api/music-video', publicReadLimiter, async (req, res) => {
     const event = req.event;
     if (req.query.d === '1') ensureMusicVideoRuntime(event).displayLastPolledAt = Date.now();
     const vcfg = ensureVisualsConfigs(event);
-    const emptyResponse = { enabled: false, matched: false, videoId: null, introOffsetMs: 0, trackId: (event.cachedNowPlaying && event.cachedNowPlaying.trackId) || null, progressMs: 0, durationMs: 0, isPlaying: false, updatedAt: Date.now(), subtitlesEnabled: !!vcfg.musicVideoSubtitlesEnabled, lyricsStyle: vcfg.musicVideoLyricsStyle, videoOffsetMs: vcfg.musicVideoOffsetMs, infoPopupSeconds: vcfg.musicVideoInfoSeconds };
+    const emptyResponse = { enabled: false, matched: false, videoId: null, introOffsetMs: 0, trackId: (event.cachedNowPlaying && event.cachedNowPlaying.trackId) || null, progressMs: 0, durationMs: 0, isPlaying: false, updatedAt: Date.now(), subtitlesEnabled: !!vcfg.musicVideoSubtitlesEnabled, lyricsStyle: vcfg.musicVideoLyricsStyle, visualsSig: visualsConfigSig(vcfg), videoOffsetMs: vcfg.musicVideoOffsetMs, infoPopupSeconds: vcfg.musicVideoInfoSeconds };
 
     // Mute / Show Queue from Admin -> Settings -> Content win over videos:
     // returning nothing makes the display drop the video, after which its
@@ -6772,7 +6785,7 @@ app.get('/e/:slug/api/music-video', publicReadLimiter, async (req, res) => {
                 isPlaying: false,
                 updatedAt: np.progressCapturedAt || np.updatedAt,
                 serverNow: Date.now(),
-                subtitlesEnabled: !!vcfg.musicVideoSubtitlesEnabled, lyricsStyle: vcfg.musicVideoLyricsStyle,
+                subtitlesEnabled: !!vcfg.musicVideoSubtitlesEnabled, lyricsStyle: vcfg.musicVideoLyricsStyle, visualsSig: visualsConfigSig(vcfg),
                 videoOffsetMs: vcfg.musicVideoOffsetMs, infoPopupSeconds: vcfg.musicVideoInfoSeconds
             });
         }
@@ -7009,7 +7022,7 @@ app.get('/e/:slug/api/music-video', publicReadLimiter, async (req, res) => {
         // two (both server clock) so its own clock being off can't skew sync.
         updatedAt: np.progressCapturedAt || np.updatedAt,
         serverNow: Date.now(),
-        subtitlesEnabled: !!vcfg.musicVideoSubtitlesEnabled, lyricsStyle: vcfg.musicVideoLyricsStyle,
+        subtitlesEnabled: !!vcfg.musicVideoSubtitlesEnabled, lyricsStyle: vcfg.musicVideoLyricsStyle, visualsSig: visualsConfigSig(vcfg),
         videoOffsetMs: vcfg.musicVideoOffsetMs, infoPopupSeconds: vcfg.musicVideoInfoSeconds
     });
 });
