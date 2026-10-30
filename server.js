@@ -2379,7 +2379,7 @@ const MUSIC_VIDEO_INFO_SECONDS_DEFAULT = 30;
 const MUSIC_VIDEO_INFO_SECONDS_MIN = 5;
 const MUSIC_VIDEO_INFO_SECONDS_MAX = 120;
 // Lyric looks the display knows how to draw (names must match visuals.html's .lyr-style-* CSS).
-const MUSIC_VIDEO_LYRICS_STYLES = ['classic', 'karaoke', 'subtitle', 'bold', 'soft'];
+const MUSIC_VIDEO_LYRICS_STYLES = ['classic', 'karaoke', 'subtitle', 'bold', 'soft', 'neon', 'outline', 'gradient', 'reveal', 'lowerthird', 'centre'];
 const MUSIC_VIDEO_LYRICS_STYLE_DEFAULT = 'classic';
 const MUSIC_VIDEO_OFFSET_MIN_MS = -5000;
 const MUSIC_VIDEO_OFFSET_MAX_MS = 5000;
@@ -5692,7 +5692,7 @@ app.post('/e/:slug/api/admin/visuals/music-video-offset', (req, res) => {
     res.json({ success: true, offsetMs: clamped });
 });
 
-// Look of the on-screen lyrics (classic | karaoke | subtitle | bold | soft).
+// Look of the on-screen lyrics (see MUSIC_VIDEO_LYRICS_STYLES).
 app.post('/e/:slug/api/admin/visuals/music-video-lyrics-style', (req, res) => {
     const style = String((req.body || {}).style || '').toLowerCase();
     if (!MUSIC_VIDEO_LYRICS_STYLES.includes(style)) return res.status(400).json({ error: 'style must be one of: ' + MUSIC_VIDEO_LYRICS_STYLES.join(', ') });
