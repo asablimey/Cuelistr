@@ -1532,6 +1532,7 @@ body.has-player { overflow: hidden; }
                 <div class="row-set"><div><div class="rl">Mute visuals</div></div><button type="button" class="switch" id="sw-vmute" role="switch" aria-checked="false" aria-label="Mute visuals" onclick="toggleSwitch('vmute')"></button></div>
                 <div class="row-set"><div><div class="rl">Mute all</div></div><button type="button" class="switch" id="sw-vmuteall" role="switch" aria-checked="false" aria-label="Mute all" onclick="toggleSwitch('vmuteall')"></button></div>
                 <div class="row-set"><div><div class="rl">Show queue</div></div><button type="button" class="switch" id="sw-vqueue" role="switch" aria-checked="false" aria-label="Show queue" onclick="toggleSwitch('vqueue')"></button></div>
+                <div class="row-set"><div><div class="rl">Karaoke mode</div><div class="rs">Black screen with full-screen lyrics for the song (uses the Subtitle style below)</div></div><button type="button" class="switch" id="sw-vkar" role="switch" aria-checked="false" aria-label="Karaoke mode" onclick="toggleSwitch('vkar')"></button></div>
                 <div class="row-set"><div><div class="rl">Show time</div></div><button type="button" class="switch" id="sw-vclock" role="switch" aria-checked="false" aria-label="Show time" onclick="toggleSwitch('vclock')"></button></div>
                 <div class="row-set"><div><div class="rl">Show venue code</div></div><button type="button" class="switch" id="sw-vcode" role="switch" aria-checked="false" aria-label="Show venue code" onclick="toggleSwitch('vcode')"></button></div>
                 <div class="row-set"><div><div class="rl">Show logo</div></div><button type="button" class="switch" id="sw-vlogo" role="switch" aria-checked="false" aria-label="Show logo" onclick="toggleSwitch('vlogo')"></button></div>
@@ -1541,7 +1542,7 @@ body.has-player { overflow: hidden; }
                 <div class="row-set"><div><div class="rl">Music videos</div></div><button type="button" class="switch" id="sw-vmv" role="switch" aria-checked="false" aria-label="Music videos" onclick="toggleSwitch('vmv')"></button></div>
                 <div class="row-set"><div><div class="rl">Prefer Visualisers/Lyric Vids</div></div><button type="button" class="switch" id="sw-vviz" role="switch" aria-checked="false" aria-label="Prefer Visualisers/Lyric Vids" onclick="toggleSwitch('vviz')"></button></div>
                 <div class="row-set"><div><div class="rl">Subtitles</div></div><button type="button" class="switch" id="sw-vsub" role="switch" aria-checked="false" aria-label="Subtitles" onclick="toggleSwitch('vsub')"></button></div>
-                <div class="row-set"><div><div class="rl">Subtitle style</div><div class="rs">Look of the lyrics shown when Subtitles is on</div></div><select id="sel-vlyr" class="row-select" aria-label="Subtitle style" onchange="setLyricsStyle(this.value)"><option value="classic">Classic (3 lines)</option><option value="karaoke">Karaoke (fills as sung)</option><option value="subtitle">Subtitle box</option><option value="bold">Bold caps</option><option value="soft">Soft italic</option><option value="neon">Neon glow</option><option value="outline">Outline</option><option value="gradient">Gradient</option><option value="reveal">Reveal (wipes in)</option><option value="lowerthird">Lower third</option><option value="centre">Centre stage</option></select></div>
+                <div class="row-set"><div><div class="rl">Subtitle style</div><div class="rs">Look of the lyrics shown when Subtitles or Karaoke mode is on</div></div><select id="sel-vlyr" class="row-select" aria-label="Subtitle style" onchange="setLyricsStyle(this.value)"><option value="classic">Classic (3 lines)</option><option value="karaoke">Karaoke (fills as sung)</option><option value="subtitle">Subtitle box</option><option value="bold">Bold caps</option><option value="soft">Soft italic</option><option value="neon">Neon glow</option><option value="outline">Outline</option><option value="gradient">Gradient</option><option value="reveal">Reveal (wipes in)</option><option value="lowerthird">Lower third</option><option value="centre">Centre stage</option></select></div>
                 <div class="row-set"><div><div class="rl">Family mode</div></div><button type="button" class="switch" id="sw-vfam" role="switch" aria-checked="false" aria-label="Family mode" onclick="toggleSwitch('vfam')"></button></div>
             </div>
             <div class="settings-card" id="custom-card">
@@ -1883,6 +1884,7 @@ body.has-player { overflow: hidden; }
             vcode:    { el: 'sw-vcode',    path: '/api/admin/visuals/toggle-show-venue-code', body: v => ({ enabled: v }) },
             vlogo:    { el: 'sw-vlogo',    path: '/api/admin/visuals/toggle-show-logo',       body: v => ({ enabled: v }) },
             vqueue:   { el: 'sw-vqueue',   path: '/api/admin/visuals/toggle-show-queue',       body: v => ({ enabled: v }) },
+            vkar:     { el: 'sw-vkar',     path: '/api/admin/visuals/toggle-karaoke-mode',     body: v => ({ enabled: v }) },
             vmv:      { el: 'sw-vmv',      path: '/api/admin/visuals/toggle-music-videos',     body: v => ({ enabled: v }) },
             vviz:     { el: 'sw-vviz',     path: '/api/admin/visuals/toggle-prefer-visualizers', body: v => ({ enabled: v }) },
             vsub:     { el: 'sw-vsub',     path: '/api/admin/visuals/toggle-music-video-subtitles', body: v => ({ enabled: v }) },
@@ -2884,6 +2886,7 @@ body.has-player { overflow: hidden; }
                     setSwitchFromServer('vmute', !!data.visuals.muteVisuals);
                     setSwitchFromServer('vmuteall', !!data.visuals.muteAll);
                     setSwitchFromServer('vqueue', !!data.visuals.showQueue);
+                    setSwitchFromServer('vkar', !!data.visuals.karaokeModeEnabled);
                     setSwitchFromServer('vclock', !!data.visuals.showClockEnabled);
                     setSwitchFromServer('vcode', !!data.visuals.showVenueCodeEnabled);
                     setSwitchFromServer('vlogo', !!data.visuals.showLogoEnabled);
