@@ -2373,6 +2373,8 @@
             // correction loop not keeping up)?
             console.log(`[MV-SYNC] track=${currentVideoTrackId} video=${currentVideoId} pos=${cur.toFixed(2)}s target=${mvTargetSec().toFixed(2)}s drift=${driftMs.toFixed(0)}ms settling=${settling}`);
 
+            mvDriftWatch(absMs, settling);   // read-only: may ask for a fresh re-sync if drift is not recovering
+
             if (!settling && absMs > MV_BIG_DRIFT_MS) {
                 mvConsecutiveBigDrifts++;
                 if (mvConsecutiveBigDrifts >= MV_MAX_BIG_DRIFT_CHECKS) {
@@ -2888,31 +2890,113 @@
         const MV_RESYNC_FADE_MS = 500;             // a re-sync dissolves into the fresh copy over this long instead of cutting (song-to-song changes still hard-cut)
         let mvResyncFade = false;                  // set while a re-sync's fresh copy is loading; completeHandoff reads it
         let mvPlaySeen = { trackId: null, playing: null };
-        function mvWantResync(reason) { mvResyncWanted = { reason, notBefore: Date.now() + MV_RESYNC_SETTLE_MS }; }
+        const MV_RESYNC_AFTER_RESUME_SETTLE_MS = 3500;   // Spotify's progress is least reliable right after a resume: give it longer before taking the reading we re-anchor on
+        // A re-sync also re-anchors the song clock on the NEWEST Spotify reading - exactly what a page reload does
+        // (mvClock starts empty, the first reading becomes the anchor). Without this the clock keeps an anchor that
+        // can be up to ~1.5s off after a pause/resume (updateMvClock deliberately ignores readings within
+        // MV_CLOCK_RESYNC_THRESHOLD_MS), and the video then follows that off clock perfectly. updateMvClock itself is unchanged.
+        const MV_RESYNC_REANCHOR_CLOCK = true;
+        function mvWantResync(reason, settleMs) {
+            const notBefore = Math.max(Date.now() + (settleMs || MV_RESYNC_SETTLE_MS), mvResyncWanted ? mvResyncWanted.notBefore : 0);
+            mvResyncWanted = { reason, notBefore };
+            console.log('[MV-RESYNC] requested: ' + reason);
+        }
         function mvNotePollForResync(data) {
             if (typeof data.visualsSig === 'string') {
                 if (mvVisualsSig !== null && data.visualsSig !== mvVisualsSig) mvWantResync('visuals settings changed');
                 mvVisualsSig = data.visualsSig;
             }
             const playing = !!data.isPlaying;
-            if (mvPlaySeen.trackId === data.trackId && mvPlaySeen.playing === false && playing) mvWantResync('resumed after pause');
+            if (mvPlaySeen.trackId === data.trackId && mvPlaySeen.playing === false && playing) mvWantResync('resumed after pause', MV_RESYNC_AFTER_RESUME_SETTLE_MS);
             mvPlaySeen = { trackId: data.trackId, playing };
+            mvClockDisagreeWatch(data);
         }
+
+        // The video can only ever be as right as the song clock it follows, and that clock keeps its first anchor
+        // while later Spotify readings agree to within 1.5s. If readings keep disagreeing with the anchor by a
+        // consistent few hundred ms, the anchor is stale (typically after a pause/resume): the video then looks
+        // "synced" to the clock but off against the audio, and the drift watchdog can't see it. Ask for the
+        // fresh re-sync (which re-anchors the clock) when 5 polls in a row say the same thing.
+        const mvDis = { clockRef: null, n: 0, sign: 0, sum: 0, count: {} };
+        function mvClockDisagreeWatch(data) {
+            const c = mvClock;
+            if (!c || !musicVideoActive || !mvRevealed || !data.enabled || !data.matched || !data.isPlaying || !c.isPlaying || c.trackId !== data.trackId) { mvDis.n = 0; mvDis.sum = 0; mvDis.clockRef = null; return; }
+            if (mvDis.clockRef !== c) { mvDis.clockRef = c; mvDis.n = 0; mvDis.sum = 0; }      // clock was re-anchored: start counting again
+            const serverNow = Number.isFinite(data.serverNow) ? data.serverNow : Date.now();
+            const ageMs = Math.max(0, serverNow - (data.updatedAt || serverNow));
+            const diff = (Date.now() - ((data.progressMs || 0) + ageMs)) - c.base;             // what this reading says the anchor should be, minus the anchor
+            if (Math.abs(diff) > 400 && (mvDis.n === 0 || Math.sign(diff) === mvDis.sign)) { mvDis.n++; mvDis.sign = Math.sign(diff); mvDis.sum += diff; }
+            else { mvDis.n = 0; mvDis.sum = 0; return; }
+            if (mvDis.n < 5) return;
+            const avg = Math.round(mvDis.sum / mvDis.n);
+            mvDis.n = 0; mvDis.sum = 0;
+            const tid = data.trackId, now = Date.now();
+            if ((mvDis.count[tid] || 0) >= 3 || now - mvWatch.lastAt < 20000) return;
+            mvDis.count[tid] = (mvDis.count[tid] || 0) + 1;
+            mvWatch.lastAt = now;
+            mvWantResync('song clock is ~' + avg + 'ms off Spotify');
+        }
+        let mvResyncLastNote = '';
+        function mvResyncNote(msg) { if (msg !== mvResyncLastNote) { mvResyncLastNote = msg; console.log('[MV-RESYNC] ' + msg); } }
         function mvMaybeResync(data) {
             const w = mvResyncWanted;
             if (!w) return;
-            if (Date.now() > w.notBefore + 20000) { mvResyncWanted = null; return; }   // couldn't act for 20s: drop it
+            if (Date.now() > w.notBefore + 20000) { mvResyncWanted = null; mvResyncNote('gave up (could not start within 20s): ' + w.reason); return; }
             if (Date.now() < w.notBefore) return;
             // Nothing revealed yet = a fresh load is already in progress, which is exactly what we'd do.
-            if (!musicVideoActive || !mvRevealed || !currentVideoId || currentVideoTrackId !== data.trackId) { mvResyncWanted = null; return; }
-            if (!data.isPlaying || !mvClock || !mvClock.isPlaying) return;              // only while playing; waits for resume
-            if (pendingSlot || standby || mvExpectedSwitch) return;                     // another handoff owns the second player: try again next poll
+            if (!musicVideoActive || !mvRevealed || !currentVideoId || currentVideoTrackId !== data.trackId) { mvResyncWanted = null; mvResyncNote('not needed (video not on screen yet / fresh load already running): ' + w.reason); return; }
+            if (!data.isPlaying || !mvClock || !mvClock.isPlaying) { mvResyncNote('waiting for playback to resume: ' + w.reason); return; }   // only while playing
+            if (pendingSlot || standby || mvExpectedSwitch) { mvResyncNote('waiting for the other player to be free: ' + w.reason); return; }   // another handoff owns it: try again next poll
             const rem = songRemainingMs();
-            if (rem !== null && rem < MV_RESYNC_MIN_REMAINING_MS) { mvResyncWanted = null; return; }
+            if (rem !== null && rem < MV_RESYNC_MIN_REMAINING_MS) { mvResyncWanted = null; mvResyncNote('skipped (song nearly over): ' + w.reason); return; }
             mvResyncWanted = null;
+            mvResyncNote('starting fresh load: ' + w.reason);
+            if (MV_RESYNC_REANCHOR_CLOCK) { mvClock = null; updateMvClock(data, mvLastPollAt || Date.now()); }   // same as a reload: newest reading becomes the anchor
             reportPlayerEvent('resync', w.reason, currentVideoId, currentVideoTrackId);
             mvResyncFade = true;
             startMusicVideo(currentVideoId, currentVideoTrackId);
+        }
+
+        // ---- Coming back to this tab -------------------------------------------------------------------
+        // A hidden browser tab throttles this page's timers (the drift check then runs about once every 16s)
+        // and can pause or stall the video, so on return the video can be seconds out, and the gentle
+        // speed-nudging takes many seconds to close that. After being away a few seconds, take a fresh clock
+        // reading straight away and re-sync from scratch, same as a reload would.
+        const MV_HIDDEN_RESYNC_MIN_MS = 3000;
+        let mvHiddenAt = null;
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) { if (mvHiddenAt === null) mvHiddenAt = Date.now(); return; }
+            const away = mvHiddenAt === null ? 0 : Date.now() - mvHiddenAt;
+            mvHiddenAt = null;
+            if (away >= MV_HIDDEN_RESYNC_MIN_MS) { mvWantResync('tab visible again after ' + Math.round(away / 1000) + 's'); pollMusicVideo(); }
+        });
+        window.addEventListener('pageshow', e => { if (e.persisted) { mvWantResync('page restored from cache'); pollMusicVideo(); } });
+
+        // ---- Safety net: drift that is not recovering ---------------------------------------------------
+        // Read-only watcher fed by mvCheck. Normal speed-nudging keeps a playing video within ~60ms. If it
+        // stays clearly off and is not closing, don't wait it out: do the fresh re-sync. Limited per song so a
+        // wrong catalog start time can't make it flicker forever (then the drift just stays visible in the
+        // [MV-SYNC] log, which points at the catalog value).
+        const MV_WATCH_MAX_PER_TRACK = 3;
+        const MV_WATCH_MIN_GAP_MS = 20000;
+        const mvWatch = { since: null, startAbs: 0, lastSeen: 0, lastAt: 0, count: {} };
+        function mvDriftWatch(absMs, settling) {
+            const now = Date.now();
+            if (now - mvWatch.lastSeen > 3000) mvWatch.since = null;   // we weren't measuring (paused, handoff, hidden tab): start over
+            mvWatch.lastSeen = now;
+            if (settling || !mvRevealed || absMs <= 150) { mvWatch.since = null; return; }
+            if (mvWatch.since === null) { mvWatch.since = now; mvWatch.startAbs = absMs; return; }
+            const el = now - mvWatch.since;
+            const stuck = (absMs > 1000 && el >= 2500)
+                || (absMs > 350 && el >= 6000 && absMs > mvWatch.startAbs * 0.6)
+                || el >= 15000;
+            if (!stuck) return;
+            mvWatch.since = null;
+            const tid = currentVideoTrackId;
+            if ((mvWatch.count[tid] || 0) >= MV_WATCH_MAX_PER_TRACK || now - mvWatch.lastAt < MV_WATCH_MIN_GAP_MS) return;
+            mvWatch.count[tid] = (mvWatch.count[tid] || 0) + 1;
+            mvWatch.lastAt = now;
+            mvWantResync('drift not recovering (' + Math.round(absMs) + 'ms)');
         }
 
         /* =========================================================
