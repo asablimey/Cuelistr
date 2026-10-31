@@ -422,6 +422,70 @@
         #mv-lyrics.lyr-style-centre .lyr-prev, #mv-lyrics.lyr-style-centre .lyr-next { display: none; }
         #mv-lyrics.lyr-style-centre .lyr-cur { font-weight: 800; font-size: clamp(2.4rem, 7vh, 5.5rem); }
 
+        /* ---------- Karaoke Mode: black screen, full-screen lyrics (same styles, bigger, vertically centred).
+           Switched on from admin / manager (Display settings). The look is the same Subtitle style setting. ---------- */
+        #karaoke-view { position: fixed; inset: 0; background: #000; z-index: 9500; display: none; color: #fff; font-family: 'Khula', sans-serif; }
+        #karaoke-view.kar-on { display: block; }
+        #kar-meta { position: absolute; top: 3.5vh; left: 0; right: 0; padding: 0 6vw; text-align: center; font-size: clamp(0.9rem, 2.2vh, 1.5rem); letter-spacing: 0.04em; color: rgba(255,255,255,0.45); }
+        #kar-note { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); padding: 0 8vw; text-align: center; font-size: clamp(1.1rem, 2.8vh, 2rem); color: rgba(255,255,255,0.4); }
+        #kar-lyrics {
+            --lyr-bottom: 8vh;
+            position: absolute; left: 0; right: 0; bottom: var(--lyr-bottom); z-index: 4;
+            padding: 0 8vw; text-align: center; pointer-events: none;
+            font-family: 'Khula', sans-serif; color: #fff;
+            opacity: 0; transition: opacity 0.25s ease;
+        }
+        #kar-lyrics.is-on { opacity: 1; }
+        #kar-lyrics .lyr-prev, #kar-lyrics .lyr-next, #kar-lyrics .lyr-cur { display: block; margin: 0 auto; max-width: 90vw; line-height: 1.2; text-shadow: 0 2px 6px rgba(0,0,0,0.85), 0 0 18px rgba(0,0,0,0.55); }
+        #kar-lyrics .lyr-cur { font-weight: 700; font-size: clamp(2.38rem, 6.44vh, 4.76rem); min-height: 1.2em; }
+        #kar-lyrics .lyr-cur.lyr-in { animation: lyrIn 0.22s ease-out; }
+        @keyframes lyrIn { from { opacity: 0; transform: translateY(0.25em); } to { opacity: 1; transform: none; } }
+        #kar-lyrics .lyr-prev, #kar-lyrics .lyr-next { font-weight: 600; font-size: clamp(1.4rem, 3.64vh, 2.66rem); opacity: 0.55; }
+        #kar-lyrics .lyr-prev { margin-bottom: 0.45em; }
+        #kar-lyrics .lyr-next { margin-top: 0.45em; }
+        /* classic: previous / current / next stacked (the base look above) */
+        /* karaoke: current line fills in left to right across its length; next line below */
+        #kar-lyrics.lyr-style-karaoke .lyr-prev { display: none; }
+        #kar-lyrics.lyr-style-karaoke .lyr-cur {
+            --p: 0%;
+            color: transparent; text-shadow: none; filter: drop-shadow(0 2px 5px rgba(0,0,0,0.85));
+            background: linear-gradient(90deg, #ffd54a var(--p), rgba(255,255,255,0.55) var(--p));
+            -webkit-background-clip: text; background-clip: text;
+        }
+        /* subtitle: one line in a dark rounded box, like movie subtitles */
+        #kar-lyrics.lyr-style-subtitle .lyr-prev, #kar-lyrics.lyr-style-subtitle .lyr-next { display: none; }
+        #kar-lyrics.lyr-style-subtitle .lyr-cur { display: inline-block; font-weight: 600; font-size: clamp(1.96rem, 5.04vh, 3.64rem); background: rgba(0,0,0,0.62); padding: 0.18em 0.6em; border-radius: 0.35em; text-shadow: none; }
+        #kar-lyrics.lyr-style-subtitle .lyr-cur:empty { display: none; }
+        /* bold: huge uppercase single line */
+        #kar-lyrics.lyr-style-bold .lyr-prev, #kar-lyrics.lyr-style-bold .lyr-next { display: none; }
+        #kar-lyrics.lyr-style-bold .lyr-cur { font-weight: 800; font-size: clamp(3.08rem, 8.96vh, 6.72rem); text-transform: uppercase; letter-spacing: 0.04em; text-shadow: 0 3px 8px rgba(0,0,0,0.9), 0 0 28px rgba(0,0,0,0.6); }
+        /* soft: light italic with a gentle glow */
+        #kar-lyrics.lyr-style-soft .lyr-prev, #kar-lyrics.lyr-style-soft .lyr-next { display: none; }
+        #kar-lyrics.lyr-style-soft .lyr-cur { font-weight: 400; font-style: italic; font-size: clamp(2.38rem, 6.16vh, 4.48rem); color: rgba(255,255,255,0.94); text-shadow: 0 0 14px rgba(255,255,255,0.45), 0 2px 8px rgba(0,0,0,0.9); }
+        /* neon: glowing pink/violet tube lettering */
+        #kar-lyrics.lyr-style-neon .lyr-prev, #kar-lyrics.lyr-style-neon .lyr-next { display: none; }
+        #kar-lyrics.lyr-style-neon .lyr-cur { font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #fff; text-shadow: 0 0 5px #fff, 0 0 14px #ff2fd2, 0 0 28px #ff2fd2, 0 0 48px #8a2bff; }
+        /* outline: hollow white lettering */
+        #kar-lyrics.lyr-style-outline .lyr-prev, #kar-lyrics.lyr-style-outline .lyr-next { display: none; }
+        #kar-lyrics.lyr-style-outline .lyr-cur { font-weight: 800; font-size: clamp(3.08rem, 8.4vh, 6.3rem); letter-spacing: 0.03em; color: rgba(0,0,0,0.25); -webkit-text-stroke: 2px #fff; text-shadow: none; filter: drop-shadow(0 2px 6px rgba(0,0,0,0.85)); }
+        /* gradient: warm sunset-coloured lettering */
+        #kar-lyrics.lyr-style-gradient .lyr-prev, #kar-lyrics.lyr-style-gradient .lyr-next { display: none; }
+        #kar-lyrics.lyr-style-gradient .lyr-cur { font-weight: 800; font-size: clamp(2.8rem, 7.84vh, 5.88rem); color: transparent; text-shadow: none; filter: drop-shadow(0 2px 5px rgba(0,0,0,0.85)); background: linear-gradient(90deg, #ff5f6d, #ffc371, #ffe66d); -webkit-background-clip: text; background-clip: text; }
+        /* reveal: the line wipes in from the left over its length (stays fully visible after) */
+        #kar-lyrics.lyr-style-reveal .lyr-prev, #kar-lyrics.lyr-style-reveal .lyr-next { display: none; }
+        #kar-lyrics.lyr-style-reveal .lyr-cur { --p: 0%; font-weight: 700; padding: 0.1em 0.3em; clip-path: inset(-0.2em calc(100% - var(--p)) -0.2em 0); animation: none; }
+        /* lowerthird: left-aligned broadcast-style bar, next line small underneath */
+        #kar-lyrics.lyr-style-lowerthird { text-align: left; padding: 0 6vw; }
+        #kar-lyrics.lyr-style-lowerthird .lyr-prev { display: none; }
+        #kar-lyrics.lyr-style-lowerthird .lyr-cur { display: inline-block; margin: 0; text-align: left; font-size: clamp(2.1rem, 5.32vh, 3.78rem); background: rgba(0,0,0,0.72); border-left: 0.3em solid #1DB954; padding: 0.2em 0.7em; text-shadow: none; }
+        #kar-lyrics.lyr-style-lowerthird .lyr-cur:empty { display: none; }
+        #kar-lyrics.lyr-style-lowerthird .lyr-next { margin: 0.5em 0 0; text-align: left; font-size: clamp(1.33rem, 3.08vh, 2.24rem); }
+        /* centre: one big line in the middle of the screen */
+        #kar-lyrics.lyr-style-centre { --lyr-bottom: 38vh; }
+        #kar-lyrics.lyr-style-centre .lyr-prev, #kar-lyrics.lyr-style-centre .lyr-next { display: none; }
+        #kar-lyrics.lyr-style-centre .lyr-cur { font-weight: 800; font-size: clamp(3.36rem, 9.8vh, 7.7rem); }
+        #karaoke-view #kar-lyrics { top: 50%; bottom: auto; transform: translateY(-50%); }
+
         .mv-info-pop {
             position: absolute; left: 40px; bottom: 26px; z-index: 8;
             max-width: 60%; pointer-events: none; opacity: 0;
@@ -495,6 +559,12 @@
         </div>
         <div id="mv-lyrics" class="lyr-style-classic"><span class="lyr-prev"></span><span class="lyr-cur"></span><span class="lyr-next"></span></div>
         <img class="mv-logo" id="mv-logo" src="/assets/cuelistr-logo-dark.svg" alt="">
+    </div>
+
+    <div id="karaoke-view" aria-hidden="true">
+        <div id="kar-meta"></div>
+        <div id="kar-note"></div>
+        <div id="kar-lyrics" class="lyr-style-classic"><span class="lyr-prev"></span><span class="lyr-cur"></span><span class="lyr-next"></span></div>
     </div>
 
     <div id="mute-overlay"></div>
@@ -2844,6 +2914,108 @@
             mvResyncFade = true;
             startMusicVideo(currentVideoId, currentVideoTrackId);
         }
+
+        /* =========================================================
+           Karaoke Mode. When switched on (admin / manager -> Display), the screen goes black and shows
+           full-screen synced lyrics for whatever is playing, in the chosen style. It has its OWN song clock
+           and lyric state, built from /api/karaoke - it does not use or change the video's clock (mvClock) or
+           any video code. While it is on the server also stops sending videos (same as Mute / Show Queue), and
+           the video starts fresh again when it is switched off.
+           ========================================================= */
+        const karEl = document.getElementById('karaoke-view');
+        const karLyr = document.getElementById('kar-lyrics');
+        const karPrevEl = karLyr.querySelector('.lyr-prev'), karCurEl = karLyr.querySelector('.lyr-cur'), karNextEl = karLyr.querySelector('.lyr-next');
+        const karMetaEl = document.getElementById('kar-meta'), karNoteEl = document.getElementById('kar-note');
+        let karStyle = 'classic';
+        const kar = { on: false, clock: null, meta: null, key: null, lines: null, status: 'idle', paint: null };
+
+        async function karPoll() {
+            try {
+                const res = await fetch(eventUrl('/api/karaoke'));
+                if (!res.ok) return;
+                const d = await res.json();
+                const recv = Date.now();
+                kar.on = !!d.enabled;
+                const want = lyrUrlStyle || d.style;
+                const st = MV_LYRICS_STYLES.includes(want) ? want : 'classic';
+                if (st !== karStyle) { karStyle = st; karLyr.className = 'lyr-style-' + st + (karLyr.classList.contains('is-on') ? ' is-on' : ''); kar.paint = null; }
+                karEl.classList.toggle('kar-on', kar.on);
+                if (!kar.on) return;
+                if (!d.trackId || !d.title) { kar.clock = null; kar.meta = null; return; }
+                kar.meta = { trackId: d.trackId, title: d.title, artist: d.artist || '', durationMs: d.durationMs || 0 };
+                const playing = !!d.isPlaying;
+                const posAtRecv = (d.progressMs || 0) + (playing ? Math.max(0, (d.serverNow || 0) - (d.updatedAt || 0)) : 0);
+                const base = recv - posAtRecv;
+                const c = kar.clock;
+                // Keep the existing clock while the new reading agrees with it (no jumping); re-anchor on a real change.
+                if (!c || c.trackId !== d.trackId || c.isPlaying !== playing || !playing || Math.abs(base - c.base) > 400) {
+                    kar.clock = { trackId: d.trackId, isPlaying: playing, base, pausedPosMs: d.progressMs || 0 };
+                }
+            } catch (e) { /* keep what's on screen */ }
+        }
+
+        async function karLoad(key, m) {
+            try {
+                const url = eventUrl('/api/music-video/lyrics') + '?title=' + encodeURIComponent(m.title || '')
+                    + '&artist=' + encodeURIComponent(m.artist || '') + '&durationMs=' + (m.durationMs || 0);
+                const res = await fetch(url);
+                if (!res.ok) throw new Error('lyrics ' + res.status);
+                const d = await res.json();
+                if (kar.key !== key) return;
+                kar.lines = (d && Array.isArray(d.lines) && d.lines.length) ? d.lines : null;
+                kar.status = kar.lines ? 'ready' : 'none';
+            } catch (e) {
+                if (kar.key !== key) return;
+                kar.status = 'none';
+                setTimeout(() => { if (kar.key === key && !kar.lines) kar.key = null; }, 15000);   // network hiccup: try again later
+            }
+        }
+
+        function karTick() {
+            if (!kar.on) return;
+            const c = kar.clock, m = kar.meta;
+            if (!c || !m) { karMetaEl.textContent = ''; karNoteEl.textContent = 'Waiting for music\u2026'; karLyr.classList.remove('is-on'); return; }
+            if (kar.key !== c.trackId) { kar.key = c.trackId; kar.lines = null; kar.status = 'loading'; kar.paint = null; karLoad(c.trackId, m); }
+            karMetaEl.textContent = m.title + (m.artist ? ' \u2014 ' + m.artist : '');
+            if (!kar.lines) { karNoteEl.textContent = kar.status === 'none' ? 'No synced lyrics for this song' : ''; karLyr.classList.remove('is-on'); return; }
+            karNoteEl.textContent = '';
+
+            const lines = kar.lines;
+            const pos = (c.isPlaying ? (Date.now() - c.base) : c.pausedPosMs) + MV_LYRICS_LEAD_MS;
+            const idx = lyrIndexAt(lines, pos);
+            const cur = idx >= 0 ? lines[idx] : null;
+            const inLine = !!(cur && cur.text && (pos - cur.t <= MV_LYRICS_MAX_LINE_MS));
+            const paintKey = c.trackId + '|' + (inLine ? 'l' + idx : 'g' + idx) + '|' + karStyle;
+            if (paintKey !== kar.paint) {
+                kar.paint = paintKey;
+                let prevText = '', nextText = '', curText = '\u266A';
+                if (inLine) {
+                    const prev = idx > 0 ? lines[idx - 1] : null, next = idx + 1 < lines.length ? lines[idx + 1] : null;
+                    prevText = (prev && prev.text && cur.t - prev.t < 8000) ? prev.text : '';
+                    nextText = (next && next.text && next.t - cur.t < 8000) ? next.text : '';
+                    curText = cur.text;
+                } else {
+                    // Instrumental / before the first line: a note, with the next line to get ready for.
+                    for (let j = idx + 1; j < lines.length; j++) { if (lines[j].text) { nextText = lines[j].text; break; } }
+                }
+                karPrevEl.textContent = prevText; karNextEl.textContent = nextText; karCurEl.textContent = curText;
+                karCurEl.classList.remove('lyr-in'); void karCurEl.offsetWidth; karCurEl.classList.add('lyr-in');
+            }
+            if (karStyle === 'karaoke' || karStyle === 'reveal') {
+                let p = 0;
+                if (inLine) {
+                    const next = idx + 1 < lines.length ? lines[idx + 1] : null;
+                    const end = Math.min(next ? next.t : cur.t + 4000, cur.t + MV_LYRICS_MAX_LINE_MS);
+                    p = Math.max(0, Math.min(1, (pos - cur.t) / Math.max(400, end - cur.t)));
+                    if (karStyle === 'reveal') p = Math.min(1, p / 0.7);
+                } else if (karStyle === 'reveal') p = 1;
+                karCurEl.style.setProperty('--p', (p * 100).toFixed(1) + '%');
+            }
+            karLyr.classList.add('is-on');
+        }
+        karPoll();
+        setInterval(karPoll, 1000);
+        setInterval(karTick, 100);
 
         async function pollMusicVideo() {
             try {
