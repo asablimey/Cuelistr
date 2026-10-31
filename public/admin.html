@@ -1422,6 +1422,7 @@
                                 <button id="toggle-mute-visuals" class="toggle-btn closed-status" onclick="toggleMuteVisuals()">Mute Visuals: OFF</button>
                                 <button id="toggle-mute-all" class="toggle-btn closed-status" onclick="toggleMuteAll()">Mute All: OFF</button>
                                 <button id="toggle-show-queue" class="toggle-btn closed-status" onclick="toggleShowQueue()">Show Queue: OFF</button>
+                                <button id="toggle-karaoke-mode" class="toggle-btn closed-status" onclick="toggleKaraokeMode()" title="Black screen with full-screen lyrics for the song">Karaoke Mode: OFF</button>
                             </div>
                             <div class="control-bar" style="margin-top: 10px;">
                                 <button id="toggle-show-clock" class="toggle-btn closed-status" onclick="toggleShowClock()">Show Time: OFF</button>
@@ -1466,7 +1467,7 @@
                             <p class="settings-card-hint" style="margin-top: 16px; margin-bottom: 0;">
                                 <strong>Subtitles</strong> shows time-synced lyrics over whatever video is currently
                                 showing (in place of YouTube's own captions), when lyrics are available for the song.
-                                Pick how they look below.
+                                Pick how they look below (Karaoke Mode uses the same style).
                             </p>
                             <div class="config-dashboard" style="margin-top: 16px;">
                                 <div class="input-group">
@@ -1710,6 +1711,7 @@
         let visualsMuted = false;
         let visualsMuteAll = false;
         let visualsShowQueue = false;
+        let karaokeModeEnabled = false;
         let visualsShowClock = false;
         let visualsShowLogo = false;
         let visualsShowVenueCode = false;
@@ -2438,6 +2440,16 @@ async function verifyPassword() {
             updateDashboard();
         }
 
+        async function toggleKaraokeMode() {
+            if (!isAuthorized) return;
+            await fetch(eventUrl('/api/admin/visuals/toggle-karaoke-mode'), {
+                method: 'POST',
+                headers: adminHeaders({ 'Content-Type': 'application/json' }),
+                body: JSON.stringify({ enabled: !karaokeModeEnabled })
+            });
+            updateDashboard();
+        }
+
         async function toggleMusicVideoSubtitles() {
             if (!isAuthorized) return;
             await fetch(eventUrl('/api/admin/visuals/toggle-music-video-subtitles'), {
@@ -3061,6 +3073,11 @@ async function verifyPassword() {
                     visualsShowQueue = !!data.visuals.showQueue;
                     showQueueBtn.innerText = visualsShowQueue ? "Show Queue: ON" : "Show Queue: OFF";
                     showQueueBtn.className = visualsShowQueue ? "toggle-btn open-status" : "toggle-btn closed-status";
+
+                    const karaokeBtn = document.getElementById('toggle-karaoke-mode');
+                    karaokeModeEnabled = !!data.visuals.karaokeModeEnabled;
+                    karaokeBtn.innerText = karaokeModeEnabled ? "Karaoke Mode: ON" : "Karaoke Mode: OFF";
+                    karaokeBtn.className = karaokeModeEnabled ? "toggle-btn open-status" : "toggle-btn closed-status";
 
                     const showClockBtn = document.getElementById('toggle-show-clock');
                     visualsShowClock = !!data.visuals.showClockEnabled;
