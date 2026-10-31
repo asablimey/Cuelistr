@@ -5593,6 +5593,8 @@ app.post('/e/:slug/api/admin/visuals/toggle-mute', makeVisualsToggleRoute('muteV
 app.post('/e/:slug/api/admin/visuals/toggle-show-queue', makeVisualsToggleRoute('showQueue'));
 app.post('/e/:slug/api/admin/visuals/toggle-music-videos', makeVisualsToggleRoute('musicVideosEnabled'));
 app.post('/e/:slug/api/admin/visuals/toggle-music-video-subtitles', makeVisualsToggleRoute('musicVideoSubtitlesEnabled'));
+// Karaoke Mode: the display goes black and shows full-screen synced lyrics for the current song (see /api/karaoke).
+app.post('/e/:slug/api/admin/visuals/toggle-karaoke-mode', makeVisualsToggleRoute('karaokeModeEnabled'));
 app.post('/e/:slug/api/admin/visuals/toggle-family-mode', makeVisualsToggleRoute('familyModeEnabled'));
 app.post('/e/:slug/api/admin/visuals/toggle-prefer-visualizers', makeVisualsToggleRoute('preferVisualizersEnabled'));
 app.post('/e/:slug/api/admin/visuals/toggle-show-clock', makeVisualsToggleRoute('showClockEnabled'));
@@ -6235,6 +6237,7 @@ app.post('/e/:slug/api/admin/action', (req, res) => {
         const vcfg = ensureVisualsConfigs(event);
         vcfg.musicVideosEnabled = false;
         vcfg.musicVideoSubtitlesEnabled = false;
+        vcfg.karaokeModeEnabled = false;
         vcfg.familyModeEnabled = false;
         vcfg.preferVisualizersEnabled = false;
         vcfg.showClockEnabled = false;
@@ -6713,7 +6716,7 @@ app.get('/e/:slug/api/music-video', publicReadLimiter, async (req, res) => {
     // Mute / Show Queue from Admin -> Settings -> Content win over videos:
     // returning nothing makes the display drop the video, after which its
     // ambient poll applies the black-out or the queue board.
-    if (vcfg.muteVisuals || vcfg.muteAll || vcfg.showQueue || vcfg.showCustom) return res.json({ ...emptyResponse, override: true, reason: 'admin_override_mute_or_show_queue_or_custom_is_on' });
+    if (vcfg.muteVisuals || vcfg.muteAll || vcfg.showQueue || vcfg.showCustom || vcfg.karaokeModeEnabled) return res.json({ ...emptyResponse, override: true, reason: 'admin_override_mute_or_show_queue_or_custom_is_on' });
 
     // Admin -> Settings -> Content -> Music Videos forces a video attempt for
     // every song, ignoring the scheduler. With it off, only an active Music
@@ -7120,6 +7123,27 @@ app.get('/e/:slug/api/music-video/lyrics', publicReadLimiter, async (req, res) =
     if (LYRICS_CACHE.size >= LYRICS_CACHE_MAX) LYRICS_CACHE.delete(LYRICS_CACHE.keys().next().value);
     LYRICS_CACHE.set(key, { at: Date.now(), ttl: lines ? LYRICS_HIT_TTL_MS : LYRICS_MISS_TTL_MS, lines });
     res.json({ lines });
+});
+
+// Karaoke Mode feed: whether the mode is on, the style, and the song that is playing with its position, so the
+// display can run full-screen lyrics without needing a matched video. (Lyrics themselves come from
+// /api/music-video/lyrics above.)
+app.get('/e/:slug/api/karaoke', publicReadLimiter, (req, res) => {
+    const event = req.event;
+    const vcfg = ensureVisualsConfigs(event);
+    const np = event.cachedNowPlaying || {};
+    res.json({
+        enabled: !!vcfg.karaokeModeEnabled,
+        style: vcfg.musicVideoLyricsStyle,
+        trackId: np.trackId || null,
+        title: np.title || '',
+        artist: np.artist || '',
+        durationMs: np.durationMs || 0,
+        progressMs: np.progressMs || 0,
+        isPlaying: !!np.isPlaying,
+        updatedAt: np.progressCapturedAt || np.updatedAt || Date.now(),
+        serverNow: Date.now()
+    });
 });
 
 // The display tells the server what the YouTube player actually said (error
