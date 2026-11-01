@@ -2228,7 +2228,7 @@
            in sync: no seek, no buffering, no freeze. The on-screen video is not touched until then.
            A fresh load or reload mid-song lands past any skips already passed (mvSkipCountAt).
            ========================================================= */
-        const MV_SKIP_PRELOAD_SEC = 10;       // start preparing the post-skip copy this long before the skip
+        const MV_SKIP_PRELOAD_SEC = 14;       // start preparing the post-skip copy this long before the skip (time to load AND settle into sync, hidden)
         const MV_SKIP_GIVEUP_MS = 25000;      // preparing it took this long without success: drop it (falls back to a corrective seek)
         let mvSkips = [];                     // [{fromMs,toMs}] for the song the clock is on
         let mvSkipsTrackId = null;
@@ -2291,11 +2291,39 @@
             }
             clearTimeout(pendingLoadTimeout); pendingLoadTimeout = null;
         }
+        // While the post-skip copy waits hidden for the cut, keep steering it onto the target: it is not on screen,
+        // so a seek costs nothing visible, and it can be brought well inside the normal tolerance BEFORE the cut,
+        // instead of cutting to a copy that was only roughly right and nudging it afterwards. Returns null if the
+        // player can't be read yet, else { playing, drift }.
+        function mvSkipSteer(sp) {
+            const slot = sp.slot, st = players[slot];
+            if (!st || !st.ready) return null;
+            let state, cur;
+            try { state = st.yt.getPlayerState(); } catch (e) { return null; }
+            if (state !== YT.PlayerState.PLAYING) { sp.okSince = null; return { playing: false, drift: null }; }
+            try { cur = st.yt.getCurrentTime(); } catch (e) { return null; }
+            const now = Date.now();
+            if (cur !== sp.last) { sp.last = cur; sp.changedAt = now; }       // getCurrentTime moves in steps: interpolate between them, like the on-screen video does
+            const pos = sp.last + Math.min(now - sp.changedAt, 600) / 1000 * (st.currentRate || 1);
+            const driftMs = (pos - mvTargetSec()) * 1000;                      // positive = copy is ahead of where it should be
+            const abs = Math.abs(driftMs);
+            if (abs <= 60) { if (!sp.okSince) sp.okSince = now; } else sp.okSince = null;
+            if (now - sp.lastSteerAt >= 250) {
+                sp.lastSteerAt = now;
+                const seeking = st.seekIssuedAt && now - st.seekIssuedAt < 2500;   // let a seek finish before judging again
+                if (!seeking) {
+                    if (abs > 250 && now - (st.lastSeekAt || 0) > 2000) { mvSetRate(slot, 1); mvSeekTo(slot, mvTargetSec()); sp.okSince = null; }
+                    else if (abs > 35 || (st.currentRate !== 1 && abs > 20)) mvSetRate(slot, driftMs < 0 ? 1 + mvNudgeDeviationFor(abs) : 1 - mvNudgeDeviationFor(abs));
+                    else mvSetRate(slot, 1);
+                }
+            }
+            return { playing: true, drift: driftMs };
+        }
         function mvSkipBegin(k) {
             const s = mvSkips[k];
             if (standby) standbyDisarm();               // the other player is needed; the next-song standby re-arms itself afterwards
             const slot = otherSlot(activeSlot);
-            const mark = { k, slot, fromSec: s.fromMs / 1000, shiftSec: (s.toMs - s.fromMs) / 1000, openedAt: 0 };
+            const mark = { k, slot, fromSec: s.fromMs / 1000, shiftSec: (s.toMs - s.fromMs) / 1000, openedAt: 0, okSince: null, lastSteerAt: 0, last: null, changedAt: 0 };
             console.log('[MV-SKIP] preparing skip ' + (k + 1) + '/' + mvSkips.length + ': video ' + mark.fromSec.toFixed(1) + 's -> ' + (s.toMs / 1000).toFixed(1) + 's');
             reportPlayerEvent('skip_prepare', 'from=' + mark.fromSec.toFixed(1) + ' to=' + (s.toMs / 1000).toFixed(1), currentVideoId, currentVideoTrackId);
             mvResyncFade = false;                       // a skip is always a hard cut
@@ -2589,15 +2617,19 @@
         function pendingCheck() {
             if (!pendingSlot) return;
             if (mvSkipPending) {
-                // Post-skip copy: keep it aligned and confirmed, but only cut once the on-screen video has reached the skip start.
+                // Post-skip copy: steer it onto the target (hidden), and only cut once the on-screen video has
+                // reached the skip start AND the copy has been within 60ms of the target for 300ms.
                 const sp = mvSkipPending;
+                const now = Date.now();
                 const gateOpen = (mvTargetSecRaw() - sp.shiftSec) >= sp.fromSec - 0.03;
-                if (gateOpen && !sp.openedAt) sp.openedAt = Date.now();
-                const r = checkSlotConfirmedInSync(pendingSlot, pendingReadySince);
-                pendingReadySince = r.readySince;
-                let playing = false;
-                try { playing = players[pendingSlot].yt.getPlayerState() === YT.PlayerState.PLAYING; } catch (e) { /* ignore */ }
-                if (gateOpen && (r.confirmed || (playing && Date.now() - sp.openedAt > 2500))) completeHandoff();
+                if (gateOpen && !sp.openedAt) sp.openedAt = now;
+                const r = mvSkipSteer(sp);
+                if (!r || !gateOpen) return;
+                const steady = sp.okSince && now - sp.okSince >= 300;
+                if (steady || (r.playing && now - sp.openedAt > 3000)) {   // can't settle: cut anyway rather than keep showing the part to skip
+                    console.log('[MV-SKIP] cutting after the skip, copy drift ' + (r.drift === null ? '?' : r.drift.toFixed(0)) + 'ms');
+                    completeHandoff();
+                }
                 return;
             }
             if (mvFromCatalog && Date.now() - mvStartedAt > 12000) {
