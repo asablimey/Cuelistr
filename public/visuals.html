@@ -2198,7 +2198,7 @@
         function mvTargetSec() {
             if (!mvClock) return 0;
             const posMs = mvClock.isPlaying ? (Date.now() - mvClock.base) : mvClock.pausedPosMs;
-            return Math.max(0, (posMs + mvVideoLeadMs + mvIntroOffsetMs) / 1000);
+            return Math.max(0, (posMs + mvVideoLeadMs + mvIntroOffsetMs) / 1000 + mvSkipShiftSec());   // + total skipped so far (0 for videos with no skip points)
         }
 
         // Same as mvTargetSec() but NOT clamped at 0: negative while a video whose
@@ -2207,13 +2207,121 @@
         function mvTargetSecRaw() {
             if (!mvClock) return 0;
             const posMs = mvClock.isPlaying ? (Date.now() - mvClock.base) : mvClock.pausedPosMs;
-            return (posMs + mvVideoLeadMs + mvIntroOffsetMs) / 1000;
+            return (posMs + mvVideoLeadMs + mvIntroOffsetMs) / 1000 + mvSkipShiftSec();
         }
         // Where to tell a player to start so that it LANDS on the right frame once the
         // load/seek has taken latencyMs to resume. Never below 0 (a video can't start before its beginning).
         function mvStartSecWithLatency(latencyMs) {
             return Math.max(0, mvTargetSecRaw() + latencyMs / 1000);
         }
+
+        /* =========================================================
+           Skip points (catalog "Skip points" column).
+           Parts of a video to jump over (talking, skits, breaks the song doesn't have), as VIDEO-time ranges
+           [{fromMs,toMs}]. After a skip, the video's target is simply later by the skipped length
+           (mvSkipShiftSec(), added once in mvTargetSec), so the start time and the rest of the sync maths are
+           exactly as before; with no skip points the shift is always 0.
+           Seamless jump: ~10s before the video reaches a skip's start, a second copy is loaded in the other
+           player at the post-skip position and played hidden, in step with the song, through the SAME handoff
+           machinery song-to-song cuts use (pendingSlot / pendingCheck / completeHandoff). The cut is held until
+           the on-screen video reaches the skip start, then it is a hard cut to a copy that is already playing
+           in sync: no seek, no buffering, no freeze. The on-screen video is not touched until then.
+           A fresh load or reload mid-song lands past any skips already passed (mvSkipCountAt).
+           ========================================================= */
+        const MV_SKIP_PRELOAD_SEC = 10;       // start preparing the post-skip copy this long before the skip
+        const MV_SKIP_GIVEUP_MS = 25000;      // preparing it took this long without success: drop it (falls back to a corrective seek)
+        let mvSkips = [];                     // [{fromMs,toMs}] for the song the clock is on
+        let mvSkipsTrackId = null;
+        let mvSkipsSig = '';
+        let mvSkipApplied = 0;                // how many skips the video's target already includes
+        let mvSkipPending = null;             // { k, slot, fromSec, shiftSec, openedAt } while the post-skip copy is being prepared
+
+        function mvParseSkips(raw) {
+            if (!Array.isArray(raw)) return [];
+            const out = [];
+            for (const s of raw) {
+                const a = Number(s && s.fromMs), b = Number(s && s.toMs);
+                if (Number.isFinite(a) && Number.isFinite(b) && a >= 0 && b > a && (!out.length || a >= out[out.length - 1].toMs)) out.push({ fromMs: a, toMs: b });
+            }
+            return out;
+        }
+        function mvSkipShiftSec() {
+            if (!mvSkips.length || !mvClock || mvSkipsTrackId !== mvClock.trackId) return 0;
+            let t = 0;
+            for (let i = 0; i < mvSkipApplied && i < mvSkips.length; i++) t += (mvSkips[i].toMs - mvSkips[i].fromMs) / 1000;
+            return t;
+        }
+        function mvSkipPosMs() { return mvClock ? (mvClock.isPlaying ? (Date.now() - mvClock.base) : mvClock.pausedPosMs) : 0; }
+        // How many skips are already behind us at song position posMs (stateless, so reloads and seeks land right).
+        function mvSkipCountAt(posMs) {
+            let shift = 0, k = 0;
+            for (const s of mvSkips) {
+                const pre = (posMs + mvVideoLeadMs + mvIntroOffsetMs) / 1000 + shift;
+                if (pre >= s.fromMs / 1000) { shift += (s.toMs - s.fromMs) / 1000; k++; } else break;
+            }
+            return k;
+        }
+        // Called every poll for the matched track: picks up its skip list and sets the starting state.
+        function mvSkipSync(data) {
+            if (mvSkipPending && pendingSlot !== mvSkipPending.slot) mvSkipPending = null;
+            const list = mvParseSkips(data.skips);
+            const sig = JSON.stringify(list);
+            if (mvSkipsTrackId !== data.trackId || mvSkipsSig !== sig || !musicVideoActive) {
+                if (mvSkipPending) mvSkipAbort('track or skip list changed');
+                mvSkipsTrackId = data.trackId; mvSkipsSig = sig; mvSkips = list;
+                mvSkipApplied = list.length ? mvSkipCountAt(mvSkipPosMs()) : 0;
+            }
+        }
+        // Keeps mvSkipApplied right if the song position jumps (seek in Spotify, offset edited) with no handoff in flight.
+        function mvSkipReconcile() {
+            if (mvSkipPending || pendingSlot || !mvSkips.length || !mvClock || mvSkipsTrackId !== mvClock.trackId) return;
+            const k = mvSkipCountAt(mvSkipPosMs());
+            if (k !== mvSkipApplied) { console.log('[MV-SKIP] position changed: skips applied ' + mvSkipApplied + ' -> ' + k); mvSkipApplied = k; }
+        }
+        function mvSkipAbort(why) {
+            const sp = mvSkipPending;
+            if (!sp) return;
+            console.log('[MV-SKIP] dropped the prepared copy: ' + why);
+            mvSkipPending = null;
+            mvSkipApplied = sp.k;                       // the video on screen is still in the pre-skip frame
+            if (pendingSlot === sp.slot) {
+                try { if (players[sp.slot].ready) players[sp.slot].yt.stopVideo(); } catch (e) { /* ignore */ }
+                document.getElementById(`video-loading-cover-${sp.slot}`).classList.remove('is-hidden', 'is-hidden-instant');
+                pendingSlot = null; pendingVideoId = null; pendingTrackId = null; pendingReadySince = null;
+            }
+            clearTimeout(pendingLoadTimeout); pendingLoadTimeout = null;
+        }
+        function mvSkipBegin(k) {
+            const s = mvSkips[k];
+            if (standby) standbyDisarm();               // the other player is needed; the next-song standby re-arms itself afterwards
+            const slot = otherSlot(activeSlot);
+            const mark = { k, slot, fromSec: s.fromMs / 1000, shiftSec: (s.toMs - s.fromMs) / 1000, openedAt: 0 };
+            console.log('[MV-SKIP] preparing skip ' + (k + 1) + '/' + mvSkips.length + ': video ' + mark.fromSec.toFixed(1) + 's -> ' + (s.toMs / 1000).toFixed(1) + 's');
+            reportPlayerEvent('skip_prepare', 'from=' + mark.fromSec.toFixed(1) + ' to=' + (s.toMs / 1000).toFixed(1), currentVideoId, currentVideoTrackId);
+            mvResyncFade = false;                       // a skip is always a hard cut
+            mvSkipPending = mark;
+            mvSkipApplied = k + 1;                      // from now the NEW copy is aimed at the post-skip position
+            pendingSlot = slot; pendingVideoId = currentVideoId; pendingTrackId = currentVideoTrackId; pendingReadySince = null;
+            mvPendingMeta = { title: mvTrackMeta.title, artist: mvTrackMeta.artist, year: mvTrackMeta.year || null };
+            loadIntoSlot(slot, currentVideoId);
+            clearTimeout(pendingLoadTimeout);
+            pendingLoadTimeout = setTimeout(() => { if (mvSkipPending === mark) mvSkipAbort('not ready in time'); }, MV_SKIP_GIVEUP_MS);
+        }
+        function mvSkipTick() {
+            try {
+                if (mvSkipPending && pendingSlot !== mvSkipPending.slot) mvSkipPending = null;   // someone else took or cleared the pending player
+                if (!mvSkips.length || !mvClock || mvSkipsTrackId !== mvClock.trackId || !musicVideoActive) return;
+                mvSkipReconcile();
+                if (mvSkipPending || pendingSlot || mvExpectedSwitch || !mvRevealed || mvCorrectingActive || !mvClock.isPlaying) return;
+                const st = players[activeSlot];
+                if (!st.ready || st.holdingEnd) return;
+                const k = mvSkipApplied;
+                if (k >= mvSkips.length) return;
+                const lead = mvSkips[k].fromMs / 1000 - mvTargetSecRaw();
+                if (lead > 0 && lead <= MV_SKIP_PRELOAD_SEC) mvSkipBegin(k);
+            } catch (e) { /* never let this break the page */ }
+        }
+        setInterval(mvSkipTick, 100);
 
         function mvSampleReading() {
             const st = players[activeSlot];
@@ -2480,6 +2588,18 @@
         // revealReadyCheck below (item 6).
         function pendingCheck() {
             if (!pendingSlot) return;
+            if (mvSkipPending) {
+                // Post-skip copy: keep it aligned and confirmed, but only cut once the on-screen video has reached the skip start.
+                const sp = mvSkipPending;
+                const gateOpen = (mvTargetSecRaw() - sp.shiftSec) >= sp.fromSec - 0.03;
+                if (gateOpen && !sp.openedAt) sp.openedAt = Date.now();
+                const r = checkSlotConfirmedInSync(pendingSlot, pendingReadySince);
+                pendingReadySince = r.readySince;
+                let playing = false;
+                try { playing = players[pendingSlot].yt.getPlayerState() === YT.PlayerState.PLAYING; } catch (e) { /* ignore */ }
+                if (gateOpen && (r.confirmed || (playing && Date.now() - sp.openedAt > 2500))) completeHandoff();
+                return;
+            }
             if (mvFromCatalog && Date.now() - mvStartedAt > 12000) {
                 try { if (players[pendingSlot].yt.getPlayerState() === YT.PlayerState.PLAYING) { completeHandoff(); return; } } catch (e) { /* fall through to the normal check */ }
             }
@@ -2537,6 +2657,7 @@
         // previously-active slot the new standby, with no CSS transition on
         // either - an instant swap, never a fade through black or ambient.
         function completeHandoff() {
+            mvSkipPending = null;   // (a skip cut finishing; harmless for every other handoff)
             const oldSlot = activeSlot;
             const newSlot = pendingSlot;
             clearTimeout(pendingLoadTimeout); pendingLoadTimeout = null;
@@ -2952,6 +3073,7 @@
             mvResyncWanted = null;
             mvResyncNote('starting fresh load: ' + w.reason);
             if (MV_RESYNC_REANCHOR_CLOCK) { mvClock = null; updateMvClock(data, mvLastPollAt || Date.now()); }   // same as a reload: newest reading becomes the anchor
+            mvSkipReconcile();   // the fresh copy starts past any skip points already behind us
             reportPlayerEvent('resync', w.reason, currentVideoId, currentVideoTrackId);
             mvResyncFade = true;
             startMusicVideo(currentVideoId, currentVideoTrackId);
@@ -3174,6 +3296,7 @@
                 if (data.enabled && data.matched && data.videoId) {
                     // Always fold the newest reading into the sync clock first.
                     updateMvClock(data, receivedAt);
+                    mvSkipSync(data);
                     mvSoftMissSince = null;
                     const inProgressForThisTrack = musicVideoActive &&
                         (currentVideoTrackId === data.trackId || pendingTrackId === data.trackId);
