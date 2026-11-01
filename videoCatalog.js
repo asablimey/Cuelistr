@@ -74,6 +74,53 @@ function parseStartMs(input) {
     return ms >= MIN_START_MS && ms <= MAX_START_MS ? (ms === 0 ? 0 : ms) : null;
 }
 
+// "Skip points" column: parts of the video to jump over while it plays (talking, skits, breaks the song
+// doesn't have). Times are VIDEO times (what YouTube shows), as ranges: "2:14-2:31, 3:40-3:52".
+// Accepts that text, or an array of { fromMs, toMs }. Returns a sorted, non-overlapping array of
+// { fromMs, toMs } ([] for blank), or null if anything is invalid.
+const MAX_SKIPS = 20;
+const MAX_SKIP_MS = 3 * 3600 * 1000;
+function parseClockMs(text) {
+    const s = String(text == null ? '' : text).trim();
+    if (!/^\d+(\.\d+)?(:\d+(\.\d+)?){0,2}$/.test(s)) return null;
+    let seconds = 0;
+    for (const p of s.split(':').map(Number)) seconds = seconds * 60 + p;
+    const ms = Math.round(seconds * 1000);
+    return ms >= 0 && ms <= MAX_SKIP_MS ? ms : null;
+}
+function parseSkips(input) {
+    if (input === null || input === undefined || input === '') return [];
+    const pairs = [];
+    if (Array.isArray(input)) {
+        for (const s of input) {
+            const a = Number(s && s.fromMs), b = Number(s && s.toMs);
+            if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+            pairs.push([Math.round(a), Math.round(b)]);
+        }
+    } else {
+        const text = String(input).trim();
+        if (!text) return [];
+        for (const part of text.split(/[,;\n]+/)) {
+            const p = part.trim();
+            if (!p) continue;
+            const m = /^(.+?)\s*(?:-|\u2013|\u2014|\bto\b)\s*(.+)$/i.exec(p);
+            if (!m) return null;
+            const a = parseClockMs(m[1]), b = parseClockMs(m[2]);
+            if (a === null || b === null) return null;
+            pairs.push([a, b]);
+        }
+    }
+    if (pairs.length > MAX_SKIPS) return null;
+    pairs.sort((x, y) => x[0] - y[0]);
+    const out = [];
+    for (const [a, b] of pairs) {
+        if (a < 0 || b > MAX_SKIP_MS || b - a < 500) return null;                // each skip must be at least half a second
+        if (out.length && a < out[out.length - 1].toMs) return null;            // overlapping
+        out.push({ fromMs: a, toMs: b });
+    }
+    return out;
+}
+
 // "Video ON/OFF" column. Returns true/false, `fallback` for blank, null if unrecognised.
 function parseOnOff(input, fallback) {
     if (typeof input === 'boolean') return input;
@@ -179,6 +226,7 @@ function normalizeInput(input, existing) {
         enabled: base.enabled !== false,
         nsfw: base.nsfw === 'yes' || base.nsfw === 'no' ? base.nsfw : '',
         kind: ['video', 'visualizer', 'lyric', 'audio'].includes(base.kind) ? base.kind : '',
+        skips: Array.isArray(base.skips) ? base.skips : [],
         isrc: base.isrc || '',
         notes: has('notes') ? clampStr(src.notes, 500) : (base.notes || '')
     };
@@ -216,6 +264,11 @@ function normalizeInput(input, existing) {
         const v = parseKind(src.kind);
         if (v === null) errors.kind = 'Use Music video, Visualizer, Lyric video or Audio (or leave blank).';
         else row.kind = v;
+    }
+    if (has('skips')) {
+        const v = parseSkips(src.skips);
+        if (v === null) errors.skips = 'Use video times as ranges, e.g. 2:14-2:31, 3:40-3:52 (each end later than its start, in order, not overlapping).';
+        else row.skips = v;
     }
     return { row, errors };
 }
