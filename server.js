@@ -6783,6 +6783,7 @@ app.get('/e/:slug/api/music-video', publicReadLimiter, async (req, res) => {
                 videoId: runtime.cache.videoId,
                 introOffsetMs: runtime.cache.introOffsetMs || 0,
                 videoKind: runtime.cache.kind || '',
+                skips: runtime.cache.skips || [],
                 trackId: np.trackId,
                 progressMs: np.progressMs,
                 durationMs: np.durationMs,
@@ -6859,7 +6860,7 @@ app.get('/e/:slug/api/music-video', publicReadLimiter, async (req, res) => {
             // applied exactly as it was - changing the sync maths (mvTargetSec, mvVideoLeadMs, latency or
             // drift handling, the startMs -> introOffsetMs hand-off) shifts every video at once.
             // If a change touches any of that, stop and ask first.
-            runtime.cache = { trackId: np.trackId, searchedTrackId: np.trackId, matched: true, videoId: row.youtubeId, introOffsetMs: row.startMs || 0, source: 'catalog', rowId: row.id, kind: row.kind || '' };
+            runtime.cache = { trackId: np.trackId, searchedTrackId: np.trackId, matched: true, videoId: row.youtubeId, introOffsetMs: row.startMs || 0, source: 'catalog', rowId: row.id, kind: row.kind || '', skips: Array.isArray(row.skips) ? row.skips : [] };
             if (!(runtime.catalogServed instanceof Set)) runtime.catalogServed = new Set();
             runtime.catalogServed.add(`${np.trackId}|${row.youtubeId}`);
         }
@@ -7018,6 +7019,7 @@ app.get('/e/:slug/api/music-video', publicReadLimiter, async (req, res) => {
         introOffsetMs: mvOffsetNow,
         source: runtime.cache.source || null,
         videoKind: runtime.cache.kind || '',   // catalog "Video type" (video | visualizer | lyric | audio | blank)
+        skips: runtime.cache.skips || [],      // catalog "Skip points": [{ fromMs, toMs }] in VIDEO time; the display jumps over each one
         trackId: np.trackId,
         progressMs: np.progressMs,
         durationMs: np.durationMs,
