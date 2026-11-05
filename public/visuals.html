@@ -381,14 +381,10 @@
         #mv-lyrics .lyr-prev { margin-bottom: 0.45em; }
         #mv-lyrics .lyr-next { margin-top: 0.45em; }
         /* classic: previous / current / next stacked (the base look above) */
-        /* karaoke: current line fills in left to right across its length; next line below */
+        /* karaoke: each WORD fills in as it is sung (a wrapped line fills its top row, then the next); next line below */
         #mv-lyrics.lyr-style-karaoke .lyr-prev { display: none; }
-        #mv-lyrics.lyr-style-karaoke .lyr-cur {
-            --p: 0%;
-            color: transparent; text-shadow: none; filter: drop-shadow(0 2px 5px rgba(0,0,0,0.85));
-            background: linear-gradient(90deg, #ffd54a var(--p), rgba(255,255,255,0.55) var(--p));
-            -webkit-background-clip: text; background-clip: text;
-        }
+        #mv-lyrics.lyr-style-karaoke .lyr-cur { text-shadow: none; filter: drop-shadow(0 2px 5px rgba(0,0,0,0.85)); }
+        #mv-lyrics.lyr-style-karaoke .lyr-w { --p: 0%; color: transparent; background: linear-gradient(90deg, #ffd54a var(--p), rgba(255,255,255,0.55) var(--p)); -webkit-background-clip: text; background-clip: text; }
         /* subtitle: one line in a dark rounded box, like movie subtitles */
         #mv-lyrics.lyr-style-subtitle .lyr-prev, #mv-lyrics.lyr-style-subtitle .lyr-next { display: none; }
         #mv-lyrics.lyr-style-subtitle .lyr-cur { display: inline-block; font-weight: 600; font-size: clamp(1.4rem, 3.6vh, 2.6rem); background: rgba(0,0,0,0.62); padding: 0.18em 0.6em; border-radius: 0.35em; text-shadow: none; }
@@ -408,9 +404,10 @@
         /* gradient: warm sunset-coloured lettering */
         #mv-lyrics.lyr-style-gradient .lyr-prev, #mv-lyrics.lyr-style-gradient .lyr-next { display: none; }
         #mv-lyrics.lyr-style-gradient .lyr-cur { font-weight: 800; font-size: clamp(2rem, 5.6vh, 4.2rem); color: transparent; text-shadow: none; filter: drop-shadow(0 2px 5px rgba(0,0,0,0.85)); background: linear-gradient(90deg, #ff5f6d, #ffc371, #ffe66d); -webkit-background-clip: text; background-clip: text; }
-        /* reveal: the line wipes in from the left over its length (stays fully visible after) */
+        /* reveal: each WORD wipes in as it is sung (and stays) */
         #mv-lyrics.lyr-style-reveal .lyr-prev, #mv-lyrics.lyr-style-reveal .lyr-next { display: none; }
-        #mv-lyrics.lyr-style-reveal .lyr-cur { --p: 0%; font-weight: 700; padding: 0.1em 0.3em; clip-path: inset(-0.2em calc(100% - var(--p)) -0.2em 0); animation: none; }
+        #mv-lyrics.lyr-style-reveal .lyr-cur { font-weight: 700; padding: 0.1em 0.3em; animation: none; }
+        #mv-lyrics.lyr-style-reveal .lyr-w { --p: 0%; display: inline-block; clip-path: inset(-0.2em calc(100% - var(--p)) -0.2em 0); }
         /* lowerthird: left-aligned broadcast-style bar, next line small underneath */
         #mv-lyrics.lyr-style-lowerthird { text-align: left; padding: 0 6vw; }
         #mv-lyrics.lyr-style-lowerthird .lyr-prev { display: none; }
@@ -444,14 +441,10 @@
         #kar-lyrics .lyr-prev { margin-bottom: 0.45em; }
         #kar-lyrics .lyr-next { margin-top: 0.45em; }
         /* classic: previous / current / next stacked (the base look above) */
-        /* karaoke: current line fills in left to right across its length; next line below */
+        /* karaoke: each WORD fills in as it is sung (a wrapped line fills its top row, then the next); next line below */
         #kar-lyrics.lyr-style-karaoke .lyr-prev { display: none; }
-        #kar-lyrics.lyr-style-karaoke .lyr-cur {
-            --p: 0%;
-            color: transparent; text-shadow: none; filter: drop-shadow(0 2px 5px rgba(0,0,0,0.85));
-            background: linear-gradient(90deg, #ffd54a var(--p), rgba(255,255,255,0.55) var(--p));
-            -webkit-background-clip: text; background-clip: text;
-        }
+        #kar-lyrics.lyr-style-karaoke .lyr-cur { text-shadow: none; filter: drop-shadow(0 2px 5px rgba(0,0,0,0.85)); }
+        #kar-lyrics.lyr-style-karaoke .lyr-w { --p: 0%; color: transparent; background: linear-gradient(90deg, #ffd54a var(--p), rgba(255,255,255,0.55) var(--p)); -webkit-background-clip: text; background-clip: text; }
         /* subtitle: one line in a dark rounded box, like movie subtitles */
         #kar-lyrics.lyr-style-subtitle .lyr-prev, #kar-lyrics.lyr-style-subtitle .lyr-next { display: none; }
         #kar-lyrics.lyr-style-subtitle .lyr-cur { display: inline-block; font-weight: 600; font-size: clamp(1.96rem, 5.04vh, 3.64rem); background: rgba(0,0,0,0.62); padding: 0.18em 0.6em; border-radius: 0.35em; text-shadow: none; }
@@ -471,9 +464,10 @@
         /* gradient: warm sunset-coloured lettering */
         #kar-lyrics.lyr-style-gradient .lyr-prev, #kar-lyrics.lyr-style-gradient .lyr-next { display: none; }
         #kar-lyrics.lyr-style-gradient .lyr-cur { font-weight: 800; font-size: clamp(2.8rem, 7.84vh, 5.88rem); color: transparent; text-shadow: none; filter: drop-shadow(0 2px 5px rgba(0,0,0,0.85)); background: linear-gradient(90deg, #ff5f6d, #ffc371, #ffe66d); -webkit-background-clip: text; background-clip: text; }
-        /* reveal: the line wipes in from the left over its length (stays fully visible after) */
+        /* reveal: each WORD wipes in as it is sung (and stays) */
         #kar-lyrics.lyr-style-reveal .lyr-prev, #kar-lyrics.lyr-style-reveal .lyr-next { display: none; }
-        #kar-lyrics.lyr-style-reveal .lyr-cur { --p: 0%; font-weight: 700; padding: 0.1em 0.3em; clip-path: inset(-0.2em calc(100% - var(--p)) -0.2em 0); animation: none; }
+        #kar-lyrics.lyr-style-reveal .lyr-cur { font-weight: 700; padding: 0.1em 0.3em; animation: none; }
+        #kar-lyrics.lyr-style-reveal .lyr-w { --p: 0%; display: inline-block; clip-path: inset(-0.2em calc(100% - var(--p)) -0.2em 0); }
         /* lowerthird: left-aligned broadcast-style bar, next line small underneath */
         #kar-lyrics.lyr-style-lowerthird { text-align: left; padding: 0 6vw; }
         #kar-lyrics.lyr-style-lowerthird .lyr-prev { display: none; }
@@ -2957,15 +2951,48 @@
         const lyrEl = document.getElementById('mv-lyrics');
         const lyrPrevEl = lyrEl.querySelector('.lyr-prev'), lyrCurEl = lyrEl.querySelector('.lyr-cur'), lyrNextEl = lyrEl.querySelector('.lyr-next');
         let lyrStyle = 'classic';
-        const lyr = { key: null, lines: null, status: 'idle', idx: -2 };
+        const lyr = { key: null, lines: null, status: 'idle', idx: -2, words: null };
 
         function lyrSetStyle(name) {
             name = MV_LYRICS_STYLES.includes(name) ? name : 'classic';
             if (name === lyrStyle) return;
             lyrStyle = name;
+            lyr.idx = -2;   // repaint the current line in the new style
             lyrEl.className = 'lyr-style-' + name + (lyrEl.classList.contains('is-on') ? ' is-on' : '');
         }
         function lyrHide() { lyrEl.classList.remove('is-on'); }
+
+        // Word-by-word lighting (Karaoke and Reveal styles): the line is split into word spans and each word lights
+        // only while it is being sung, in reading order - so a long line that wraps onto two rows fills the top row
+        // first and the bottom row after, never both at once. The lyrics only carry a start time per LINE, so word
+        // times are an estimate: the words share the time the line takes to sing, longer words taking longer.
+        function lyrIsWordStyle(style) { return style === 'karaoke' || style === 'reveal'; }
+        function lyrBuildWords(el, text) {
+            el.textContent = '';
+            const words = String(text).split(/\s+/).filter(Boolean);
+            const spans = words.map((w, i) => {
+                const sp = document.createElement('span');
+                sp.className = 'lyr-w'; sp.textContent = w;
+                el.appendChild(sp);
+                if (i < words.length - 1) el.appendChild(document.createTextNode(' '));
+                return sp;
+            });
+            return { spans, words };
+        }
+        function lyrWordTimes(words, lineMs) {       // lineMs: how long this line has before the next one starts
+            const chars = words.reduce((n, w) => n + w.length, 0);
+            const span = Math.max(500, Math.min(lineMs, MV_LYRICS_MAX_LINE_MS, Math.max(1600, chars * 85)) * 0.92);
+            const total = words.reduce((n, w) => n + w.length + 2, 0);
+            let acc = 0;
+            return words.map(w => { const st = acc / total * span; acc += w.length + 2; return { s: st, e: acc / total * span }; });
+        }
+        function lyrLightWords(spans, times, relMs) {
+            for (let i = 0; i < spans.length; i++) {
+                const t = times[i];
+                const p = Math.max(0, Math.min(1, (relMs - t.s) / Math.max(120, t.e - t.s)));
+                spans[i].style.setProperty('--p', (p * 100).toFixed(1) + '%');
+            }
+        }
 
         async function lyrLoad(key, meta) {
             try {
@@ -3012,16 +3039,13 @@
                 const prev = idx > 0 ? lines[idx - 1] : null, next = idx + 1 < lines.length ? lines[idx + 1] : null;
                 lyrPrevEl.textContent = (prev && prev.text && cur.t - prev.t < 8000) ? prev.text : '';
                 lyrNextEl.textContent = (next && next.text && next.t - cur.t < 8000) ? next.text : '';
-                lyrCurEl.textContent = cur.text;
+                if (lyrIsWordStyle(lyrStyle)) {
+                    const w = lyrBuildWords(lyrCurEl, cur.text);
+                    lyr.words = { spans: w.spans, times: lyrWordTimes(w.words, next ? next.t - cur.t : 4000) };
+                } else { lyrCurEl.textContent = cur.text; lyr.words = null; }
                 lyrCurEl.classList.remove('lyr-in'); void lyrCurEl.offsetWidth; lyrCurEl.classList.add('lyr-in');
             }
-            if (lyrStyle === 'karaoke' || lyrStyle === 'reveal') {
-                const next = idx + 1 < lines.length ? lines[idx + 1] : null;
-                const end = Math.min(next ? next.t : cur.t + 4000, cur.t + MV_LYRICS_MAX_LINE_MS);
-                let p = Math.max(0, Math.min(1, (pos - cur.t) / Math.max(400, end - cur.t)));
-                if (lyrStyle === 'reveal') p = Math.min(1, p / 0.7);   // fully shown by 70% of the line
-                lyrCurEl.style.setProperty('--p', (p * 100).toFixed(1) + '%');
-            }
+            if (lyr.words) lyrLightWords(lyr.words.spans, lyr.words.times, pos - cur.t);
             lyrEl.classList.add('is-on');
         }
         setInterval(lyrTick, 100);
@@ -3165,7 +3189,7 @@
         const karPrevEl = karLyr.querySelector('.lyr-prev'), karCurEl = karLyr.querySelector('.lyr-cur'), karNextEl = karLyr.querySelector('.lyr-next');
         const karMetaEl = document.getElementById('kar-meta'), karNoteEl = document.getElementById('kar-note');
         let karStyle = 'classic';
-        const kar = { on: false, clock: null, meta: null, key: null, lines: null, status: 'idle', paint: null };
+        const kar = { on: false, clock: null, meta: null, key: null, lines: null, status: 'idle', paint: null, words: null };
 
         async function karPoll() {
             try {
@@ -3236,19 +3260,15 @@
                     // Instrumental / before the first line: a note, with the next line to get ready for.
                     for (let j = idx + 1; j < lines.length; j++) { if (lines[j].text) { nextText = lines[j].text; break; } }
                 }
-                karPrevEl.textContent = prevText; karNextEl.textContent = nextText; karCurEl.textContent = curText;
+                karPrevEl.textContent = prevText; karNextEl.textContent = nextText;
+                if (lyrIsWordStyle(karStyle)) {
+                    const w = lyrBuildWords(karCurEl, curText);
+                    const nxt = inLine && idx + 1 < lines.length ? lines[idx + 1] : null;
+                    kar.words = { spans: w.spans, times: lyrWordTimes(w.words, nxt ? nxt.t - cur.t : 4000) };
+                } else { karCurEl.textContent = curText; kar.words = null; }
                 karCurEl.classList.remove('lyr-in'); void karCurEl.offsetWidth; karCurEl.classList.add('lyr-in');
             }
-            if (karStyle === 'karaoke' || karStyle === 'reveal') {
-                let p = 0;
-                if (inLine) {
-                    const next = idx + 1 < lines.length ? lines[idx + 1] : null;
-                    const end = Math.min(next ? next.t : cur.t + 4000, cur.t + MV_LYRICS_MAX_LINE_MS);
-                    p = Math.max(0, Math.min(1, (pos - cur.t) / Math.max(400, end - cur.t)));
-                    if (karStyle === 'reveal') p = Math.min(1, p / 0.7);
-                } else if (karStyle === 'reveal') p = 1;
-                karCurEl.style.setProperty('--p', (p * 100).toFixed(1) + '%');
-            }
+            if (kar.words) lyrLightWords(kar.words.spans, kar.words.times, inLine ? pos - cur.t : (karStyle === 'reveal' ? 1e9 : -1));   // the \u266A between lines: shown for Reveal, unlit for Karaoke
             karLyr.classList.add('is-on');
         }
         karPoll();
