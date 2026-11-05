@@ -7127,6 +7127,65 @@ app.get('/e/:slug/api/music-video/lyrics', publicReadLimiter, async (req, res) =
     res.json({ lines });
 });
 
+// ---------------------------------------------------------------------------
+// BPM for track names in DJ (Basic) mode. Spotify's own audio-features endpoint is closed to apps created after
+// Nov 2024, so tempo comes from ReccoBeats (free, no key, takes Spotify track ids). Results are estimates, cached in
+// memory (hits 30 days, misses 6 hours). Only Spotify track ids are sent to them. A lookup that fails just shows
+// no BPM; nothing else depends on it.
+// ---------------------------------------------------------------------------
+const BPM_CACHE = new Map();                 // spotify track id -> { at, bpm (0 = none found) }
+const BPM_HIT_TTL_MS = 30 * 24 * 3600 * 1000;
+const BPM_MISS_TTL_MS = 6 * 3600 * 1000;
+const BPM_CACHE_MAX = 20000;
+const BPM_BATCH = 25;
+
+async function fetchBpmBatch(ids) {
+    const found = new Map();
+    try {
+        const r = await fetch(`https://api.reccobeats.com/v1/audio-features?ids=${ids.join(',')}`, {
+            timeout: 8000, headers: { 'Accept': 'application/json', 'User-Agent': LYRICS_UA }
+        });
+        if (!r.ok) return null;                                    // rate limit / outage: don't cache, try again later
+        const body = await r.json();
+        const items = Array.isArray(body) ? body : (body.content || body.audio_features || []);
+        for (const it of items) {
+            if (!it) continue;
+            const href = String(it.href || it.track_href || it.uri || '');
+            const m = href.match(/(?:track[\/:])([A-Za-z0-9]{22})/);
+            const id = m ? m[1] : (/^[A-Za-z0-9]{22}$/.test(String(it.id || '')) ? it.id : null);
+            const tempo = Number(it.tempo);
+            if (id && Number.isFinite(tempo) && tempo > 0) found.set(id, Math.round(tempo));
+        }
+        // A single id with an answer we could not match back by href: it can only be that one.
+        if (ids.length === 1 && !found.size && items.length === 1 && Number(items[0] && items[0].tempo) > 0) found.set(ids[0], Math.round(Number(items[0].tempo)));
+    } catch (e) { return null; }
+    return found;
+}
+
+app.get('/e/:slug/api/bpm', publicReadLimiter, async (req, res) => {
+    const ids = [...new Set(String(req.query.ids || '').split(',').map(x => x.trim()).filter(x => /^[A-Za-z0-9]{22}$/.test(x)))].slice(0, 50);
+    const out = {};
+    const need = [];
+    const now = Date.now();
+    for (const id of ids) {
+        const hit = BPM_CACHE.get(id);
+        if (hit && now - hit.at < (hit.bpm ? BPM_HIT_TTL_MS : BPM_MISS_TTL_MS)) out[id] = hit.bpm;
+        else need.push(id);
+    }
+    for (let i = 0; i < need.length; i += BPM_BATCH) {
+        const chunk = need.slice(i, i + BPM_BATCH);
+        const found = await fetchBpmBatch(chunk);
+        if (found === null) continue;                              // couldn't ask: leave these out so the page asks again later
+        for (const id of chunk) {
+            const bpm = found.get(id) || 0;
+            if (BPM_CACHE.size >= BPM_CACHE_MAX) BPM_CACHE.delete(BPM_CACHE.keys().next().value);
+            BPM_CACHE.set(id, { at: Date.now(), bpm });
+            out[id] = bpm;
+        }
+    }
+    res.json({ bpm: out });
+});
+
 // Karaoke Mode feed: whether the mode is on, the style, and the song that is playing with its position, so the
 // display can run full-screen lyrics without needing a matched video. (Lyrics themselves come from
 // /api/music-video/lyrics above.)
