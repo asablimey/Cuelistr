@@ -894,6 +894,7 @@
         .toast-visible { opacity: 1; transform: translateY(0); }
     
         /* --- Now Playing bar (live from Spotify) --- */
+.bpm-tag { color: #a7a7a7; font-weight: 600; font-size: .8rem; margin-left: 6px; white-space: nowrap; flex: none; }
         .now-playing-bar {
             position: fixed;
             left: 0; right: 0; bottom: 0;
@@ -1165,14 +1166,14 @@
                             <div class="settings-section-label">Site Mode</div>
                             <div class="mode-row">
                                 <div class="theme-seg" id="site-mode-seg" role="group" aria-label="Site mode">
-                                    <button type="button" data-mode="basic" onclick="setSiteMode('basic')">Basic</button>
-                                    <button type="button" data-mode="full" onclick="setSiteMode('full')">Full</button>
+                                    <button type="button" data-mode="basic" onclick="setSiteMode('basic')">DJ (Basic)</button>
+                                    <button type="button" data-mode="full" onclick="setSiteMode('full')">Cuelistr (Full)</button>
                                 </div>
                             </div>
                             <p class="settings-card-hint" style="margin-top: 14px; margin-bottom: 0;">
-                                <strong>Basic</strong> is just search and request: guests search Spotify and send a song, and you see the queue and play it.
+                                <strong>DJ (Basic)</strong> is just search and request: guests search Spotify and send a song, and you see the queue and play it.
                                 Kiosk, visuals, the music scheduler, blocklists, stats, filters and music videos are switched off, on the server too.
-                                <strong>Full</strong> turns everything back on exactly as you left it - nothing is deleted when you switch.
+                                <strong>Cuelistr (Full)</strong> turns everything back on exactly as you left it - nothing is deleted when you switch.
                             </p>
                         </div>
 
@@ -1783,7 +1784,7 @@
                         <img src="${safeImageUrl(p.artwork)}">
                         <div class="text-container">
                             <div class="title-wrapper">
-                                <p class="song-title">${escapeHtml(p.title)}</p>
+                                <p class="song-title">${escapeHtml(p.title)}</p>${bpmTag(p.id)}
                                 ${p.explicit ? '<span class="explicit-badge">E</span>' : ''}
                             </div>
                             <p class="song-artist">${escapeHtml(artistWithYear(p.artist, p.year))}</p>
@@ -2798,7 +2799,7 @@ async function verifyPassword() {
                         <img src="${safeImageUrl(song.artwork)}">
                         <div class="text-container">
                             <div class="title-wrapper">
-                                <p class="song-title">${escapeHtml(song.title)}</p>
+                                <p class="song-title">${escapeHtml(song.title)}</p>${bpmTag(song.id)}
                                 ${song.hasVideo ? '<span class="video-tag">(Video)</span>' : ''}
                                 ${song.explicit ? '<span class="explicit-badge">E</span>' : ''}
                             </div>
@@ -2842,7 +2843,7 @@ async function verifyPassword() {
                         <img src="${safeImageUrl(t.artwork)}">
                         <div class="text-container">
                             <div class="title-wrapper">
-                                <p class="song-title">${escapeHtml(t.title)}</p>
+                                <p class="song-title">${escapeHtml(t.title)}</p>${bpmTag(t.id)}
                                 ${t.hasVideo ? '<span class="video-tag">(Video)</span>' : ''}
                             </div>
                             <p class="song-artist">${escapeHtml(artistWithYear(t.artist, t.year))}</p>
@@ -2916,6 +2917,34 @@ async function verifyPassword() {
         }
 
         // ---- Site mode (Basic / Full) ----
+        // ---- BPM next to track names: DJ (Basic) mode only --------------------------------------------
+        // Tempo comes from /api/bpm (estimates, cached on the server). Rows get an empty tag straight away; the
+        // numbers are filled in once fetched, and remembered so re-renders don't flicker.
+        const bpmCache = new Map();        // Spotify track id -> rounded BPM, or 0 when none was found
+        const bpmAsked = new Set();        // ids already requested
+        function bpmOn() { return typeof adminBasicMode !== 'undefined' && adminBasicMode; }
+        function bpmText(id) { const b = id ? bpmCache.get(id) : 0; return b ? ' (' + b + 'bpm)' : ''; }
+        function bpmTag(id) { return (bpmOn() && id) ? '<span class="bpm-tag" data-bpm-id="' + escapeHtml(String(id)) + '">' + bpmText(id) + '</span>' : ''; }
+        function bpmFill() {
+            document.querySelectorAll('.bpm-tag[data-bpm-id]').forEach(el => { const t = bpmOn() ? bpmText(el.dataset.bpmId) : ''; if (el.textContent !== t) el.textContent = t; });
+        }
+        async function bpmRefresh() {
+            if (!bpmOn()) return;
+            const ids = [...new Set([...document.querySelectorAll('.bpm-tag[data-bpm-id]')].map(el => el.dataset.bpmId))]
+                .filter(id => /^[A-Za-z0-9]{22}$/.test(id) && !bpmCache.has(id) && !bpmAsked.has(id)).slice(0, 40);
+            if (ids.length) {
+                ids.forEach(id => bpmAsked.add(id));
+                try {
+                    const res = await fetch(eventUrl('/api/bpm?ids=' + ids.join(',')));
+                    const d = res.ok ? await res.json() : null;
+                    if (!d || !d.bpm) throw new Error('bpm unavailable');
+                    ids.forEach(id => { if (id in d.bpm) bpmCache.set(id, Number(d.bpm[id]) || 0); else bpmAsked.delete(id); });   // not answered: ask again later
+                } catch (e) { ids.forEach(id => bpmAsked.delete(id)); }
+            }
+            bpmFill();
+        }
+        setInterval(() => { bpmFill(); bpmRefresh(); }, 1500);
+
         let adminBasicMode = false;
         function markSeg(id, mode) {
             document.querySelectorAll('#' + id + ' button').forEach(b => b.classList.toggle('is-active', b.dataset.mode === mode));
@@ -2936,7 +2965,7 @@ async function verifyPassword() {
         }
         async function setSiteMode(mode) {
             if (mode === 'basic' && !adminBasicMode &&
-                !confirm('Switch to Basic mode?\n\nGuests will only be able to search and request. Kiosk, visuals, the scheduler, blocklists, stats and music videos are switched off until you go back to Full. Nothing is deleted.')) return;
+                !confirm('Switch to DJ (Basic) mode?\n\nGuests will only be able to search and request. Kiosk, visuals, the scheduler, blocklists, stats and music videos are switched off until you go back to Cuelistr (Full). Nothing is deleted.')) return;
             try {
                 const res = await fetch(eventUrl('/api/admin/site-mode'), {
                     method: 'POST', headers: adminHeaders({ 'Content-Type': 'application/json' }),
@@ -2944,7 +2973,7 @@ async function verifyPassword() {
                 });
                 if (!res.ok) { showToast('Could not change the mode.', 'error'); return; }
                 applyAdminMode(mode);
-                showToast(mode === 'basic' ? 'Basic mode on.' : 'Full mode on.', 'success');
+                showToast(mode === 'basic' ? 'DJ (Basic) mode on.' : 'Cuelistr (Full) mode on.', 'success');
             } catch (e) { showToast('Could not reach the server.', 'error'); }
         }
         async function updateDashboard() {
@@ -3942,7 +3971,7 @@ async function verifyPassword() {
             }
 
             document.getElementById('now-playing-artwork').src = data.artwork || '';
-            document.getElementById('now-playing-title').innerText = data.title;
+            document.getElementById('now-playing-title').innerHTML = escapeHtml(data.title) + bpmTag(data.trackId);
             document.getElementById('now-playing-artist').innerText = data.artist || '';
             document.getElementById('now-playing-live-dot').classList.toggle('is-paused', !data.isPlaying);
 
