@@ -1081,16 +1081,17 @@ body.has-player #player { display: block; }
 @media (orientation: landscape) { .rotate-lock { display: flex; } }
 #blk-results .settings-card { margin-bottom: 14px; }
 
-/* Shorter queue rows */
-.swipe-wrap .song-row, #queue-list > .song-row { padding: 6px 10px; gap: 8px; }
-#queue-list .song-details { gap: 10px; }
-#queue-list .song-details img { width: 38px; height: 38px; }
-#queue-list .song-title { font-size: .95rem; }
-#queue-list .song-artist { font-size: .78rem; margin-top: 0; }
-#queue-list .length-requester-row { margin-top: 2px; }
-#queue-list .requester-badge { padding: 2px 7px; }
-#queue-list .swipe-wrap, #queue-list > .song-row { margin-bottom: 6px; }
-.btn.ico.play-now { width: 34px; height: 34px; min-width: 34px; flex: none; padding: 0; border-radius: 4px; align-self: center; }
+.bpm-tag { color: #a7a7a7; font-weight: 600; font-size: .8rem; margin-left: 6px; white-space: nowrap; flex: none; }
+/* Shorter queue rows - Cuelistr (Full) mode only. DJ (Basic) mode keeps the original, larger rows. */
+body:not(.basic-mode) .swipe-wrap .song-row, body:not(.basic-mode) #queue-list > .song-row { padding: 6px 10px; gap: 8px; }
+body:not(.basic-mode) #queue-list .song-details { gap: 10px; }
+body:not(.basic-mode) #queue-list .song-details img { width: 38px; height: 38px; }
+body:not(.basic-mode) #queue-list .song-title { font-size: .95rem; }
+body:not(.basic-mode) #queue-list .song-artist { font-size: .78rem; margin-top: 0; }
+body:not(.basic-mode) #queue-list .length-requester-row { margin-top: 2px; }
+body:not(.basic-mode) #queue-list .requester-badge { padding: 2px 7px; }
+body:not(.basic-mode) #queue-list .swipe-wrap, body:not(.basic-mode) #queue-list > .song-row { margin-bottom: 6px; }
+body:not(.basic-mode) .btn.ico.play-now { width: 34px; height: 34px; min-width: 34px; flex: none; padding: 0; border-radius: 4px; align-self: center; }
 
 /* Playback tab: only the queue scrolls; top bar, strip and player stay put */
 html:has(body.has-player) { overflow: hidden; }
@@ -1343,12 +1344,12 @@ body.has-player { overflow: hidden; }
             <div class="settings-card">
                 <div class="settings-section-label">Site Mode</div>
                 <p class="settings-card-hint" style="margin-top:0;">
-                    <strong>Basic</strong> is just search and request: guests search Spotify and send a song, and you see the queue and play it.
-                    <strong>Full</strong> turns everything back on exactly as you left it - nothing is deleted when you switch.
+                    <strong>DJ (Basic)</strong> is just search and request: guests search Spotify and send a song, and you see the queue and play it.
+                    <strong>Cuelistr (Full)</strong> turns everything back on exactly as you left it - nothing is deleted when you switch.
                 </p>
                 <div class="theme-seg full" id="site-mode-seg" role="group" aria-label="Site mode">
-                    <button type="button" data-mode="basic" onclick="setSiteMode('basic')">Basic</button>
-                    <button type="button" data-mode="full" onclick="setSiteMode('full')">Full</button>
+                    <button type="button" data-mode="basic" onclick="setSiteMode('basic')">DJ (Basic)</button>
+                    <button type="button" data-mode="full" onclick="setSiteMode('full')">Cuelistr (Full)</button>
                 </div>
             </div>
 
@@ -1913,7 +1914,7 @@ body.has-player { overflow: hidden; }
                     <div class="song-details">
                         <img src="${safeImageUrl(p.artwork)}" alt="">
                         <div class="text-container">
-                            <div class="title-wrapper"><p class="song-title">${escapeHtml(p.title)}</p>${p.explicit ? '<span class="explicit-badge">E</span>' : ''}</div>
+                            <div class="title-wrapper"><p class="song-title">${escapeHtml(p.title)}</p>${bpmTag(p.id)}${p.explicit ? '<span class="explicit-badge">E</span>' : ''}</div>
                             <p class="song-artist">${escapeHtml(artistWithYear(p.artist, p.year))}</p>
                             <div class="length-requester-row"><span class="length-text plain">By ${escapeHtml((p.requesters || []).join(', '))}</span></div>
                         </div>
@@ -1990,12 +1991,12 @@ body.has-player { overflow: hidden; }
         }
         async function setSiteMode(mode) {
             if (mode === 'basic' && !managerBasicMode &&
-                !confirm('Switch to Basic mode?\n\nGuests will only be able to search and request. Kiosk, visuals, the scheduler, blocklists, stats and music videos are switched off until you go back to Full. Nothing is deleted.')) return;
+                !confirm('Switch to DJ (Basic) mode?\n\nGuests will only be able to search and request. Kiosk, visuals, the scheduler, blocklists, stats and music videos are switched off until you go back to Cuelistr (Full). Nothing is deleted.')) return;
             try {
                 const res = await adminPost('/api/admin/site-mode', { mode });
                 if (!res.ok) { showToast('Could not change the mode.', 'error'); return; }
                 applyAdminMode(mode);
-                showToast(mode === 'basic' ? 'Basic mode on.' : 'Full mode on.', 'success');
+                showToast(mode === 'basic' ? 'DJ (Basic) mode on.' : 'Cuelistr (Full) mode on.', 'success');
             } catch (e) { showToast('Could not reach the server.', 'error'); }
         }
 
@@ -2141,7 +2142,7 @@ body.has-player { overflow: hidden; }
                                 <img src="${safeImageUrl(song.artwork)}" alt="" draggable="false">
                                 <div class="text-container">
                                     <div class="title-wrapper">
-                                        <p class="song-title">${escapeHtml(song.title)}</p>
+                                        <p class="song-title">${escapeHtml(song.title)}</p>${bpmTag(song.id)}
                                         ${song.hasVideo ? '<span class="video-tag">(Video)</span>' : ''}
                                         ${song.explicit ? '<span class="explicit-badge">E</span>' : ''}
                                     </div>
@@ -2164,7 +2165,7 @@ body.has-player { overflow: hidden; }
                         <div class="song-details">
                             <img src="${safeImageUrl(t.artwork)}" alt="" draggable="false">
                             <div class="text-container">
-                                <div class="title-wrapper"><p class="song-title">${escapeHtml(t.title)}</p>${t.hasVideo ? '<span class="video-tag">(Video)</span>' : ''}</div>
+                                <div class="title-wrapper"><p class="song-title">${escapeHtml(t.title)}</p>${bpmTag(t.id)}${t.hasVideo ? '<span class="video-tag">(Video)</span>' : ''}</div>
                                 <p class="song-artist">${escapeHtml(artistWithYear(t.artist, t.year))}</p>
                                 <div class="length-requester-row"><span class="length-text plain">Playlist</span></div>
                             </div>
@@ -2914,6 +2915,34 @@ body.has-player { overflow: hidden; }
         }
 
         // ---- Playback (same endpoints + 4s poll as admin.html) ----
+        // ---- BPM next to track names: DJ (Basic) mode only --------------------------------------------
+        // Tempo comes from /api/bpm (estimates, cached on the server). Rows get an empty tag straight away; the
+        // numbers are filled in once fetched, and remembered so re-renders don't flicker.
+        const bpmCache = new Map();        // Spotify track id -> rounded BPM, or 0 when none was found
+        const bpmAsked = new Set();        // ids already requested
+        function bpmOn() { return typeof managerBasicMode !== 'undefined' && managerBasicMode; }
+        function bpmText(id) { const b = id ? bpmCache.get(id) : 0; return b ? ' (' + b + 'bpm)' : ''; }
+        function bpmTag(id) { return (bpmOn() && id) ? '<span class="bpm-tag" data-bpm-id="' + escapeHtml(String(id)) + '">' + bpmText(id) + '</span>' : ''; }
+        function bpmFill() {
+            document.querySelectorAll('.bpm-tag[data-bpm-id]').forEach(el => { const t = bpmOn() ? bpmText(el.dataset.bpmId) : ''; if (el.textContent !== t) el.textContent = t; });
+        }
+        async function bpmRefresh() {
+            if (!bpmOn()) return;
+            const ids = [...new Set([...document.querySelectorAll('.bpm-tag[data-bpm-id]')].map(el => el.dataset.bpmId))]
+                .filter(id => /^[A-Za-z0-9]{22}$/.test(id) && !bpmCache.has(id) && !bpmAsked.has(id)).slice(0, 40);
+            if (ids.length) {
+                ids.forEach(id => bpmAsked.add(id));
+                try {
+                    const res = await fetch(eventUrl('/api/bpm?ids=' + ids.join(',')));
+                    const d = res.ok ? await res.json() : null;
+                    if (!d || !d.bpm) throw new Error('bpm unavailable');
+                    ids.forEach(id => { if (id in d.bpm) bpmCache.set(id, Number(d.bpm[id]) || 0); else bpmAsked.delete(id); });   // not answered: ask again later
+                } catch (e) { ids.forEach(id => bpmAsked.delete(id)); }
+            }
+            bpmFill();
+        }
+        setInterval(() => { bpmFill(); bpmRefresh(); }, 1500);
+
         let nowPlaying = null;          // last /api/now-playing payload + fetchedAt
         let nowPlayingTicker = null;
         let lastTrackId = null;
@@ -3039,7 +3068,7 @@ body.has-player { overflow: hidden; }
             const prevTrack = lastTrackId;
             nowPlaying = data ? Object.assign({}, data, { progressMs: data.progressMs || 0, durationMs: data.durationMs || 0, fetchedAt: Date.now() }) : null;
             if (nowPlaying && nowPlaying.connected && nowPlaying.title) {
-                $('pl-title').textContent = nowPlaying.title;
+                $('pl-title').innerHTML = escapeHtml(nowPlaying.title) + bpmTag(nowPlaying.trackId);
                 $('pl-artist').textContent = nowPlaying.artist || '';
                 $('pl-art').src = nowPlaying.artwork ? safeImageUrl(nowPlaying.artwork) : 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
                 // A new track starting while music is playing means the songs are crossfading
@@ -3402,7 +3431,7 @@ body.has-player { overflow: hidden; }
             const art = safeImageUrl(nowPlaying.artwork);
             const artEl = $('now-playing-artwork');
             if (artEl.getAttribute('src') !== art) artEl.setAttribute('src', art);
-            $('now-playing-title').textContent = nowPlaying.title;
+            $('now-playing-title').innerHTML = escapeHtml(nowPlaying.title) + bpmTag(nowPlaying.trackId);
             $('now-playing-artist').textContent = nowPlaying.artist || '';
             $('now-playing-live-dot').classList.toggle('is-paused', !nowPlaying.isPlaying);
             paintMiniProgress();
