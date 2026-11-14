@@ -1453,6 +1453,22 @@
             const ageMs = c.isPlaying ? Math.max(0, serverNow - (c.updatedAt || serverNow)) : 0;
             const newBase = receivedAt - ((c.progressMs || 0) + ageMs);
             const isPlaying = !!c.isPlaying;
+            const prevClock = songClock;
+            if (prevClock && isPlaying) {
+                if (prevClock.predicted && prevClock.trackId === c.trackId) {
+                    // We cut on our own prediction; now the real position is in. How far off was it?
+                    const off = newBase - prevClock.base;
+                    if (Math.abs(off) > 2500) mvMixNote('the predicted song change was ' + (off / 1000).toFixed(1) + 's off');
+                    else if (Math.abs(off) <= 1500) mvMixNatural();
+                } else if (prevClock.trackId !== c.trackId && !prevClock.predicted) {
+                    const firstPos = (c.progressMs || 0) + ageMs;
+                    const prevPos = prevClock.isPlaying ? (receivedAt - prevClock.base) : prevClock.pausedPosMs;
+                    const prevRem = prevClock.durationMs ? prevClock.durationMs - prevPos : null;
+                    if (firstPos > 5000) mvMixNote('a new song started ' + (firstPos / 1000).toFixed(0) + 's in');
+                    else if (prevRem !== null && prevRem > 8000) mvMixNote('a song ended ' + (prevRem / 1000).toFixed(0) + 's before its full length');
+                    else if (prevRem !== null && prevRem <= 6000) mvMixNatural();
+                }
+            }
             if (!songClock || songClock.trackId !== c.trackId || songClock.isPlaying !== isPlaying || songClock.predicted ||
                 Math.abs(newBase - songClock.base) > MV_CLOCK_RESYNC_THRESHOLD_MS) {
                 songClock = { base: newBase, isPlaying, pausedPosMs: c.progressMs || 0, trackId: c.trackId, durationMs: c.durationMs || 0 };
@@ -1465,6 +1481,25 @@
             if (!songClock || !songClock.durationMs) return null;
             const pos = songClock.isPlaying ? (Date.now() - songClock.base) : songClock.pausedPosMs;
             return songClock.durationMs - pos;
+        }
+
+        // ---- Songs that are trimmed or cut short (Spotify Mix) ------------------------------------------
+        // The video follows the song's REAL position (+ the catalog start time and skip points), and that stays
+        // right however Spotify trims a song. What breaks is PREDICTING: "this song plays to its full length, and
+        // the next one starts at 0:00". When a changeover shows that doesn't hold (a song starting part-way in,
+        // ending early, or a predicted cut that landed seconds off), predicting is switched off for a while: the
+        // next video is parked as early as possible and cut to only once Spotify really reports the new song,
+        // at the position it is really at. Three normal changeovers in a row switch prediction back on.
+        let mvMixUntil = 0, mvMixNaturalStreak = 0;
+        const MV_MIX_HOLD_MS = 30 * 60 * 1000;
+        function mvMixOn() { return Date.now() < mvMixUntil; }
+        function mvMixNote(why) {
+            mvMixUntil = Date.now() + MV_MIX_HOLD_MS; mvMixNaturalStreak = 0;
+            console.log('[MV-MIX] trimmed or cut-short songs detected (' + why + '): not predicting song changes');
+        }
+        function mvMixNatural() {
+            if (!mvMixOn()) return;
+            if (++mvMixNaturalStreak >= 3) { mvMixUntil = 0; mvMixNaturalStreak = 0; console.log('[MV-MIX] songs are playing in full again: predicting song changes'); }
         }
 
         function standbyDisarm() {
@@ -1505,7 +1540,7 @@
             if (!standby) {
                 if (!wanted) return;
                 const rem = songRemainingMs();
-                if (rem !== null && rem > MV_ARM_LEAD_MS) return;
+                if (!mvMixOn() && rem !== null && rem > MV_ARM_LEAD_MS) return;   // (trimmed songs can end long before their full length: be ready early)
                 standbyArm(nx);
                 return;
             }
@@ -1681,6 +1716,7 @@
         // plays next - the parked video, or straight to the queue/ambient
         // screen if the next song has no video. Only on fresh, consistent data.
         function mvPredictedSwitchCheck() {
+            if (mvMixOn()) return;   // songs are being trimmed: only cut when Spotify really reports the change
             if (!songClock || !songClock.isPlaying || !songClock.durationMs) return;
             if (mvExpectedSwitch) return;
             if (!mvLastPoll || Date.now() - mvLastPollAt > MV_PREDICT_FRESH_MS) return;
@@ -2377,12 +2413,14 @@
         // one are just whichever slot happens to be active at the moment
         // this runs. The logo itself only tracks mvRevealed, so it's up
         // for the whole time any video is genuinely on screen.
+        let mvInfoTrackId = null, mvInfoShownAt = 0;
         function mvUpdateOverlay() {
             const logo = document.getElementById('mv-logo');
             const pop = document.getElementById('mv-info-pop');
             if (!mvRevealed) {
                 logo.classList.remove('is-visible');
                 pop.classList.remove('is-visible');
+                mvInfoTrackId = null;
                 return;
             }
             logo.classList.add('is-visible');
@@ -2393,15 +2431,20 @@
                 try { cur = st.yt.getCurrentTime(); } catch (e) { /* not ready yet */ }
                 try { dur = st.yt.getDuration(); } catch (e) { /* not ready yet */ }
             }
-            const nearStart = cur !== null && cur <= MV_INFO_POPUP_WINDOW_SEC;
-            // End side. The video is cut at (song end - crossfade + switch delay), which is
-            // usually well before the YouTube file itself ends (outros, longer uploads), so
-            // the song clock decides, with the video's own end as a fallback.
-            const cutLeadMs = Math.max(0, MV_ASSUMED_CROSSFADE_MS - MV_SWITCH_AFTER_SONG_START_MS);
-            const songRem = songRemainingMs();
-            const nearSongEnd = songRem !== null && songRem <= MV_INFO_POPUP_WINDOW_SEC * 1000 + cutLeadMs;
-            const nearEnd = nearSongEnd || (cur !== null && dur > 0 && (dur - cur) <= MV_INFO_POPUP_WINDOW_SEC);
-            const prev = (mvInfoPreview && Date.now() < mvInfoPreview.until) ? mvInfoPreview : null;
+            // The song info follows the VIDEO, never the song's clock (so trimmed songs, e.g. Spotify Mix, can't move it):
+            // it shows for the first N seconds after this video appears on screen, and for the last N seconds of the
+            // video itself. (A re-sync or skip swaps in a copy of the same song, which does not restart the start window.)
+            if (mvInfoTrackId !== currentVideoTrackId) { mvInfoTrackId = currentVideoTrackId; mvInfoShownAt = Date.now(); }
+            const nearStart = Date.now() - mvInfoShownAt <= MV_INFO_POPUP_WINDOW_SEC * 1000;
+            const nearEnd = cur !== null && dur > 0 && (dur - cur) <= MV_INFO_POPUP_WINDOW_SEC;
+            // About to cut to the parked next video on our own prediction: show ITS song info MV_INFO_LEAD_BEFORE_SWITCH_MS before the switch.
+            let incoming = null;
+            if (standby && standby.status === 'parked' && !pendingSlot && !mvMixOn() && songClock && songClock.isPlaying && songClock.durationMs &&
+                standby.afterTrackId === songClock.trackId && (standby.startMs || 0) + mvVideoLeadMs >= 0) {
+                const cutIn = (songClock.base + songClock.durationMs - mvPlayLatencyMs) - Date.now();
+                if (cutIn <= MV_INFO_LEAD_BEFORE_SWITCH_MS && cutIn > -500) incoming = { title: standby.title, artist: standby.artist, year: standby.year };
+            }
+            const prev = (mvInfoPreview && Date.now() < mvInfoPreview.until) ? mvInfoPreview : incoming;
             if (nearStart || nearEnd || prev) {
                 document.getElementById('mv-info-title').innerText = prev ? (prev.title || mvTrackMeta.title || npLiveTitle) : (mvTrackMeta.title || npLiveTitle);
                 const artistText = prev ? (prev.artist || mvTrackMeta.artist || npLiveArtist) : (mvTrackMeta.artist || npLiveArtist);
@@ -3078,7 +3121,34 @@
             mvResyncWanted = { reason, notBefore };
             console.log('[MV-RESYNC] requested: ' + reason);
         }
+        // Read-only: is Spotify's reported position advancing at the speed of real time? (If a Mix tempo-adjusts a
+        // song's start or end, it won't.) Logs [MV-TEMPO] lines only; it changes nothing about the clock or the video.
+        const mvTempo = { trackId: null, samples: [], lastLogAt: 0 };
+        function mvTempoProbe(data) {
+            if (!data.enabled || !data.matched || !data.isPlaying || !data.trackId || !Number.isFinite(data.updatedAt)) { mvTempo.samples = []; return; }
+            if (mvTempo.trackId !== data.trackId) { mvTempo.trackId = data.trackId; mvTempo.samples = []; }
+            const last = mvTempo.samples[mvTempo.samples.length - 1];
+            if (last && last.u === data.updatedAt) return;                       // same Spotify reading as the previous poll
+            const now = Date.now();
+            const serverNow = Number.isFinite(data.serverNow) ? data.serverNow : now;
+            mvTempo.samples.push({ u: data.updatedAt, t: now, nb: now - ((data.progressMs || 0) + Math.max(0, serverNow - data.updatedAt)) });
+            while (mvTempo.samples.length > 10 || (mvTempo.samples.length && now - mvTempo.samples[0].t > 45000)) mvTempo.samples.shift();
+            const n = mvTempo.samples.length;
+            if (n < 5 || now - mvTempo.samples[0].t < 12000) return;
+            let st = 0, sn = 0;
+            for (const q of mvTempo.samples) { st += q.t; sn += q.nb; }
+            const mt = st / n, mn = sn / n;
+            let num = 0, den = 0;
+            for (const q of mvTempo.samples) { num += (q.t - mt) * (q.nb - mn); den += (q.t - mt) * (q.t - mt); }
+            const slope = den ? num / den : 0;                                   // 0 = Spotify's position runs at exactly real time
+            if (Math.abs(slope) >= 0.02 && now - mvTempo.lastLogAt > 10000) {
+                mvTempo.lastLogAt = now;
+                console.log('[MV-TEMPO] Spotify\'s position is advancing at ' + ((1 - slope) * 100).toFixed(1) + '% of real time over the last ' +
+                    Math.round((now - mvTempo.samples[0].t) / 1000) + 's, at song position ' + Math.round(((data.progressMs || 0)) / 1000) + 's of ' + Math.round((data.durationMs || (data.clock && data.clock.durationMs) || 0) / 1000) + 's');
+            }
+        }
         function mvNotePollForResync(data) {
+            mvTempoProbe(data);
             if (typeof data.visualsSig === 'string') {
                 if (mvVisualsSig !== null && data.visualsSig !== mvVisualsSig) mvWantResync('visuals settings changed');
                 mvVisualsSig = data.visualsSig;
