@@ -3123,7 +3123,7 @@
         }
         // Read-only: is Spotify's reported position advancing at the speed of real time? (If a Mix tempo-adjusts a
         // song's start or end, it won't.) Logs [MV-TEMPO] lines only; it changes nothing about the clock or the video.
-        const mvTempo = { trackId: null, samples: [], lastLogAt: 0 };
+        const mvTempo = { trackId: null, samples: [], lastLogAt: 0, anchorLoggedFor: null };
         function mvTempoProbe(data) {
             if (!data.enabled || !data.matched || !data.isPlaying || !data.trackId || !Number.isFinite(data.updatedAt)) { mvTempo.samples = []; return; }
             if (mvTempo.trackId !== data.trackId) { mvTempo.trackId = data.trackId; mvTempo.samples = []; }
@@ -3131,10 +3131,23 @@
             if (last && last.u === data.updatedAt) return;                       // same Spotify reading as the previous poll
             const now = Date.now();
             const serverNow = Number.isFinite(data.serverNow) ? data.serverNow : now;
-            mvTempo.samples.push({ u: data.updatedAt, t: now, nb: now - ((data.progressMs || 0) + Math.max(0, serverNow - data.updatedAt)) });
+            const nbNow = now - ((data.progressMs || 0) + Math.max(0, serverNow - data.updatedAt));
+            // diff = how far the song clock the video follows is ahead of (+) or behind (-) what Spotify's reading says
+            mvTempo.samples.push({ u: data.updatedAt, t: now, nb: nbNow, diff: (mvClock && mvClock.trackId === data.trackId && mvClock.isPlaying) ? nbNow - mvClock.base : null });
             while (mvTempo.samples.length > 10 || (mvTempo.samples.length && now - mvTempo.samples[0].t > 45000)) mvTempo.samples.shift();
             const n = mvTempo.samples.length;
             if (n < 5 || now - mvTempo.samples[0].t < 12000) return;
+            // One line per song: is the clock the video follows sitting where Spotify's readings say the song is?
+            if (mvTempo.anchorLoggedFor !== data.trackId) {
+                const ds = mvTempo.samples.map(q => q.diff).filter(d => d !== null);
+                if (ds.length >= 5) {
+                    const mean = ds.reduce((a, b) => a + b, 0) / ds.length;
+                    const sd = Math.sqrt(ds.reduce((a, b) => a + (b - mean) * (b - mean), 0) / ds.length);
+                    mvTempo.anchorLoggedFor = data.trackId;
+                    console.log('[MV-ANCHOR] "' + (data.title || data.trackId) + '": the video clock is ' + (mean >= 0 ? 'AHEAD of' : 'BEHIND') + ' Spotify\'s position by ' + Math.abs(Math.round(mean)) +
+                        'ms (spread ' + Math.round(sd) + 'ms over ' + ds.length + ' readings)' + (mvMixOn() ? ' [mix mode on]' : ''));
+                }
+            }
             let st = 0, sn = 0;
             for (const q of mvTempo.samples) { st += q.t; sn += q.nb; }
             const mt = st / n, mn = sn / n;
