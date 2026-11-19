@@ -175,7 +175,7 @@ function stripDiacritics(s) {
 // "The Beatles" / "Hey Jude - Remastered 2015".
 const clean = (v) => stripDiacritics(v).toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '');
 
-function coreTitle(song) {
+function coreTitleText(song) {
     let t = String(song || '').trim();
     // Drop trailing "(...)" / "[...]" groups, but never the whole title
     // (e.g. "(I Can't Get No) Satisfaction" keeps its opening bracket).
@@ -189,8 +189,9 @@ function coreTitle(song) {
     if (unfeat) t = unfeat;
     const dash = t.split(/\s[-\u2013\u2014]\s/)[0].trim();
     if (dash) t = dash;
-    return clean(t);
+    return t;
 }
+function coreTitle(song) { return clean(coreTitleText(song)); }
 
 function artistKeys(artist) {
     return String(artist || '')
@@ -203,6 +204,80 @@ function artistKeys(artist) {
 function titleKey(artist, song) {
     const a = artistKeys(artist)[0], t = coreTitle(song);
     return a && t ? `${a}|${t}` : '';
+}
+// A row typed with its version tag but no bracket or dash ("Song Re-edit", "Song Extended Mix") would never be found by
+// its core title. Index it a second time with those trailing version words dropped. rowMatchesVersion still compares
+// the version words, so this only lets such rows be FOUND; it can't make a wrong version match.
+function coreTitleLoose(song) {
+    const tokens = coreTitleText(song).toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+    const droppable = w => VERSION_MARKERS[w] || w === 're' || w === 'original' || w === 'version';
+    while (tokens.length > 1 && droppable(tokens[tokens.length - 1])) tokens.pop();
+    return clean(tokens.join(' '));
+}
+function titleKeyLoose(artist, song) {
+    const a = artistKeys(artist)[0], t = coreTitleLoose(song);
+    return a && t ? `${a}|${t}` : '';
+}
+
+// ---------- "is this the same VERSION of the song?" --------------------------
+// Matching by title + artist deliberately ignores decorations ("- Remastered 2011", "(feat. X)", "- Single
+// Version"), so a row would also fire for a different recording: a remix, a re-edit, a live cut, or the version
+// with/without a guest artist. Different recordings have different starts and lengths, so a video made for one
+// cannot sync to the other. These checks stop that; they apply to the Title+Artist tiers only (Spotify ID and
+// ISRC matches are already exact).
+const VERSION_MARKERS = { remix: 'remix', rmx: 'remix', remixed: 'remix', edit: 'edit', edited: 'edit', rework: 'rework', reworked: 'rework',
+    bootleg: 'bootleg', flip: 'flip', vip: 'vip', mashup: 'mashup', live: 'live', acoustic: 'acoustic', instrumental: 'instrumental',
+    extended: 'extended', sped: 'spedup', speedup: 'spedup', slowed: 'slowed', reverb: 'reverb', nightcore: 'nightcore', cover: 'cover',
+    demo: 'demo', stripped: 'stripped', piano: 'piano', orchestral: 'orchestral', acapella: 'acapella', acappella: 'acapella',
+    mix: 'mix', club: 'club', radio: 'radio', dub: 'dub', dance: 'dance' };
+// The whole title is scanned, so a tag typed with or without brackets / a dash counts the same, on both sides.
+// "Remastered", "Single Version", "Album Version" are the SAME recording and don't count.
+function versionKey(song) {
+    const tokens = String(song || '').toLowerCase().split(/[^a-z]+/).filter(Boolean);
+    const found = new Set();
+    tokens.forEach((w, i) => {
+        if (!VERSION_MARKERS[w]) return;
+        if (w === 'mix' && tokens[i - 1] === 'original') return;     // "Original Mix" is the plain song
+        found.add(VERSION_MARKERS[w]);
+    });
+    return [...found].sort().join('+');
+}
+// Artists named in "(feat. X)" / "ft. X" / "featuring X" in a title.
+function featKeysFromTitle(title) {
+    const t = String(title || '');
+    const out = [];
+    const m = t.match(/[(\[]\s*(?:feat|ft|featuring|with)\b\.?\s+([^)\]]+)[)\]]/i) || t.match(/\s(?:feat|ft|featuring)\b\.?\s+(.+)$/i);
+    if (m) for (const k of artistKeys(m[1])) out.push(k);
+    return out;
+}
+// Everyone credited on a row (Artist box + any "(feat. X)" / "ft. X" in its title) and on the playing track.
+// A row lists ALL the artists in its video, so the two sets must be the same: a video that has a guest artist is
+// not the version without them, and the reverse.
+function creditSet(artist, title) {
+    return new Set([...artistKeys(artist), ...featKeysFromTitle(title)]);
+}
+// np: the playing track { trackId, isrc, title, artist }.
+function rowMatchesVersion(row, np) {
+    const nIsrc = parseIsrc(np.isrc) || '';
+    if (row.spotifyId && np.trackId && row.spotifyId !== np.trackId) return false;   // pinned to a different Spotify track (an ISRC match would already have won)
+    if (row.isrc && nIsrc && row.isrc !== nIsrc) return false;                      // pinned to a different recording
+    if (versionKey(row.song) !== versionKey(np.title)) return false;                 // remix / re-edit / live / ... on only one side
+    const rowSet = creditSet(row.artist, row.song);
+    if (rowSet.size) {
+        const playSet = creditSet(np.artist, np.title);
+        let same = rowSet.size === playSet.size;
+        if (same) for (const k of rowSet) if (!playSet.has(k)) { same = false; break; }
+        if (!same) {
+            // Names run together because a comma was missed ("Dua Lipa DaBaby"): every artist on the track must be inside
+            // the row's text, with nothing left over. ("the" is ignored on both sides.)
+            const strip = x => x.replace(/the/g, '');
+            const blob = strip([...rowSet].join(''));
+            const keys = [...playSet].map(strip);
+            same = keys.length > 0 && keys.every(k => blob.includes(k)) && blob.length === keys.reduce((n, k) => n + k.length, 0);
+        }
+        if (!same) return false;                                                     // an artist is on one side only
+    }
+    return true;
 }
 
 function clampStr(v, max) {
@@ -293,7 +368,11 @@ module.exports = function createVideoCatalog({ redis }) {
             push(bySpotify, row.spotifyId, row);
             push(byIsrc, row.isrc, row);
             push(byTitle, titleKey(row.artist, row.song), row);
+            const lk = titleKeyLoose(row.artist, row.song);
+            if (lk && lk !== titleKey(row.artist, row.song)) push(byTitle, lk, row);
             push(byCore, coreTitle(row.song), row);
+            const lc = coreTitleLoose(row.song);
+            if (lc && lc !== coreTitle(row.song)) push(byCore, lc, row);
         }
         return { loadedAt: Date.now(), rows, bySpotify, byIsrc, byTitle, byCore };
     }
@@ -368,7 +447,9 @@ module.exports = function createVideoCatalog({ redis }) {
 
     // np: { trackId, isrc, title, artist }. A row only needs Title + Artist and
     // a YouTube ID. Spotify ID and ISRC are optional extras that pin an exact
-    // version of a song. Tiers, strongest first: Spotify ID, ISRC, Title+Artist
+    // version of a song: a row that has one is used for THAT recording only, and
+    // the Title+Artist tiers also refuse a different version (remix, re-edit,
+    // live, a track with or without a guest artist) - see rowMatchesVersion. Tiers, strongest first: Spotify ID, ISRC, Title+Artist
     // (any of the playing artists), then Title alone for rows whose Artist is
     // blank. The first tier holding a usable row wins; a row a person switched
     // OFF stops the search; a row with no YouTube ID yet does not block a
@@ -383,11 +464,11 @@ module.exports = function createVideoCatalog({ redis }) {
                        ['isrc', st.byIsrc.get(parseIsrc(n.isrc) || '') || []]];
         const titleHits = [];
         for (const a of artistKeys(n.artist)) {
-            for (const r of (st.byTitle.get(`${a}|${coreTitle(n.title)}`) || [])) if (!titleHits.includes(r)) titleHits.push(r);
+            for (const r of (st.byTitle.get(`${a}|${coreTitle(n.title)}`) || [])) if (!titleHits.includes(r) && rowMatchesVersion(r, n)) titleHits.push(r);
         }
         tiers.push(['title', titleHits]);
         const core = coreTitle(n.title);
-        tiers.push(['title_only', core ? (st.byCore.get(core) || []).filter(r => !artistKeys(r.artist).length) : []]);
+        tiers.push(['title_only', core ? (st.byCore.get(core) || []).filter(r => !artistKeys(r.artist).length && rowMatchesVersion(r, n)) : []]);
         let noVideo = null;
         for (const [via, list] of tiers) {
             if (!list.length) continue;
