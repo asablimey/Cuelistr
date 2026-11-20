@@ -10,9 +10,10 @@ const events = require('./eventStore');
 // on /master.
 const videoCatalog = require('./videoCatalog')({ redis: events.redis });
 // The old automatic pipeline (YouTube search -> ytdl -> ffmpeg -> audio
-// cross-correlation -> frame checks) is OFF by default. Set MV_AUTO_MATCH=1 in
-// the environment to let it run as a fallback when the catalog has no row.
-const MV_AUTO_MATCH = process.env.MV_AUTO_MATCH === '1';
+// cross-correlation -> frame checks) is permanently OFF: the only music videos
+// that ever play are the ones in the catalog. (It used to be switchable with the
+// MV_AUTO_MATCH environment variable; that variable is now ignored.)
+const MV_AUTO_MATCH = false;
 // @distube/ytdl-core checks GitHub for its own updates on require by
 // default - harmless normally, but seen 403'ing in production (GitHub
 // rate-limiting the check itself) and adds noise/latency for something
@@ -6295,7 +6296,7 @@ app.post('/e/:slug/api/admin/reorder', (req, res) => {
 //      Spotify's API directly every few seconds.
 const spotifyErrLoggedAt = new Map();
 const spotifyQueueErrLoggedAt = new Map();
-const spotifyAccountCache = new Map(); // slug -> { name, at } (diagnostics only)
+
 async function syncNowPlayingForEvent(event) {
     const token = await getDjAccessToken(event);
     if (!token) {
@@ -7075,6 +7076,7 @@ function lyricsCleanTitle(title) {
         .replace(/\s*[\(\[]\s*(?:remaster(?:ed)?|live|mono|stereo|radio edit|single version|album version|deluxe)[^\)\]]*[\)\]]/ig, '')
         .replace(/\s+/g, ' ').trim();
 }
+function lyricsNorm(x) { return String(x || '').toLowerCase().replace(/\([^)]*\)|\[[^\]]*\]/g, ' ').replace(/[^\p{L}\p{N}]+/gu, ' ').trim(); }
 function lyricsPrimaryArtist(artist) {
     return String(artist || '').split(/\s*(?:,|&|;|\bfeat\.?\b|\bft\.?\b|\bfeaturing\b|\bx\b|\band\b)\s*/i)[0].trim() || String(artist || '').trim();
 }
@@ -7104,8 +7106,15 @@ async function fetchSyncedLyrics(title, artist, durationMs) {
     for (const t of titles) for (const a of artists) {
         const list = await lrclibJson(`https://lrclib.net/api/search?track_name=${encodeURIComponent(t)}&artist_name=${encodeURIComponent(a)}`);
         if (!Array.isArray(list)) continue;
-        const best = list.filter(usable)
-            .sort((x, y) => Math.abs((Number(x.duration) || dur) - dur) - Math.abs((Number(y.duration) || dur) - dur))[0];
+        // Several uploads can exist for one song (original, translations, romanisations) with near-identical lengths, and
+        // which one came first in the list could change from day to day. Pick deterministically: exact title and artist
+        // match first, then closest length, then the OLDEST upload (the original is normally uploaded before any translation).
+        const nt = lyricsNorm(t), na = lyricsNorm(a);
+        const score = r => (lyricsNorm(r.trackName) === nt ? 4 : 0) + (lyricsNorm(r.artistName) === na ? 4 : (na && lyricsNorm(r.artistName).includes(na) ? 2 : 0));
+        const best = list.filter(usable).sort((x, y) =>
+            (score(y) - score(x)) ||
+            (Math.abs((Number(x.duration) || dur) - dur) - Math.abs((Number(y.duration) || dur) - dur)) ||
+            ((Number(x.id) || Infinity) - (Number(y.id) || Infinity)))[0];
         if (best) return parseLrc(best.syncedLyrics);
     }
     return null;
@@ -7371,15 +7380,21 @@ app.listen(PORT, async () => {
     // eats a multi-second model-load cold start. A failure here is logged
     // once and clearly, rather than silently surfacing later as every
     // checkFrameSafety call quietly reporting "not flagged".
-    let fullInstall = true;
-    try { require.resolve('nsfwjs'); require.resolve('@tensorflow/tfjs-node'); } catch (e) { fullInstall = false; }
-    if (!fullInstall) {
-        console.log('[SERVER] Basic install detected (music-video packages not present) - skipping moderation model and music-video features. Events in Full mode need the full package.json.');
-    } else try {
-        await getNsfwModel();
-        console.log('[SERVER] NSFWJS moderation model loaded from', NSFW_MODEL_PATH);
-    } catch (e) {
-        console.error('[SERVER] NSFWJS model failed to load - moderation checks will report "not flagged" (i.e. moderation is effectively OFF) until this is fixed. Run `node scripts/fetch-nsfw-model.js` and redeploy. Error:', e.message);
+    // The frame-moderation model only served the old automatic video matching. With catalog-only videos it isn't
+    // needed (family mode uses each catalog row's own NSFW flag), so it is not loaded.
+    if (!MV_AUTO_MATCH) {
+        console.log('[SERVER] Music videos come from the catalog only: no automatic matching, and no moderation model is loaded.');
+    } else {
+        let fullInstall = true;
+        try { require.resolve('nsfwjs'); require.resolve('@tensorflow/tfjs-node'); } catch (e) { fullInstall = false; }
+        if (!fullInstall) {
+            console.log('[SERVER] Basic install detected (music-video packages not present) - skipping moderation model and music-video features. Events in Full mode need the full package.json.');
+        } else try {
+            await getNsfwModel();
+            console.log('[SERVER] NSFWJS moderation model loaded from', NSFW_MODEL_PATH);
+        } catch (e) {
+            console.error('[SERVER] NSFWJS model failed to load - moderation checks will report "not flagged" (i.e. moderation is effectively OFF) until this is fixed. Run `node scripts/fetch-nsfw-model.js` and redeploy. Error:', e.message);
+        }
     }
     // Bring every event with the Music Scheduler on back into memory, so its
     // playlist switches keep firing after a restart/redeploy even if nobody has
