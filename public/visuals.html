@@ -2474,8 +2474,14 @@
         // (and more precise) each correction becomes.
         const MV_NUDGE_MAX_DEV = 0.25; // fastest correction (same ceiling as the old flat 0.75x/1.25x)
         const MV_NUDGE_MIN_DEV = 0.03; // gentlest correction, used right at the edge of the target
+        // Scale the nudge across a WIDE drift range. It used to scale only between MV_NUDGE_START_MS (60ms) and
+        // MV_NUDGE_STOP_MS (25ms), a 35ms span, so ANY drift past 60ms got the full 25% (0.75x / 1.25x): the video
+        // lurched slower or faster for ~0.8s, overshot past zero, and lurched the other way - a constant
+        // slow-fast-slow stutter. Now the deviation grows with the drift, reaching the full ceiling only at
+        // MV_NUDGE_FULL_MS, so a small drift gets a gentle, invisible correction that settles without overshooting.
+        const MV_NUDGE_FULL_MS = 600;
         function mvNudgeDeviationFor(absMs) {
-            const range = MV_NUDGE_START_MS - MV_NUDGE_STOP_MS;
+            const range = MV_NUDGE_FULL_MS - MV_NUDGE_STOP_MS;
             const t = range > 0 ? Math.min(1, Math.max(0, (absMs - MV_NUDGE_STOP_MS) / range)) : 1;
             return MV_NUDGE_MIN_DEV + t * (MV_NUDGE_MAX_DEV - MV_NUDGE_MIN_DEV);
         }
