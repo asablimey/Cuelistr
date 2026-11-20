@@ -6551,11 +6551,7 @@ async function syncAllLoadedEvents() {
                 const remaining = np0.durationMs - (np0.progressMs + (now - np0.progressCapturedAt));
                 nearSongEnd = remaining < 12000 && remaining > -6000;
             }
-            // A visuals display polled in the last few seconds: read Spotify every second so a skip, restart or
-            // pause/play reaches the screen quickly instead of up to 4s late.
-            const mvRt = event.musicVideoRuntime;
-            const displayWatching = !!(mvRt && mvRt.displayLastPolledAt && now - mvRt.displayLastPolledAt < 10000);
-            const interval = (waitingOnBoundary || nearSongEnd || displayWatching) ? SCHEDULER_FAST_POLL_MS : NOW_PLAYING_NORMAL_POLL_MS;
+            const interval = (waitingOnBoundary || nearSongEnd) ? SCHEDULER_FAST_POLL_MS : NOW_PLAYING_NORMAL_POLL_MS;
             const lastSynced = nowPlayingLastSyncedAt.get(event.slug) || 0;
             return now - lastSynced >= interval;
         });
