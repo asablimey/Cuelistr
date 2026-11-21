@@ -2213,6 +2213,8 @@
         // cold-open intro is a property of the specific video, not the
         // room's speakers.
         let mvIntroOffsetMs = 0;
+        let mvTimingSeen = { trackId: null, intro: 0, lead: 0 };   // last start time / offset seen for the song on screen (to spot edits)
+        let mvSwapTried = { id: null, at: 0 };
 
         // SYNC RULE - DO NOT CHANGE WITHOUT THE OWNER'S EXPLICIT SAY-SO
         // The start time a person sets in the master catalog (row.startMs) is set PRECISELY and is
@@ -2297,7 +2299,9 @@
             const list = mvParseSkips(data.skips);
             const sig = JSON.stringify(list);
             if (mvSkipsTrackId !== data.trackId || mvSkipsSig !== sig || !musicVideoActive) {
+                const editedWhilePlaying = mvSkipsTrackId === data.trackId && mvSkipsSig !== sig && musicVideoActive && mvRevealed;
                 if (mvSkipPending) mvSkipAbort('track or skip list changed');
+                if (editedWhilePlaying) mvWantQuickSeek('skip points edited in the catalogue', 0, { onlyIfOffMs: 80, userEdit: true });
                 mvSkipsTrackId = data.trackId; mvSkipsSig = sig; mvSkips = list;
                 mvSkipApplied = list.length ? mvSkipCountAt(mvSkipPosMs()) : 0;
             }
@@ -2436,7 +2440,14 @@
             // video itself. (A re-sync or skip swaps in a copy of the same song, which does not restart the start window.)
             if (mvInfoTrackId !== currentVideoTrackId) { mvInfoTrackId = currentVideoTrackId; mvInfoShownAt = Date.now(); }
             const nearStart = Date.now() - mvInfoShownAt <= MV_INFO_POPUP_WINDOW_SEC * 1000;
-            const nearEnd = cur !== null && dur > 0 && (dur - cur) <= MV_INFO_POPUP_WINDOW_SEC;
+            // End side: the last N seconds before this video leaves the screen. That is when the video file runs out, or -
+            // when songs play in full - when the display cuts to the next song's video (about the song's end, less the
+            // crossfade lead the cut happens at). With trimmed songs (mix mode) the cut can't be known ahead, so only the
+            // file's end and the 1-second pre-announcement apply.
+            const cutLeadMs = Math.max(0, MV_ASSUMED_CROSSFADE_MS - MV_SWITCH_AFTER_SONG_START_MS);
+            const songRemForCut = mvMixOn() ? null : songRemainingMs();
+            const nearCut = songRemForCut !== null && songRemForCut <= MV_INFO_POPUP_WINDOW_SEC * 1000 + cutLeadMs;
+            const nearEnd = nearCut || (cur !== null && dur > 0 && (dur - cur) <= MV_INFO_POPUP_WINDOW_SEC);
             // About to cut to the parked next video on our own prediction: show ITS song info MV_INFO_LEAD_BEFORE_SWITCH_MS before the switch.
             let incoming = null;
             if (standby && standby.status === 'parked' && !pendingSlot && !mvMixOn() && songClock && songClock.isPlaying && songClock.durationMs &&
@@ -2590,6 +2601,11 @@
                     }
                     mvSeekTo(activeSlot, mvTargetSec());
                 }
+            } else if (mvFromCatalog) {
+                // Catalog videos are timed by hand (start time + skip points) and simply play at normal speed: the old
+                // automatic player's speed-nudging only made them stutter. Real drift is handled by mvDriftWatch (a
+                // seamless fresh copy) or, if enormous, the hard seek above.
+                mvSetRate(activeSlot, 1);
             } else if (absMs > MV_NUDGE_START_MS || (st.currentRate !== 1 && absMs > MV_NUDGE_STOP_MS)) {
                 const dev = mvNudgeDeviationFor(absMs);
                 mvSetRate(activeSlot, driftMs < 0 ? 1 + dev : 1 - dev);
@@ -3116,6 +3132,52 @@
         const MV_RESYNC_FADE_MS = 500;             // a re-sync dissolves into the fresh copy over this long instead of cutting (song-to-song changes still hard-cut)
         let mvResyncFade = false;                  // set while a re-sync's fresh copy is loading; completeHandoff reads it
         let mvPlaySeen = { trackId: null, playing: null };
+        // ---- Quick re-sync: switch to a fresh, correctly placed copy (the video on screen is never seeked) ------
+        // For changes that need the video moved NOW: a timing edited in the catalogue, the song restarted or scrubbed,
+        // a resume from pause, coming back to the tab. onlyIfOffMs skips the whole thing when the video is already
+        // that close, so harmless changes cause no cut at all.
+        // Spotify's position readings are occasionally stale by a second or three. A move that is only a GUESS (not
+        // an edit you just made) must therefore be confirmed, never based on one reading: a jump waits to see the
+        // clock stay put, a re-anchor needs two agreeing readings, and guessed moves are limited to one per 5s.
+        let mvQuickSeekWanted = null, mvLastQuickSeekAt = 0;
+        function mvWantQuickSeek(reason, delayMs, opts) {
+            mvQuickSeekWanted = { reason, notBefore: Date.now() + (delayMs || 0), reanchor: !!(opts && opts.reanchor), onlyIfOffMs: (opts && opts.onlyIfOffMs) || 0,
+                userEdit: !!(opts && opts.userEdit), clockRef: (opts && opts.clockRef) || null };
+            console.log('[MV-SYNC] quick re-sync requested: ' + reason);
+        }
+        // True when the last two DIFFERENT Spotify readings agree on where the song is (within 500ms).
+        function mvReadingsAgree() {
+            const sm = mvTempo.samples;
+            return sm.length >= 2 && Math.abs(sm[sm.length - 1].nb - sm[sm.length - 2].nb) <= 500;
+        }
+        function mvMaybeQuickSeek(data) {
+            const w = mvQuickSeekWanted;
+            if (!w) return;
+            if (w.clockRef && w.clockRef !== mvClock) { mvQuickSeekWanted = null; console.log('[MV-SYNC] quick re-sync cancelled (' + w.reason + '): the clock moved again, so that was a one-off reading'); return; }
+            if (Date.now() < w.notBefore) return;
+            if (Date.now() > w.notBefore + 10000) { mvQuickSeekWanted = null; return; }
+            if (!w.userEdit && Date.now() - mvLastQuickSeekAt < 5000) { mvQuickSeekWanted = null; return; }
+            if (w.reanchor && !mvReadingsAgree()) return;                                    // wait for two steady readings (up to the 10s expiry)
+            if (!musicVideoActive || !mvRevealed || currentVideoTrackId !== data.trackId) { mvQuickSeekWanted = null; return; }
+            if (!data.isPlaying || !mvClock || !mvClock.isPlaying || pendingSlot) return;     // wait for playback / for the other handoff
+            const st = players[activeSlot];
+            if (!st || !st.ready || st.holdingEnd) { mvQuickSeekWanted = null; return; }
+            mvQuickSeekWanted = null;
+            if (w.reanchor) { mvClock = null; updateMvClock(data, mvLastPollAt || Date.now()); }   // newest (confirmed) Spotify reading becomes the anchor, as in a reload
+            mvSkipReconcile();
+            const cur = mvVideoPositionSec(), target = mvTargetSec();
+            if (w.onlyIfOffMs && cur !== null && Math.abs(cur - target) * 1000 <= w.onlyIfOffMs) {
+                console.log('[MV-SYNC] quick re-sync (' + w.reason + '): already within ' + w.onlyIfOffMs + 'ms, no seek needed');
+                return;
+            }
+            // Never seek the video that is on screen: that makes YouTube flash its pause button and a thin black line.
+            // Load a fresh copy in the hidden player, already in position, and dissolve to it instead.
+            console.log('[MV-SYNC] re-sync (' + w.reason + '): loading a fresh copy to switch to (video was at ' + (cur === null ? '?' : cur.toFixed(2)) + 's, should be at ' + target.toFixed(2) + 's)');
+            mvLastQuickSeekAt = Date.now();
+            mvResyncFade = true;
+            startMusicVideo(currentVideoId, currentVideoTrackId);
+        }
+
         const MV_RESYNC_AFTER_RESUME_SETTLE_MS = 3500;   // Spotify's progress is least reliable right after a resume: give it longer before taking the reading we re-anchor on
         // A re-sync also re-anchors the song clock on the NEWEST Spotify reading - exactly what a page reload does
         // (mvClock starts empty, the first reading becomes the anchor). Without this the clock keeps an anchor that
@@ -3169,11 +3231,11 @@
         function mvNotePollForResync(data) {
             mvTempoProbe(data);
             if (typeof data.visualsSig === 'string') {
-                if (mvVisualsSig !== null && data.visualsSig !== mvVisualsSig) mvWantResync('visuals settings changed');
+                // (a plain settings toggle never moves the video; a changed video offset is caught by the timing check in the poll)
                 mvVisualsSig = data.visualsSig;
             }
             const playing = !!data.isPlaying;
-            if (mvPlaySeen.trackId === data.trackId && mvPlaySeen.playing === false && playing) mvWantResync('resumed after pause', MV_RESYNC_AFTER_RESUME_SETTLE_MS);
+            if (mvPlaySeen.trackId === data.trackId && mvPlaySeen.playing === false && playing) mvWantQuickSeek('resumed after pause', 1500, { reanchor: true, onlyIfOffMs: 250 });
             mvPlaySeen = { trackId: data.trackId, playing };
             mvClockDisagreeWatch(data);
         }
@@ -3191,9 +3253,9 @@
             const serverNow = Number.isFinite(data.serverNow) ? data.serverNow : Date.now();
             const ageMs = Math.max(0, serverNow - (data.updatedAt || serverNow));
             const diff = (Date.now() - ((data.progressMs || 0) + ageMs)) - c.base;             // what this reading says the anchor should be, minus the anchor
-            if (Math.abs(diff) > 400 && (mvDis.n === 0 || Math.sign(diff) === mvDis.sign)) { mvDis.n++; mvDis.sign = Math.sign(diff); mvDis.sum += diff; }
+            if (Math.abs(diff) > 700 && (mvDis.n === 0 || Math.sign(diff) === mvDis.sign)) { mvDis.n++; mvDis.sign = Math.sign(diff); mvDis.sum += diff; }
             else { mvDis.n = 0; mvDis.sum = 0; return; }
-            if (mvDis.n < 5) return;
+            if (mvDis.n < 6) return;
             const avg = Math.round(mvDis.sum / mvDis.n);
             mvDis.n = 0; mvDis.sum = 0;
             const tid = data.trackId, now = Date.now();
@@ -3216,6 +3278,7 @@
             const rem = songRemainingMs();
             if (rem !== null && rem < MV_RESYNC_MIN_REMAINING_MS) { mvResyncWanted = null; mvResyncNote('skipped (song nearly over): ' + w.reason); return; }
             mvResyncWanted = null;
+            if (MV_RESYNC_REANCHOR_CLOCK && !mvReadingsAgree()) { mvResyncNote('waiting for two steady Spotify readings: ' + w.reason); return; }
             mvResyncNote('starting fresh load: ' + w.reason);
             if (MV_RESYNC_REANCHOR_CLOCK) { mvClock = null; updateMvClock(data, mvLastPollAt || Date.now()); }   // same as a reload: newest reading becomes the anchor
             mvSkipReconcile();   // the fresh copy starts past any skip points already behind us
@@ -3235,9 +3298,9 @@
             if (document.hidden) { if (mvHiddenAt === null) mvHiddenAt = Date.now(); return; }
             const away = mvHiddenAt === null ? 0 : Date.now() - mvHiddenAt;
             mvHiddenAt = null;
-            if (away >= MV_HIDDEN_RESYNC_MIN_MS) { mvWantResync('tab visible again after ' + Math.round(away / 1000) + 's'); pollMusicVideo(); }
+            if (away >= MV_HIDDEN_RESYNC_MIN_MS) { mvWantQuickSeek('tab visible again after ' + Math.round(away / 1000) + 's', 500, { reanchor: true, onlyIfOffMs: 250 }); pollMusicVideo(); }
         });
-        window.addEventListener('pageshow', e => { if (e.persisted) { mvWantResync('page restored from cache'); pollMusicVideo(); } });
+        window.addEventListener('pageshow', e => { if (e.persisted) { mvWantQuickSeek('page restored from cache', 500, { reanchor: true, onlyIfOffMs: 250 }); pollMusicVideo(); } });
 
         // ---- Safety net: drift that is not recovering ---------------------------------------------------
         // Read-only watcher fed by mvCheck. Normal speed-nudging keeps a playing video within ~60ms. If it
@@ -3254,9 +3317,11 @@
             if (settling || !mvRevealed || absMs <= 150) { mvWatch.since = null; return; }
             if (mvWatch.since === null) { mvWatch.since = now; mvWatch.startAbs = absMs; return; }
             const el = now - mvWatch.since;
+            // Catalog videos aren't speed-nudged, so nothing else closes a drift. Every correction is a cut, so only act on
+            // a clear, sustained one: a small drift is left alone rather than risk unsyncing a video that is fine.
             const stuck = (absMs > 1000 && el >= 2500)
-                || (absMs > 350 && el >= 6000 && absMs > mvWatch.startAbs * 0.6)
-                || el >= 15000;
+                || (mvFromCatalog ? (absMs > 600 && el >= 6000) : (absMs > 350 && el >= 6000 && absMs > mvWatch.startAbs * 0.6))
+                || (el >= 15000 && (!mvFromCatalog || absMs > 400));
             if (!stuck) return;
             mvWatch.since = null;
             const tid = currentVideoTrackId;
@@ -3406,6 +3471,14 @@
                         ? data.introOffsetMs : 0;
                     // A person picked this video in the catalog: never blacklist it for sync/load trouble, just retry.
                     mvFromCatalog = data.source === 'catalog';
+                    // Start time (catalogue) or the global offset (settings) edited while this song's video is on screen:
+                    // move the video there now instead of waiting for drift to be noticed.
+                    if (data.trackId && data.trackId === currentVideoTrackId && mvRevealed) {
+                        if (mvTimingSeen.trackId === data.trackId && (Math.abs(mvTimingSeen.intro - mvIntroOffsetMs) > 20 || Math.abs(mvTimingSeen.lead - mvVideoLeadMs) > 20)) {
+                            mvWantQuickSeek('timing changed (catalogue start time or video offset)', 0, { onlyIfOffMs: 60, userEdit: true });
+                        }
+                        mvTimingSeen = { trackId: data.trackId, intro: mvIntroOffsetMs, lead: mvVideoLeadMs };
+                    }
                 }
 
                 // Show Queue / Mute from the admin are deliberate - they win instantly.
@@ -3436,12 +3509,28 @@
 
                 if (data.enabled && data.matched && data.videoId) {
                     // Always fold the newest reading into the sync clock first.
+                    const clockBefore = mvClock, baseBefore = clockBefore ? clockBefore.base : 0;
                     updateMvClock(data, receivedAt);
+                    // The song's position jumped (restarted, scrubbed in Spotify): move the video straight away.
+                    if (clockBefore && mvClock !== clockBefore && clockBefore.trackId === mvClock.trackId && clockBefore.isPlaying && mvClock.isPlaying && Math.abs(mvClock.base - baseBefore) > 3000) {
+                        mvWantQuickSeek('song position jumped (restart or scrub)', 1400, { onlyIfOffMs: 300, clockRef: mvClock });
+                    }
                     mvSkipSync(data);
                     mvSoftMissSince = null;
                     const inProgressForThisTrack = musicVideoActive &&
                         (currentVideoTrackId === data.trackId || pendingTrackId === data.trackId);
-                    if (inProgressForThisTrack) mvMaybeResync(data);
+                    if (inProgressForThisTrack) {
+                        mvMaybeQuickSeek(data);
+                        mvMaybeResync(data);
+                        // The catalogue row for this song now points at a different YouTube video (edited in master): switch to it.
+                        if (currentVideoTrackId === data.trackId && currentVideoId && data.videoId !== currentVideoId && !pendingSlot && mvRevealed && !mvExpectedSwitch &&
+                            !(mvSwapTried.id === data.videoId && Date.now() - mvSwapTried.at < 15000)) {
+                            mvSwapTried = { id: data.videoId, at: Date.now() };
+                            console.log('[MV-SYNC] the catalogue video for this song changed: loading the new one');
+                            mvResyncFade = true;
+                            startMusicVideo(data.videoId, data.trackId);
+                        }
+                    }
                     if (!inProgressForThisTrack) {
                         // Negative start time (e.g. -0:05): nothing to show yet, so the queue /
                         // ambient screen carries on until the video's moment arrives.
