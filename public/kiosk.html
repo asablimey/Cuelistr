@@ -705,6 +705,66 @@
         }
         body.has-now-playing-bar { padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
 
+
+        /* ================= Idle screensaver =================
+           Shown after a stretch with no touches. Event/venue name on top, a very large QR code in the
+           middle, and the current song in a grey card at the bottom, over a layered green + white
+           background. A tap anywhere puts the normal kiosk back. */
+        #screensaver {
+            position: fixed; inset: 0; z-index: 200000; display: none; overflow: hidden;
+            flex-direction: column; align-items: center; justify-content: space-between;
+            padding: calc(3.5vh + env(safe-area-inset-top, 0px)) 5vw calc(3.5vh + env(safe-area-inset-bottom, 0px));
+            color: #fff; cursor: pointer; text-align: center;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background:
+                radial-gradient(120% 80% at 50% 0%, #0b6b30 0%, rgba(11,107,48,0) 60%),
+                linear-gradient(165deg, #0f8f40 0%, #1DB954 45%, #7fe3a6 78%, #e9fff1 100%);
+            -webkit-user-select: none; user-select: none;
+        }
+        #screensaver.on { display: flex; animation: ssFadeIn 0.6s ease both; }
+        @keyframes ssFadeIn { from { opacity: 0; } to { opacity: 1; } }
+        /* depth: big soft white glows and translucent tilted slabs that drift slowly behind everything */
+        #screensaver .ss-bg { position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+        #screensaver .ss-glow { position: absolute; border-radius: 50%; filter: blur(40px); will-change: transform; }
+        #screensaver .ss-glow.g1 { width: 70vmax; height: 70vmax; left: -22vmax; bottom: -30vmax; background: radial-gradient(circle, rgba(255,255,255,0.85) 0%, rgba(255,255,255,0) 68%); animation: ssDriftA 26s ease-in-out infinite alternate; }
+        #screensaver .ss-glow.g2 { width: 55vmax; height: 55vmax; right: -20vmax; top: 18vh; background: radial-gradient(circle, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0) 66%); animation: ssDriftB 32s ease-in-out infinite alternate; }
+        #screensaver .ss-glow.g3 { width: 48vmax; height: 48vmax; left: 8vmax; top: -18vmax; background: radial-gradient(circle, rgba(6,90,38,0.75) 0%, rgba(6,90,38,0) 68%); animation: ssDriftB 38s ease-in-out infinite alternate-reverse; }
+        #screensaver .ss-slab { position: absolute; border-radius: 6vmax; transform: rotate(-24deg); will-change: transform;
+            background: linear-gradient(135deg, rgba(255,255,255,0.30), rgba(255,255,255,0.04));
+            box-shadow: 0 2.5vmax 5vmax rgba(0,60,25,0.28), inset 0 0 0 1px rgba(255,255,255,0.28); }
+        #screensaver .ss-slab.s1 { width: 60vmax; height: 24vmax; left: -14vmax; top: 30vh; animation: ssSlabA 40s ease-in-out infinite alternate; }
+        #screensaver .ss-slab.s2 { width: 50vmax; height: 20vmax; right: -16vmax; bottom: 12vh; animation: ssSlabB 46s ease-in-out infinite alternate; background: linear-gradient(135deg, rgba(14,120,55,0.40), rgba(14,120,55,0.05)); }
+        @keyframes ssDriftA { from { transform: translate3d(0,0,0) scale(1); } to { transform: translate3d(7vmax,-5vmax,0) scale(1.12); } }
+        @keyframes ssDriftB { from { transform: translate3d(0,0,0) scale(1); } to { transform: translate3d(-6vmax,6vmax,0) scale(1.1); } }
+        @keyframes ssSlabA { from { transform: rotate(-24deg) translate3d(0,0,0); } to { transform: rotate(-20deg) translate3d(5vmax,-3vmax,0); } }
+        @keyframes ssSlabB { from { transform: rotate(-24deg) translate3d(0,0,0); } to { transform: rotate(-28deg) translate3d(-5vmax,3vmax,0); } }
+        @media (prefers-reduced-motion: reduce) { #screensaver .ss-glow, #screensaver .ss-slab { animation: none; } }
+
+        #screensaver .ss-top, #screensaver .ss-qr-wrap, #screensaver .ss-card { position: relative; z-index: 1; }
+        #screensaver .ss-top { max-width: 92vw; }
+        #screensaver .ss-event { font-size: clamp(1.8rem, 5.2vh, 3.6rem); font-weight: 800; line-height: 1.1; letter-spacing: -0.01em; text-shadow: 0 2px 14px rgba(0,50,20,0.55); overflow-wrap: anywhere; }
+        #screensaver .ss-venue { margin-top: 0.4vh; font-size: clamp(1rem, 2.6vh, 1.8rem); font-weight: 600; opacity: 0.92; text-shadow: 0 1px 8px rgba(0,50,20,0.55); }
+        #screensaver .ss-venue:empty { display: none; }
+        #screensaver .ss-qr-wrap {
+            width: min(60vh, 86vw); height: min(60vh, 86vw); background: #fff; border-radius: 3vmin; padding: 3vmin;
+            box-shadow: 0 2.2vmin 6vmin rgba(0,55,22,0.45), 0 0 0 0.8vmin rgba(255,255,255,0.35);
+            display: flex; align-items: center; justify-content: center;
+        }
+        #screensaver #ss-qr { width: 100%; height: 100%; }
+        #screensaver #ss-qr canvas { display: none !important; }
+        #screensaver #ss-qr img { width: 100% !important; height: 100% !important; display: block !important; object-fit: contain; image-rendering: pixelated; }
+        #screensaver .ss-card {
+            width: min(92vw, 760px); display: none; align-items: center; gap: 14px; padding: 12px 16px;
+            background: rgba(40,40,40,0.94); border-radius: 16px; text-align: left; overflow: hidden;
+            box-shadow: 0 1.4vmin 4vmin rgba(0,40,16,0.4);
+        }
+        #screensaver .ss-card.has-track { display: flex; }
+        #screensaver .ss-art { width: clamp(56px, 9vh, 92px); height: clamp(56px, 9vh, 92px); border-radius: 8px; object-fit: cover; background: #333; flex-shrink: 0; }
+        #screensaver .ss-meta { flex: 1; min-width: 0; }
+        #screensaver .ss-title { font-size: clamp(1rem, 2.6vh, 1.7rem); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        #screensaver .ss-artist { font-size: clamp(0.85rem, 2vh, 1.3rem); color: #c8c8c8; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        #screensaver .ss-bar { height: 5px; margin-top: 10px; background: rgba(255,255,255,0.18); border-radius: 3px; overflow: hidden; }
+        #screensaver .ss-fill { height: 100%; width: 0; background: var(--spotify-green); border-radius: 3px; }
     </style>
 </head>
 <body>
@@ -862,6 +922,7 @@
                     // easy to spot this tab among others on the kiosk device.
                 }
 
+                if (window.ssSetNames) ssSetNames(newName, data.venueName);
                 setupLocalCredits();
                 manageCountdownVisibility();
 
@@ -1267,11 +1328,14 @@
             const pct = Math.min(100, ((nowPlayingState.progressMs + elapsed) / nowPlayingState.durationMs) * 100);
             const fillEl = document.getElementById('now-playing-progress-fill');
             if (fillEl) fillEl.style.width = pct + '%';
+            const ssFill = document.getElementById('ss-progress-fill');
+            if (ssFill) ssFill.style.width = pct + '%';
         }
 
         function updateNowPlayingBar(data) {
             const bar = document.getElementById('now-playing-bar');
             if (!bar) return;
+            if (window.ssSetTrack) ssSetTrack(data);
 
             if (!data || !data.connected || !data.title) {
                 bar.classList.remove('is-visible');
@@ -1426,5 +1490,87 @@
             if (document.fonts && document.fonts.ready) document.fonts.ready.then(sync);
         })();
     </script>
+    <!-- Idle screensaver (see the #screensaver styles). Tap anywhere to dismiss. -->
+    <div id="screensaver" role="button" aria-label="Tap to return to the kiosk">
+        <div class="ss-bg"><div class="ss-glow g3"></div><div class="ss-glow g1"></div><div class="ss-glow g2"></div><div class="ss-slab s1"></div><div class="ss-slab s2"></div></div>
+        <div class="ss-top">
+            <div class="ss-event" id="ss-event">Cuelistr</div>
+            <div class="ss-venue" id="ss-venue"></div>
+        </div>
+        <div class="ss-qr-wrap"><div id="ss-qr"></div></div>
+        <div class="ss-card" id="ss-card">
+            <img class="ss-art" id="ss-art" src="" alt="">
+            <div class="ss-meta">
+                <div class="ss-title" id="ss-title"></div>
+                <div class="ss-artist" id="ss-artist"></div>
+                <div class="ss-bar"><div class="ss-fill" id="ss-progress-fill"></div></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Idle screensaver: after SCREENSAVER_IDLE_MS with no touch/key/mouse activity, cover the kiosk with
+        // the QR + now-playing screen. Any tap on it (or a key press) brings the normal kiosk straight back.
+        // Not used in Display-Only mode, where nobody is meant to touch the screen anyway.
+        (function () {
+            const SCREENSAVER_IDLE_MS = 60 * 1000;
+            const el = document.getElementById('screensaver');
+            let lastActivity = Date.now(), qrBuilt = false;
+
+            window.ssSetNames = function (name, venue) {
+                document.getElementById('ss-event').textContent = name || 'Cuelistr';
+                const v = (venue || '').trim();
+                document.getElementById('ss-venue').textContent = (v && v !== name) ? v : '';
+            };
+            window.ssSetTrack = function (data) {
+                const card = document.getElementById('ss-card');
+                if (!data || !data.connected || !data.title) { card.classList.remove('has-track'); return; }
+                document.getElementById('ss-title').textContent = data.title;
+                document.getElementById('ss-artist').textContent = data.artist || '';
+                const art = document.getElementById('ss-art');
+                if (data.artwork) { if (art.getAttribute('src') !== data.artwork) art.src = data.artwork; art.style.visibility = 'visible'; }
+                else art.style.visibility = 'hidden';
+                card.classList.add('has-track');
+            };
+
+            function buildQr() {
+                if (qrBuilt || !EVENT_SLUG) return;
+                const make = () => {
+                    try {
+                        const box = document.getElementById('ss-qr');
+                        box.innerHTML = '';
+                        new QRCode(box, { text: location.origin + '/e/' + EVENT_SLUG, width: 768, height: 768, correctLevel: QRCode.CorrectLevel.M });
+                        qrBuilt = true;
+                    } catch (e) { /* try again next time it shows */ }
+                };
+                if (typeof QRCode !== 'undefined') { make(); return; }
+                if (document.getElementById('ss-qr-lib')) return;
+                const sc = document.createElement('script');
+                sc.id = 'ss-qr-lib';
+                sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';
+                sc.onload = make;
+                sc.onerror = function () { sc.remove(); };   // offline: retried on the next idle
+                document.head.appendChild(sc);
+            }
+
+            function show() { buildQr(); el.classList.add('on'); }
+            function hide() { el.classList.remove('on'); lastActivity = Date.now(); }
+            const active = () => { if (!el.classList.contains('on')) lastActivity = Date.now(); };
+            ['pointerdown', 'pointermove', 'touchstart', 'keydown', 'wheel', 'scroll', 'input'].forEach(ev =>
+                document.addEventListener(ev, active, { passive: true, capture: true }));
+
+            // Waking: handled on 'click' (not pointerdown) so the same tap can't fall through to a button underneath.
+            el.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); hide(); });
+            document.addEventListener('keydown', function (e) { if (el.classList.contains('on')) { e.preventDefault(); hide(); } }, true);
+
+            setInterval(function () {
+                if (el.classList.contains('on')) { if (document.body.classList.contains('kiosk-display-only')) hide(); return; }
+                if (!EVENT_SLUG || document.body.classList.contains('kiosk-display-only')) return;
+                if (document.getElementById('kp-list')) return;                      // the event picker is open
+                if (Date.now() - lastActivity >= SCREENSAVER_IDLE_MS) show();
+            }, 1000);
+        })();
+    </script>
+
 </body>
 </html>
