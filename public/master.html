@@ -181,12 +181,9 @@
         table.vc input.dup { border-color: #e8a317 !important; }
         table.vc td.c-song { min-width: 170px; } table.vc td.c-artist { min-width: 140px; }
         table.vc td.c-spotify { min-width: 150px; } table.vc td.c-youtube { min-width: 120px; }
-        table.vc td.c-start { width: 92px; } table.vc td.c-isrc { min-width: 120px; } table.vc td.c-notes { min-width: 150px; }
+        table.vc td.c-start { width: 92px; } table.vc td.c-notes { min-width: 150px; }
         table.vc td.c-chk { width: 56px; text-align: center; }
-        table.vc td.c-act { white-space: nowrap; width: 150px; text-align: right; }
-        .act-btn { background: none; border: none; color: #a7a7a7; cursor: pointer; font-size: 1rem; padding: 4px 6px; border-radius: 6px; }
-        .act-btn:hover { background: var(--card-bg); color: white; }
-        .tick { color: var(--spotify-green); font-size: 0.8rem; opacity: 0; transition: opacity 0.3s; margin-right: 4px; }
+        .tick { color: var(--spotify-green); font-size: 0.8rem; opacity: 0; transition: opacity 0.3s; }
         .tick.on { opacity: 1; }
         tr.flash td { background: rgba(29,185,84,0.16); }
         tr.panel td { padding: 12px 14px; background: #141414; }
@@ -237,9 +234,21 @@
         table.vc input[type=text]:focus { border-color: #1a73e8; background: #fff; }
         table.vc input.bad { background: #fde8e8 !important; border-color: #d93025 !important; }
         table.vc input.dup { background: #fff7e0; border-color: #e8a317 !important; }
-        table.vc td.c-act { background: #fff; padding: 0 4px; }
-        .act-btn { color: #5f6368; }
+        /* Actions column: fixed-size icon buttons (SVG, so no emoji-font size differences), a fixed 34px row,
+           the saved-tick floats over the left so it can't push anything, and the column stays pinned to the
+           right edge while the grid scrolls sideways so the buttons are always reachable. */
+        table.vc td.c-act { background: #fff; padding: 0; position: sticky; right: 0; z-index: 2; white-space: nowrap; box-shadow: -1px 0 0 #e1e3e6; }
+        table.vc th:last-child { position: sticky; right: 0; z-index: 5; box-shadow: -1px 0 0 #c0c0c0; }
+        table.vc td.c-act .tick { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); pointer-events: none; }
+        .act-wrap { display: flex; align-items: center; justify-content: flex-end; flex-wrap: nowrap; gap: 2px; height: 34px; padding: 0 4px; }
+        .act-btn { flex: 0 0 auto; width: 32px; height: 30px; padding: 0; margin: 0; display: inline-flex; align-items: center; justify-content: center;
+            background: none; border: none; border-radius: 6px; color: #5f6368; cursor: pointer; line-height: 1; transition: background-color 0.12s ease, color 0.12s ease; }
+        .act-btn svg { display: block; width: 18px; height: 18px; pointer-events: none; }
         .act-btn:hover { background: #e8eaed; color: #202124; }
+        .act-btn:active { background: #dadce0; }
+        .act-btn.act-del:hover { background: #fce8e6; color: #c5221f; }
+        .act-btn:disabled { opacity: 0.45; cursor: default; }
+        tr.flash td.c-act { background: #e6f4ea !important; }
         tr.flash td { background: #e6f4ea !important; }
         tr.panel td { background: #f1f3f4; color: #202124; padding: 12px 14px; }
         tr.panel .panel-title { color: #5f6368; }
@@ -350,7 +359,7 @@
                 <summary>How this table works</summary>
                 <ul>
                     <li>Shared by every event, past and future. Each cell saves when you click away.</li>
-                    <li><b>A row only needs Title, Artist and the YouTube link/ID.</b> Spotify ID and ISRC are optional and only pin an exact version.</li>
+                    <li><b>A row only needs Title, Artist and the YouTube link/ID.</b> The Spotify ID is optional and only pins an exact version.</li>
                     <li>Paste a full Spotify or YouTube link into a cell and it becomes the ID. Paste a block from Google Sheets to fill rows downward from that cell (a header row is skipped).</li>
                     <li>The player matches songs by Title + Artist, ignoring things like "- Remastered" or "(feat. X)". No row, or Video OFF, means ambient visuals.</li>
                     <li><b>Start time</b> is how far into the YouTube video the song begins. If the video should begin <i>after</i> the song has started, put a minus in front, e.g. <b>-0:05</b> starts the video 5 seconds into the song. <b>Suggestive?</b>: answer YES if the video is suggestive in any way, NO if it is fine for all audiences. With Family mode on, only rows marked NO play; blank means not checked yet and is treated as suggestive.</li>
@@ -393,7 +402,7 @@
             <div class="vc-wrap">
                 <table class="vc">
                     <thead>
-                        <tr class="heads"><th class="rn" data-k="_num" onclick="vcSort('_num')" title="Catalog number. Click to sort by it.">#</th><th data-k="song" onclick="vcSort('song')">Title</th><th data-k="artist" onclick="vcSort('artist')">Artist</th><th data-k="spotifyId" onclick="vcSort('spotifyId')">Spotify link/ID</th><th data-k="youtubeId" onclick="vcSort('youtubeId')">Youtube Link/ID</th><th data-k="startMs" onclick="vcSort('startMs')">Start time</th><th data-k="enabled" onclick="vcSort('enabled')">Video ON/OFF</th><th data-k="nsfw" onclick="vcSort('nsfw')" title="Is the video suggestive in any way? YES = blocked in Family mode. NO = plays in Family mode. Blank = not checked yet (treated as suggestive).">Suggestive? YES/NO</th><th data-k="isrc" onclick="vcSort('isrc')">ISRC</th><th data-k="notes" onclick="vcSort('notes')">Notes</th><th data-k="kind" onclick="vcSort('kind')" title="What kind of video this is. If a song has several videos, Music video is preferred over Visualizer, then Lyric video, then Audio.">Video type</th><th class="nosort" title="Parts of the video to jump over while it plays (talking, skits, breaks the song does not have). Use VIDEO times, as ranges: 2:14-2:31, 3:40-3:52. The video skips each one seamlessly and stays in sync afterwards.">Skip points</th><th class="nosort"></th></tr>
+                        <tr class="heads"><th class="rn" data-k="_num" onclick="vcSort('_num')" title="Catalog number. Click to sort by it.">#</th><th data-k="song" onclick="vcSort('song')">Title</th><th data-k="artist" onclick="vcSort('artist')">Artist</th><th data-k="spotifyId" onclick="vcSort('spotifyId')">Spotify link/ID</th><th data-k="youtubeId" onclick="vcSort('youtubeId')">Youtube Link/ID</th><th data-k="startMs" onclick="vcSort('startMs')">Start time</th><th class="nosort" title="Parts of the video to jump over while it plays (talking, skits, breaks the song does not have). Use VIDEO times, as ranges: 2:14-2:31, 3:40-3:52. The video skips each one seamlessly and stays in sync afterwards.">Skip points</th><th data-k="enabled" onclick="vcSort('enabled')">Video ON/OFF</th><th data-k="nsfw" onclick="vcSort('nsfw')" title="Is the video suggestive in any way? YES = blocked in Family mode. NO = plays in Family mode. Blank = not checked yet (treated as suggestive).">Suggestive? YES/NO</th><th data-k="notes" onclick="vcSort('notes')">Notes</th><th data-k="kind" onclick="vcSort('kind')" title="What kind of video this is. If a song has several videos, Music video is preferred over Visualizer, then Lyric video, then Audio.">Video type</th><th class="nosort"></th></tr>
                     </thead>
                     <tbody id="vc-body"></tbody>
                 </table>
@@ -407,7 +416,7 @@
     <div class="vc-modal" id="vc-paste-modal">
         <div class="vc-modal-card">
             <h2 style="margin:0 0 6px;font-size:1.1rem">Paste rows from a spreadsheet</h2>
-            <p class="vc-help" style="margin-bottom:10px">Columns in this order: Title, Artist, Spotify link/ID, Youtube Link/ID, Start time, Video ON/OFF, Suggestive? YES/NO (YES = the video is suggestive), ISRC, Notes, Video type (Music video, Visualizer, Lyric video or Audio; optional). A header row is skipped. Spotify link/ID and ISRC can be left blank. Rows with a Spotify ID already in the catalog update that row.</p>
+            <p class="vc-help" style="margin-bottom:10px">Columns in this order: Title, Artist, Spotify link/ID, Youtube Link/ID, Start time, Skip points (optional, e.g. 2:14-2:31, 3:40-3:52), Video ON/OFF, Suggestive? YES/NO (YES = the video is suggestive), Notes, Video type (Music video, Visualizer, Lyric video or Audio; optional). A header row is skipped. Spotify link/ID can be left blank. Rows with a Spotify ID already in the catalog update that row.</p>
             <textarea id="vc-paste-text" placeholder="Paste here"></textarea>
             <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
                 <button class="btn btn-admin" onclick="document.getElementById('vc-paste-modal').classList.remove('show')">Cancel</button>
@@ -612,8 +621,8 @@
     </script>
     <script>
         /* ===================== Videos tab (curated catalog) ===================== */
-        const VC_FIELDS = ['song', 'artist', 'spotifyId', 'youtubeId', 'startMs', 'enabled', 'nsfw', 'isrc', 'notes', 'kind', 'skips'];
-        const VC_TEXT_FIELDS = ['song', 'artist', 'spotifyId', 'youtubeId', 'startMs', 'isrc', 'notes', 'skips'];
+        const VC_FIELDS = ['song', 'artist', 'spotifyId', 'youtubeId', 'startMs', 'skips', 'enabled', 'nsfw', 'notes', 'kind'];
+        const VC_TEXT_FIELDS = ['song', 'artist', 'spotifyId', 'youtubeId', 'startMs', 'skips', 'notes'];
         const VC_RENDER_CAP = 600;
         let vcRows = [];            // saved rows, as the server has them
         let vcLoaded = false;
@@ -741,7 +750,7 @@
             if (filter === 'disabled' && r.enabled) return false;
             if (filter === 'notfamily' && r.nsfw === 'no') return false;
             if (!q) return true;
-            return [r.song, r.artist, r.spotifyId, r.youtubeId, r.isrc, r.notes].join(' ').toLowerCase().includes(q);
+            return [r.song, r.artist, r.spotifyId, r.youtubeId, r.notes].join(' ').toLowerCase().includes(q);
         }
 
         function vcShowKind(v) { return v === 'video' ? 'Music video' : v === 'visualizer' ? 'Visualizer' : v === 'lyric' ? 'Lyric video' : v === 'audio' ? 'Audio' : String(v == null ? '' : v); }
@@ -786,18 +795,17 @@
                 ${txt('spotifyId', r.spotifyId || '', 'c-spotify', 'link or ID')}
                 ${txt('youtubeId', r.youtubeId || '', 'c-youtube', 'link or ID')}
                 ${txt('startMs', start, 'c-start', '0:00')}
+                ${txt('skips', raw ? (r.skips == null ? '' : r.skips) : vcFmtSkips(r.skips), 'c-skips', 'e.g. 2:14-2:31')}
                 ${txt('enabled', vcShowOnOff(r.enabled == null ? true : r.enabled), 'c-onoff', '', 'vc-dl-onoff')}
                 ${txt('nsfw', vcShowNsfw(r.nsfw), 'c-nsfw ' + (r._raw ? '' : vcNsfwClass(r.nsfw)), 'not set', 'vc-dl-nsfw')}
-                ${txt('isrc', r.isrc || '', 'c-isrc')}
                 ${txt('notes', r.notes || '', 'c-notes')}
                 ${txt('kind', vcShowKind(r.kind), 'c-kind', 'not set', 'vc-dl-kind')}
-                ${txt('skips', raw ? (r.skips == null ? '' : r.skips) : vcFmtSkips(r.skips), 'c-skips', 'e.g. 2:14-2:31')}
-                <td class="c-act"><span class="tick">✓</span>
-                    <button class="act-btn" data-act="preview" title="Preview, and mark the start time">▶</button>
-                    <button class="act-btn" data-act="spotify" title="Search Spotify to fill this row">🔍</button>
-                    <button class="act-btn" data-act="suggest" title="Suggest YouTube videos (one search, 100 quota units)">✨</button>
-                    <button class="act-btn" data-act="queue" title="Add to queue - plays like a request (event: the dropdown next to Add now playing)">➕</button>
-                    <button class="act-btn" data-act="delete" title="Delete row">🗑</button></td>
+                <td class="c-act"><span class="tick">✓</span><div class="act-wrap">
+                    <button type="button" class="act-btn" data-act="preview" title="Preview, and mark the start time"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="7 4 19 12 7 20 7 4" fill="currentColor" stroke="none"/></svg></button>
+                    <button type="button" class="act-btn" data-act="spotify" title="Search Spotify to fill this row"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><line x1="16" y1="16" x2="21" y2="21"/></svg></button>
+                    <button type="button" class="act-btn" data-act="suggest" title="Suggest YouTube videos (one search, 100 quota units)"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" fill="currentColor" stroke="none"/><path d="M19 15l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z" fill="currentColor" stroke="none"/></svg></button>
+                    <button type="button" class="act-btn" data-act="queue" title="Add to queue - plays like a request (event: the dropdown next to Add now playing)"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+                    <button type="button" class="act-btn act-del" data-act="delete" title="Delete row"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="4 7 20 7"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13h10l1-13"/><line x1="10" y1="11" x2="10" y2="16"/><line x1="14" y1="11" x2="14" y2="16"/></svg></button></div></td>
             </tr>`;
         }
         // Add to Queue: drops this row's song into the live queue of the event picked
@@ -808,7 +816,7 @@
             btn.disabled = true;
             const r = await vcApi('POST', '/add-to-queue', {
                 slug: document.getElementById('vc-np-event').value || 'any',
-                song: val('song'), artist: val('artist'), spotifyId: val('spotifyId'), isrc: val('isrc')
+                song: val('song'), artist: val('artist'), spotifyId: val('spotifyId'), isrc: ((vcRows.find(x => x.id === tr.dataset.id) || {}).isrc || '')
             });
             btn.disabled = false;
             if (!r.ok) { showToast(r.data.error || 'Could not add to the queue.', 'error'); return; }
@@ -932,7 +940,7 @@
             if (i >= 0) vcRows[i] = row; else vcRows.push(row);
         }
         function vcIsBlank(p) {
-            return !(p.song || p.artist || p.spotifyId || p.youtubeId || p.isrc || p.notes);
+            return !(p.song || p.artist || p.spotifyId || p.youtubeId || p.notes);
         }
 
         /* ---------- duplicate check (same song + artist already in the catalog) ---------- */
@@ -1191,7 +1199,7 @@
             youtube: 'youtubeId', youtubeid: 'youtubeId', youtubelinkid: 'youtubeId',
             songstartsat: 'startMs', startsat: 'startMs', start: 'startMs', startms: 'startMs', starttime: 'startMs',
             enabled: 'enabled', videoonoff: 'enabled', videoon: 'enabled', nsfw: 'nsfw', nsfwyesno: 'nsfw', suggestive: 'nsfw', suggestiveyesno: 'nsfw', content: 'nsfw', cleanexplicit: 'nsfw', explicit: 'nsfw',
-            isrc: 'isrc', notes: 'notes', videotype: 'kind', type: 'kind', kind: 'kind', skippoints: 'skips', skips: 'skips', cuepoints: 'skips' };
+            notes: 'notes', videotype: 'kind', type: 'kind', kind: 'kind', skippoints: 'skips', skips: 'skips', cuepoints: 'skips' };
         function vcImportCsv(input) {
             const file = input.files && input.files[0];
             input.value = '';
@@ -1215,10 +1223,10 @@
         }
         function vcExportCsv() {
             const esc = v => { v = String(v == null ? '' : v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
-            const head = ['id', 'Title', 'Artist', 'Spotify link/ID', 'Youtube Link/ID', 'Start time', 'Video ON/OFF', 'NSFW YES/NO', 'ISRC', 'Notes', 'Video type', 'Skip points'];
+            const head = ['id', 'Title', 'Artist', 'Spotify link/ID', 'Youtube Link/ID', 'Start time', 'Skip points', 'Video ON/OFF', 'NSFW YES/NO', 'Notes', 'Video type'];
             const lines = [head.join(',')];
-            vcRows.slice().sort(vcCompare).forEach(r => lines.push([r.id, r.song, r.artist, r.spotifyId, r.youtubeId, vcFmtStart(r.startMs),
-                r.enabled ? 'ON' : 'OFF', r.nsfw === 'yes' ? 'YES' : r.nsfw === 'no' ? 'NO' : '', r.isrc, r.notes, vcShowKind(r.kind), vcFmtSkips(r.skips)].map(esc).join(',')));
+            vcRows.slice().sort(vcCompare).forEach(r => lines.push([r.id, r.song, r.artist, r.spotifyId, r.youtubeId, vcFmtStart(r.startMs), vcFmtSkips(r.skips),
+                r.enabled ? 'ON' : 'OFF', r.nsfw === 'yes' ? 'YES' : r.nsfw === 'no' ? 'NO' : '', r.notes, vcShowKind(r.kind)].map(esc).join(',')));
             const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
@@ -1419,7 +1427,7 @@
         function vcOpenSpotifySearch(tr) {
             const f = vcReadRow(tr);
             const el = vcOpenPanelRow(tr, 'spotify', `
-                <div class="panel-title">Search Spotify. Picking a result fills Song, Artist, Spotify ID and ISRC.</div>
+                <div class="panel-title">Search Spotify. Picking a result fills Song, Artist and Spotify ID.</div>
                 <div class="vc-toolbar" style="margin-bottom:8px"><input type="text" id="vc-sp-q" style="width:320px" placeholder="Artist and song" value="${escapeHtml((f.artist + ' ' + f.song).trim())}"></div>
                 <div class="panel-list" id="vc-sp-results"></div>`);
             if (!el) return;
@@ -1434,7 +1442,7 @@
                 if (!r.ok) { box.innerHTML = `<div class="panel-title">${escapeHtml(r.data.error || 'Search failed.')}</div>`; return; }
                 const tracks = r.data.tracks || [];
                 if (!tracks.length) { box.innerHTML = '<div class="panel-title">No results.</div>'; return; }
-                box.innerHTML = tracks.map((t, i) => `<div class="panel-item"><div><b>${escapeHtml(t.name)}</b> - ${escapeHtml(t.artist)}<div class="meta">${escapeHtml(t.album)} · ${vcFmtDuration(t.durationMs)}${t.isrc ? ' · ' + escapeHtml(t.isrc) : ''}</div></div><button class="btn btn-admin" data-sp-use="${i}">Use</button></div>`).join('');
+                box.innerHTML = tracks.map((t, i) => `<div class="panel-item"><div><b>${escapeHtml(t.name)}</b> - ${escapeHtml(t.artist)}<div class="meta">${escapeHtml(t.album)} · ${vcFmtDuration(t.durationMs)}</div></div><button class="btn btn-admin" data-sp-use="${i}">Use</button></div>`).join('');
                 el._tracks = tracks;
             };
             let timer;
@@ -1513,7 +1521,7 @@
 
                 if (btn.dataset.spUse !== undefined) {
                     const t = panelRow._tracks[Number(btn.dataset.spUse)];
-                    vcSetInputs(tr, { song: t.name, artist: t.artist, spotifyId: t.id, isrc: t.isrc || '' });
+                    vcSetInputs(tr, { song: t.name, artist: t.artist, spotifyId: t.id });
                     tr._dur = t.durationMs;
                     vcClosePanel();
                     vcSaveRow(tr);
@@ -1893,19 +1901,19 @@
 
     <script>
         /* ===================== Video table: drag header edges to resize columns ===================== */
-        // 11 data columns get explicit pixel widths; the last (actions) column takes
+        // 11 data columns (# to Video type) get explicit pixel widths; the last (actions) column takes
         // whatever is left, so a dragged edge follows the mouse 1:1. Until you drag one,
         // the columns are scaled to fill the table exactly. Dragged widths are remembered
         // on this browser; double-click any edge to go back to fitting the screen.
         (function () {
-            const KEY = 'vcColWidths.v1';
+            const KEY = 'vcColWidths.v2';   // v2: new column order, ISRC removed (old saved widths no longer line up)
             const table = document.querySelector('table.vc');
             if (!table) return;
             const wrap = table.closest('.vc-wrap');
             const ths = Array.from(table.querySelectorAll('thead tr.heads th'));
             const N = ths.length - 1;                       // resizable columns (all but actions)
-            const BASE = [56, 210, 210, 190, 180, 96, 130, 170, 120, 210, 130]; // # Title Artist Spotify YouTube Start ON/OFF Suggestive ISRC Notes Type
-            const MIN  = [46, 80, 80, 80, 80, 64, 100, 120, 70, 80, 80];
+            const BASE = [56, 210, 210, 190, 180, 96, 210, 130, 170, 210, 130]; // # Title Artist Spotify YouTube Start Skips ON/OFF Suggestive Notes Type
+            const MIN  = [46, 80, 80, 80, 80, 64, 100, 100, 120, 80, 80];
             const ACT_MIN = 200;
             const baseSum = BASE.reduce((a, b) => a + b, 0);
             let widths = null;                               // null = auto-fit
