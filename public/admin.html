@@ -483,6 +483,20 @@
         .sidebar-header h3 { margin: 0; font-size: 1.1rem; }
         .sidebar-close-btn { background: none; border: none; color: var(--text-muted); font-size: 1.3rem; cursor: pointer; padding: 4px 8px; }
         .sidebar-close-btn:hover { color: var(--text); }
+
+        /* Quick controls in the main menu */
+        .sidebar-quick { padding: 12px 20px 4px 20px; flex-shrink: 0; border-bottom: 1px solid var(--border); }
+        .sidebar-quick-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); font-weight: 700; margin-bottom: 8px; }
+        .sidebar-quick-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding-bottom: 10px; }
+        .quick-btn {
+            border: 1px solid var(--border-strong); background-color: var(--card-bg); color: var(--text);
+            border-radius: 50px; padding: 10px 12px; font-family: inherit; font-size: 0.85rem; font-weight: 700;
+            cursor: pointer; transition: background-color 0.15s ease, border-color 0.15s ease;
+        }
+        .quick-btn.wide { grid-column: 1 / -1; }
+        .quick-btn.open-status { background-color: var(--spotify-green); border-color: transparent; color: white; }
+        .quick-btn.closed-status { background-color: var(--red-action); border-color: transparent; color: white; }
+        .quick-btn:active { transform: scale(0.98); }
         .sidebar-nav-item {
             display: flex; align-items: center;
             padding: 11px 20px; cursor: pointer; border: none;
@@ -989,6 +1003,15 @@
         <button type="button" id="sidebar-nav-blocked" class="sidebar-nav-item" onclick="switchTab('blocked')">Blocked</button>
         <button type="button" id="sidebar-nav-scheduler" class="sidebar-nav-item" onclick="openSchedulerTab()">Music Scheduler &#8599;</button>
 
+        <div class="sidebar-quick" id="sidebar-quick">
+            <div class="sidebar-quick-label">Quick controls</div>
+            <div class="sidebar-quick-grid">
+                <button type="button" id="quick-requests" class="quick-btn wide open-status" onclick="toggleRequests()">Requests: OPEN</button>
+                <button type="button" id="quick-mute-visuals" class="quick-btn" onclick="toggleMuteVisuals()">Mute visuals</button>
+                <button type="button" id="quick-mute-all" class="quick-btn" onclick="toggleMuteAll()">Mute all</button>
+            </div>
+        </div>
+
         <!-- Account status - this is your Song Request Station account
              session (site-wide, separate from this event's admin password
              above). Logging out here doesn't lock you out of this admin
@@ -1454,7 +1477,7 @@
                             </p>
                             <div class="control-bar">
                                 <button id="toggle-music-videos" class="toggle-btn closed-status" onclick="toggleMusicVideos()">Music Videos: OFF</button>
-                                <button id="toggle-music-video-subtitles" class="toggle-btn closed-status" onclick="toggleMusicVideoSubtitles()">Subtitles: OFF</button>
+                                <button id="toggle-music-video-subtitles" class="toggle-btn closed-status" onclick="toggleMusicVideoSubtitles()">Lyrics: OFF</button>
                             </div>
                             <div class="control-bar" style="margin-top: 10px;">
                                 <button id="toggle-prefer-visualizers" class="toggle-btn closed-status" onclick="togglePreferVisualizers()">Prefer Visualisers/Lyric Vids: OFF</button>
@@ -1466,13 +1489,13 @@
                                 Suggestive = NO are considered.
                             </p>
                             <p class="settings-card-hint" style="margin-top: 16px; margin-bottom: 0;">
-                                <strong>Subtitles</strong> shows time-synced lyrics over whatever video is currently
+                                <strong>Lyrics</strong> shows time-synced lyrics over whatever video is currently
                                 showing (in place of YouTube's own captions), when lyrics are available for the song.
                                 Pick how they look below (Karaoke Mode uses the same style).
                             </p>
                             <div class="config-dashboard" style="margin-top: 16px;">
                                 <div class="input-group">
-                                    <label for="select-music-video-lyrics-style">Subtitle Style</label>
+                                    <label for="select-music-video-lyrics-style">Lyrics Style</label>
                                     <select id="select-music-video-lyrics-style" onchange="saveMusicVideoLyricsStyle(this.value)">
                                         <option value="classic">Classic (3 lines)</option>
                                         <option value="karaoke">Karaoke (fills as sung)</option>
@@ -2361,6 +2384,24 @@ async function verifyPassword() {
             updateDashboard();
         }
 
+        function syncQuickControls() {
+            const r = document.getElementById('quick-requests');
+            if (r) {
+                r.innerText = requestsAllowed ? 'Requests: OPEN' : 'Requests: CLOSED';
+                r.className = 'quick-btn wide ' + (requestsAllowed ? 'open-status' : 'closed-status');
+            }
+            const mv = document.getElementById('quick-mute-visuals');
+            if (mv) {
+                mv.innerText = visualsMuted ? 'Visuals muted' : 'Mute visuals';
+                mv.className = 'quick-btn' + (visualsMuted ? ' closed-status' : '');
+            }
+            const ma = document.getElementById('quick-mute-all');
+            if (ma) {
+                ma.innerText = visualsMuteAll ? 'All muted' : 'Mute all';
+                ma.className = 'quick-btn' + (visualsMuteAll ? ' closed-status' : '');
+            }
+        }
+
         async function toggleMuteVisuals() {
             if (!isAuthorized) return;
             await fetch(eventUrl('/api/admin/visuals/toggle-mute'), {
@@ -2473,8 +2514,8 @@ async function verifyPassword() {
                     headers: adminHeaders({ 'Content-Type': 'application/json' }),
                     body: JSON.stringify({ style })
                 });
-                if (res.ok) showToast("Subtitle style updated.", "success");
-                else { lyricsStyleLockUntil = 0; showToast("Could not update the subtitle style.", "error"); }
+                if (res.ok) showToast("Lyrics style updated.", "success");
+                else { lyricsStyleLockUntil = 0; showToast("Could not update the lyrics style.", "error"); }
             } catch (e) {
                 lyricsStyleLockUntil = 0;
                 showToast("Could not reach the server.", "error");
@@ -3009,6 +3050,7 @@ async function verifyPassword() {
                 requestsAllowed = data.requestsAllowed;
                 toggleBtn.innerText = requestsAllowed ? "Requests: OPEN" : "Requests: CLOSED";
                 toggleBtn.className = requestsAllowed ? "toggle-btn open-status" : "toggle-btn closed-status";
+                syncQuickControls();
 
                 const explicitBtn = document.getElementById('toggle-explicit');
                 explicitBlockActive = data.explicitBlockActive || false;
@@ -3097,6 +3139,7 @@ async function verifyPassword() {
                     visualsMuteAll = !!data.visuals.muteAll;
                     muteAllBtn.innerText = visualsMuteAll ? "Mute All: ON" : "Mute All: OFF";
                     muteAllBtn.className = visualsMuteAll ? "toggle-btn open-status" : "toggle-btn closed-status";
+                    syncQuickControls();
 
                     const showQueueBtn = document.getElementById('toggle-show-queue');
                     visualsShowQueue = !!data.visuals.showQueue;
@@ -3130,7 +3173,7 @@ async function verifyPassword() {
 
                     const musicVideoSubtitlesBtn = document.getElementById('toggle-music-video-subtitles');
                     musicVideoSubtitlesEnabled = !!data.visuals.musicVideoSubtitlesEnabled;
-                    musicVideoSubtitlesBtn.innerText = musicVideoSubtitlesEnabled ? "Subtitles: ON" : "Subtitles: OFF";
+                    musicVideoSubtitlesBtn.innerText = musicVideoSubtitlesEnabled ? "Lyrics: ON" : "Lyrics: OFF";
                     musicVideoSubtitlesBtn.className = musicVideoSubtitlesEnabled ? "toggle-btn open-status" : "toggle-btn closed-status";
 
                     const preferVizBtn = document.getElementById('toggle-prefer-visualizers');
