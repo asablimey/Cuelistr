@@ -1314,7 +1314,7 @@
             if (b) {
                 const el = document.getElementById('main-display-list');
                 if (el && !(document.getElementById('search-input') || {}).value) {
-                    el.innerHTML = '<p class="empty-placeholder">Search for a song above to request it.</p>';
+                    el.innerHTML = '';
                 }
             }
         }
@@ -1416,7 +1416,7 @@
             const el = document.getElementById('venue-history-content');
             const list = readVenueHistory();
             if (list.length === 0) {
-                el.innerHTML = '<p class="venue-empty-msg">No recent venues yet. Venues you check in to will show up here.</p>';
+                el.innerHTML = '<p class="venue-empty-msg">No recent venues yet.</p>';
                 return;
             }
             el.innerHTML = list.map(v => `
@@ -1967,7 +1967,7 @@
                         : locationBlocked
                         ? "Enter the venue code to request songs"
                         : queueIsFull
-                        ? "Queue is full right now — wait for songs to play, it'll reopen automatically."
+                        ? "Queue is full right now."
                         : "Song submissions are currently paused by the admin.";
                     document.getElementById('list-title').innerText = "Up Next";
                     renderQueue(data.queue);
@@ -2067,7 +2067,7 @@
                 const s = document.getElementById('search-input');
                 if (!s || s.value.trim() === '') {
                     const d = document.getElementById('main-display-list');
-                    if (d && !d.querySelector('.empty-placeholder')) d.innerHTML = '<p class="empty-placeholder">Search for a song above to request it.</p>';
+                    if (d && d.innerHTML) d.innerHTML = '';
                 }
                 return;
             }
@@ -2233,7 +2233,7 @@
                 return false;
             }
             if (queueIsFull) {
-                showToast("Queue is full right now — wait for a song or two to play, it'll reopen automatically.", "error");
+                showToast("Queue is full right now.", "error");
                 return false;
             }
             if (availableCredits <= 0) {
@@ -2346,7 +2346,7 @@
                 const res = await fetch(eventUrl('/api/show-code'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
                 const data = await res.json().catch(() => ({}));
                 if (res.ok) {
-                    hintEl.textContent = `The code is on the venue screen for the next ${data.seconds || 45} seconds. If you can't see it, ask the DJ.`;
+                    hintEl.textContent = `The code is on the venue screen for the next ${data.seconds || 45} seconds.`;
                     document.getElementById('vc-input').focus();
                 } else if (res.status === 403 && data.basicMode) {
                     errEl.textContent = "This venue doesn't have a screen for codes. Ask the DJ for the code.";
