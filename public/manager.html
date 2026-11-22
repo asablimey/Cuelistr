@@ -469,6 +469,11 @@
         .sidebar-header h3 { margin: 0; font-size: 1.1rem; }
         .sidebar-close-btn { background: none; border: none; color: var(--text-muted); font-size: 1.3rem; cursor: pointer; padding: 4px 8px; }
         .sidebar-close-btn:hover { color: var(--text); }
+
+        /* Quick controls in the main menu */
+        .sidebar-quick { padding: 12px 20px 6px 20px; flex-shrink: 0; border-bottom: 1px solid var(--border); }
+        .sidebar-quick-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); font-weight: 700; margin-bottom: 4px; }
+        .quick-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 0; font-size: 0.92rem; font-weight: 600; color: var(--text); }
         .sidebar-nav-item {
             display: flex; align-items: center;
             padding: 16px 20px; cursor: pointer; border: none;
@@ -1286,6 +1291,12 @@ body.has-player { overflow: hidden; }
         <button type="button" id="nav-blk" class="sidebar-nav-item" onclick="go('blk')">Blocked</button>
         <button type="button" id="nav-dsp" class="sidebar-nav-item" onclick="go('dsp')">Display Controls</button>
         <button type="button" id="nav-acc" class="sidebar-nav-item" onclick="go('acc')">Account + events</button>
+        <div class="sidebar-quick">
+            <div class="sidebar-quick-label">Quick controls</div>
+            <div class="quick-row"><span>Requests open</span><button type="button" class="switch sm" id="qsw-requests" role="switch" aria-checked="false" aria-label="Requests open" onclick="toggleSwitch('requests')"></button></div>
+            <div class="quick-row"><span>Mute visuals</span><button type="button" class="switch sm" id="qsw-vmute" role="switch" aria-checked="false" aria-label="Mute visuals" onclick="toggleSwitch('vmute')"></button></div>
+            <div class="quick-row"><span>Mute all</span><button type="button" class="switch sm" id="qsw-vmuteall" role="switch" aria-checked="false" aria-label="Mute all" onclick="toggleSwitch('vmuteall')"></button></div>
+        </div>
         <div class="sidebar-venue-code" id="venue-box" style="display:none;">
             <div class="vc-label">Venue Code</div>
             <div class="vc-digits" id="venue-digits">------</div>
@@ -1533,7 +1544,7 @@ body.has-player { overflow: hidden; }
                 <div class="row-set"><div><div class="rl">Mute visuals</div></div><button type="button" class="switch" id="sw-vmute" role="switch" aria-checked="false" aria-label="Mute visuals" onclick="toggleSwitch('vmute')"></button></div>
                 <div class="row-set"><div><div class="rl">Mute all</div></div><button type="button" class="switch" id="sw-vmuteall" role="switch" aria-checked="false" aria-label="Mute all" onclick="toggleSwitch('vmuteall')"></button></div>
                 <div class="row-set"><div><div class="rl">Show queue</div></div><button type="button" class="switch" id="sw-vqueue" role="switch" aria-checked="false" aria-label="Show queue" onclick="toggleSwitch('vqueue')"></button></div>
-                <div class="row-set"><div><div class="rl">Karaoke mode</div><div class="rs">Black screen with full-screen lyrics for the song (uses the Subtitle style below)</div></div><button type="button" class="switch" id="sw-vkar" role="switch" aria-checked="false" aria-label="Karaoke mode" onclick="toggleSwitch('vkar')"></button></div>
+                <div class="row-set"><div><div class="rl">Karaoke mode</div><div class="rs">Black screen with full-screen lyrics for the song (uses the Lyrics style below)</div></div><button type="button" class="switch" id="sw-vkar" role="switch" aria-checked="false" aria-label="Karaoke mode" onclick="toggleSwitch('vkar')"></button></div>
                 <div class="row-set"><div><div class="rl">Show time</div></div><button type="button" class="switch" id="sw-vclock" role="switch" aria-checked="false" aria-label="Show time" onclick="toggleSwitch('vclock')"></button></div>
                 <div class="row-set"><div><div class="rl">Show venue code</div></div><button type="button" class="switch" id="sw-vcode" role="switch" aria-checked="false" aria-label="Show venue code" onclick="toggleSwitch('vcode')"></button></div>
                 <div class="row-set"><div><div class="rl">Show logo</div></div><button type="button" class="switch" id="sw-vlogo" role="switch" aria-checked="false" aria-label="Show logo" onclick="toggleSwitch('vlogo')"></button></div>
@@ -1542,8 +1553,8 @@ body.has-player { overflow: hidden; }
                 <div class="settings-section-label">Music Videos</div>
                 <div class="row-set"><div><div class="rl">Music videos</div></div><button type="button" class="switch" id="sw-vmv" role="switch" aria-checked="false" aria-label="Music videos" onclick="toggleSwitch('vmv')"></button></div>
                 <div class="row-set"><div><div class="rl">Prefer Visualisers/Lyric Vids</div></div><button type="button" class="switch" id="sw-vviz" role="switch" aria-checked="false" aria-label="Prefer Visualisers/Lyric Vids" onclick="toggleSwitch('vviz')"></button></div>
-                <div class="row-set"><div><div class="rl">Subtitles</div></div><button type="button" class="switch" id="sw-vsub" role="switch" aria-checked="false" aria-label="Subtitles" onclick="toggleSwitch('vsub')"></button></div>
-                <div class="row-set"><div><div class="rl">Subtitle style</div><div class="rs">Look of the lyrics shown when Subtitles or Karaoke mode is on</div></div><select id="sel-vlyr" class="row-select" aria-label="Subtitle style" onchange="setLyricsStyle(this.value)"><option value="classic">Classic (3 lines)</option><option value="karaoke">Karaoke (fills as sung)</option><option value="subtitle">Subtitle box</option><option value="bold">Bold caps</option><option value="soft">Soft italic</option><option value="neon">Neon glow</option><option value="outline">Outline</option><option value="gradient">Gradient</option><option value="reveal">Reveal (wipes in)</option><option value="lowerthird">Lower third</option><option value="centre">Centre stage</option></select></div>
+                <div class="row-set"><div><div class="rl">Lyrics</div></div><button type="button" class="switch" id="sw-vsub" role="switch" aria-checked="false" aria-label="Lyrics" onclick="toggleSwitch('vsub')"></button></div>
+                <div class="row-set"><div><div class="rl">Lyrics style</div><div class="rs">Look of the lyrics shown when Lyrics or Karaoke mode is on</div></div><select id="sel-vlyr" class="row-select" aria-label="Lyrics style" onchange="setLyricsStyle(this.value)"><option value="classic">Classic (3 lines)</option><option value="karaoke">Karaoke (fills as sung)</option><option value="subtitle">Subtitle box</option><option value="bold">Bold caps</option><option value="soft">Soft italic</option><option value="neon">Neon glow</option><option value="outline">Outline</option><option value="gradient">Gradient</option><option value="reveal">Reveal (wipes in)</option><option value="lowerthird">Lower third</option><option value="centre">Centre stage</option></select></div>
                 <div class="row-set"><div><div class="rl">Family mode</div></div><button type="button" class="switch" id="sw-vfam" role="switch" aria-checked="false" aria-label="Family mode" onclick="toggleSwitch('vfam')"></button></div>
             </div>
             <div class="settings-card" id="custom-card">
@@ -1896,6 +1907,8 @@ body.has-player { overflow: hidden; }
             const el = $(SWITCHES[name].el);
             el.classList.toggle('on', !!on);
             el.setAttribute('aria-checked', on ? 'true' : 'false');
+            const q = document.getElementById('q' + SWITCHES[name].el);   // matching quick-control switch in the menu
+            if (q) { q.classList.toggle('on', !!on); q.setAttribute('aria-checked', on ? 'true' : 'false'); }
         }
         function setSwitchFromServer(name, value) {
             if (value === undefined) return;
@@ -1937,7 +1950,7 @@ body.has-player { overflow: hidden; }
             updateDashboard();
         }
 
-        // Subtitle style dropdown (Display Controls -> Music Videos). Held for a few seconds after a
+        // Lyrics style dropdown (Display Controls -> Music Videos). Held for a few seconds after a
         // change so the next background sync can't flip it back before the server has saved it.
         let vlyrLock = 0;
         async function setLyricsStyle(style) {
@@ -1948,7 +1961,7 @@ body.has-player { overflow: hidden; }
                 if (!res.ok) {
                     const d = await res.json().catch(() => ({}));
                     vlyrLock = 0;
-                    showToast(d.error || 'Could not change the subtitle style.', 'error');
+                    showToast(d.error || 'Could not change the lyrics style.', 'error');
                 }
             } catch (e) {
                 vlyrLock = 0;
