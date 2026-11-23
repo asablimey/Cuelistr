@@ -7346,6 +7346,30 @@ const LANDING_FILE = path.join(__dirname, 'public', 'landing.html');
 app.get('/', (req, res) => {
     res.sendFile(require('fs').existsSync(LANDING_FILE) ? LANDING_FILE : path.join(__dirname, 'public', 'index.html'));
 });
+// Public list of songs that have a music video: Artist | Title | Video Type, A-Z by artist then title.
+// Only rows that are switched ON and have a YouTube link are included (the others can't play). Cached for a minute.
+let publicCatalogCsv = { at: 0, csv: '' };
+app.get('/video-catalog.csv', async (req, res) => {
+    try {
+        if (!publicCatalogCsv.csv || Date.now() - publicCatalogCsv.at > 60 * 1000) {
+            const rows = (await videoCatalog.list()).filter(r => r && r.enabled && r.youtubeId);
+            const cmp = (a, b) => String(a || '').localeCompare(String(b || ''), 'en', { sensitivity: 'base', numeric: true });
+            rows.sort((a, b) => cmp(a.artist, b.artist) || cmp(a.song, b.song));
+            const KIND = { video: 'Music video', visualizer: 'Visualizer', lyric: 'Lyric video', audio: 'Audio' };
+            const cell = (v) => {
+                let t = String(v == null ? '' : v).replace(/[\r\n]+/g, ' ').trim();
+                if (/^[=+@]/.test(t)) t = "'" + t;                       // stop spreadsheets reading it as a formula
+                return /[",]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
+            };
+            const lines = ['Artist,Title,Video Type'].concat(rows.map(r => [cell(r.artist), cell(r.song), cell(KIND[r.kind] || '')].join(',')));
+            publicCatalogCsv = { at: Date.now(), csv: '\uFEFF' + lines.join('\r\n') + '\r\n' };   // BOM so Excel reads accents correctly
+        }
+        res.set({ 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'inline; filename="cuelistr-video-catalogue.csv"', 'Cache-Control': 'public, max-age=60' });
+        res.send(publicCatalogCsv.csv);
+    } catch (e) {
+        res.status(500).type('text/plain').send('Could not load the video catalogue right now.');
+    }
+});
 app.get(['/request', '/join', '/app', '/cuelistr'], (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
