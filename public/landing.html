@@ -139,6 +139,40 @@
     }
     @media (max-width: 560px) { .cards.three, .cards.four { grid-template-columns: 1fr; } }
 
+
+    /* ---------- dashboard (shown in place of the marketing page once signed in) ---------- */
+    #dash { display: none; position: relative; z-index: 1; min-height: 100vh; padding: calc(26px + env(safe-area-inset-top, 0px)) 0 calc(40px + env(safe-area-inset-bottom, 0px)); }
+    body.dash-mode #dash { display: block; }
+    body.dash-mode .page, body.dash-mode .section, body.dash-mode footer { display: none; }
+    .dash-top .who { font-weight: 700; text-shadow: 0 1px 8px rgba(0,50,20,0.5); }
+    .dash-top nav { gap: 18px; }
+    .dash-wrap { max-width: 1000px; margin: 5vh auto 0; padding: 0 6vw; }
+    .dash-wrap h1 { font-size: clamp(2rem, 4.4vw, 3rem); letter-spacing: -0.03em; }
+    .dtabs { display: inline-flex; gap: 4px; margin: 22px 0 24px; padding: 5px; border-radius: 14px; background: rgba(6,48,23,0.62); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18); }
+    .dtab { appearance: none; border: 0; background: transparent; color: #fff; font: inherit; font-weight: 700; padding: 11px 20px; border-radius: 10px; cursor: pointer; }
+    .dtab.active { background: #fff; color: #08371a; }
+    .dpane { display: none; } .dpane.active { display: block; }
+    .evgrid { display: grid; gap: 14px; }
+    .ev { display: flex; align-items: center; justify-content: space-between; gap: 18px; flex-wrap: wrap; }
+    .ev-name { font-size: 1.2rem; font-weight: 800; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .ev-meta { margin-top: 6px; color: rgba(255,255,255,0.8); font-size: 0.92rem; line-height: 1.6; }
+    .ev-meta code { background: rgba(255,255,255,0.14); padding: 2px 7px; border-radius: 5px; }
+    .badge { font-size: 0.72rem; font-weight: 800; padding: 4px 10px; border-radius: 999px; }
+    .badge.open { background: #1DB954; color: #04210e; } .badge.closed { background: rgba(255,255,255,0.2); color: #fff; }
+    .ev-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .btn.small { padding: 11px 20px; font-size: 0.95rem; }
+    .dform { max-width: 560px; }
+    .dform .field label { color: rgba(255,255,255,0.8); }
+    .dform .field input { background: rgba(0,0,0,0.28); border-color: rgba(255,255,255,0.22); }
+    .dform .okmsg { color: #b8ffd2; }
+    .dform .err { color: #ffd0d5; }
+    .sugg { margin: -10px 0 18px; border-radius: 10px; overflow: hidden; background: rgba(0,0,0,0.38); }
+    .sugg button { display: block; width: 100%; text-align: left; border: 0; border-bottom: 1px solid rgba(255,255,255,0.1); background: transparent; color: #fff; font: inherit; font-size: 0.92rem; padding: 12px 14px; cursor: pointer; }
+    .sugg button:hover { background: rgba(255,255,255,0.12); }
+    .picked { margin: -8px 0 18px; font-size: 0.92rem; color: #b8ffd2; }
+    .empty { text-align: center; padding: 38px 20px; }
+    .empty p { margin: 0 0 18px; }
+
     /* ---------- sign in / create account modal ---------- */
     .backdrop { position: fixed; inset: 0; z-index: 10; background: rgba(2,24,11,0.62); backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; padding: 20px; }
     .backdrop.open { display: flex; }
@@ -282,7 +316,52 @@
         <div>Song search and playback powered by Spotify. Music videos from YouTube.</div>
     </footer>
 
-    <!-- Admin sign in / create account (mockup only: the real forms and API calls live on /new) -->
+    <!-- Dashboard: replaces the marketing page once signed in -->
+    <div id="dash">
+        <header class="top dash-top">
+            <a class="brand" href="#" id="dash-home" aria-label="Back to home page"><img src="/assets/cuelistr-logo-dark.svg" alt="Cuelistr" onerror="this.replaceWith(document.createTextNode('Cuelistr'))"></a>
+            <nav><span class="who" id="dash-user"></span><button type="button" class="nav-btn" id="dash-logout">Log out</button></nav>
+        </header>
+        <div class="dash-wrap">
+            <h1>Your events</h1>
+            <div class="dtabs" role="tablist">
+                <button type="button" class="dtab active" data-dtab="events">My events</button>
+                <button type="button" class="dtab" data-dtab="create">New event</button>
+                <button type="button" class="dtab" data-dtab="account">Account</button>
+            </div>
+
+            <div class="dpane active" id="dpane-events">
+                <div class="evgrid" id="evgrid"></div>
+            </div>
+
+            <div class="dpane" id="dpane-create">
+                <form class="card dform" id="form-create">
+                    <div class="field"><label for="ce-name">Event name</label><input id="ce-name" maxlength="60" autocomplete="off"></div>
+                    <div class="field"><label for="ce-pass">Admin password</label><input id="ce-pass" type="password" autocomplete="new-password" placeholder="At least 4 characters"></div>
+                    <div class="field"><label for="ce-loc">Venue location</label><input id="ce-loc" autocomplete="off" placeholder="Search for the venue's address or name"></div>
+                    <div class="sugg hidden" id="ce-sugg"></div>
+                    <button type="button" class="btn btn-ghost small" id="ce-here" style="margin:-4px 0 18px">Use my current location</button>
+                    <div class="picked hidden" id="ce-picked"></div>
+                    <div class="field"><label for="ce-venue">Venue name</label><input id="ce-venue" maxlength="120" autocomplete="off" placeholder="Shown to guests when they pick a venue"></div>
+                    <div class="err" id="ce-err"></div>
+                    <button type="submit" class="btn btn-primary" style="width:100%">Create event</button>
+                </form>
+            </div>
+
+            <div class="dpane" id="dpane-account">
+                <form class="card dform" id="form-pass">
+                    <div class="field"><label for="cp-cur">Current password</label><input id="cp-cur" type="password" autocomplete="current-password"></div>
+                    <div class="field"><label for="cp-new">New password</label><input id="cp-new" type="password" autocomplete="new-password" placeholder="At least 8 characters"></div>
+                    <div class="field"><label for="cp-new2">Confirm new password</label><input id="cp-new2" type="password" autocomplete="new-password"></div>
+                    <div class="err" id="cp-err"></div>
+                    <div class="okmsg" id="cp-ok"></div>
+                    <button type="submit" class="btn btn-primary" style="width:100%">Change password</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Host sign in / sign up / forgot password / reset password (these call the real account API) -->
     <div class="backdrop" id="signin-backdrop" role="dialog" aria-modal="true" aria-labelledby="signin-title">
         <div class="modal">
             <button type="button" class="x" id="close-signin" aria-label="Close">&times;</button>
@@ -304,6 +383,11 @@
                 <div class="field"><label for="su-pass">Password</label><input id="su-pass" type="password" autocomplete="new-password" placeholder="At least 8 characters"></div>
                 <div class="err" id="su-err"></div>
                 <button type="submit" class="btn submit">Sign up</button>
+            </form>
+            <form id="form-reset" class="hidden">
+                <div class="field"><label for="rp-pass">New password</label><input id="rp-pass" type="password" autocomplete="new-password" placeholder="At least 8 characters"></div>
+                <div class="err" id="rp-err"></div>
+                <button type="submit" class="btn submit">Set new password</button>
             </form>
             <form id="form-forgot" class="hidden">
                 <div class="field"><label for="fp-mail">Email</label><input id="fp-mail" type="email" autocomplete="email" autocapitalize="off" autocorrect="off"></div>
@@ -396,14 +480,14 @@
             if (window.ResizeObserver) new ResizeObserver(fit).observe(screen);
         })();
 
-        // ---------- Host sign in / sign up / forgot password: same account API as /new ----------
+        // ---------- Host sign in / sign up / forgot password: the account API ----------
         var backdrop = document.getElementById('signin-backdrop');
-        var TITLES = { login: 'Host sign in', signup: 'Create your host account', forgot: 'Reset your password' };
+        var TITLES = { login: 'Host sign in', signup: 'Create your host account', forgot: 'Reset your password', reset: 'Set a new password' };
         function showView(name) {
-            ['login', 'signup', 'forgot'].forEach(function (n) { document.getElementById('form-' + n).classList.toggle('hidden', n !== name); });
+            ['login', 'signup', 'forgot', 'reset'].forEach(function (n) { document.getElementById('form-' + n).classList.toggle('hidden', n !== name); });
             document.getElementById('tab-login').classList.toggle('active', name === 'login');
             document.getElementById('tab-signup').classList.toggle('active', name === 'signup');
-            document.querySelector('.tabs').classList.toggle('hidden', name === 'forgot');
+            document.querySelector('.tabs').classList.toggle('hidden', name === 'forgot' || name === 'reset');
             document.getElementById('signin-title').textContent = TITLES[name];
             document.querySelectorAll('.err, .okmsg').forEach(function (e) { e.style.display = 'none'; });
         }
@@ -420,34 +504,46 @@
         }
         // Runs a form's request with the button disabled; `go` returns true when it worked.
         function wire(formId, errId, failText, go) {
-            var form = document.getElementById(formId), btn = form.querySelector('.submit');
+            var form = document.getElementById(formId), btn = form.querySelector('.submit, button[type=submit]');
             form.addEventListener('submit', async function (e) {
                 e.preventDefault();
-                document.getElementById(errId).style.display = 'none';
+                var eb = document.getElementById(errId); eb.style.display = 'none'; eb.style.color = '';
                 var label = btn.textContent; btn.disabled = true; btn.textContent = 'One moment...';
                 try { await go(); }
                 catch (err) { showMsg(errId, 'Could not reach the server. Try again.'); }
                 btn.disabled = false; btn.textContent = label;
             });
         }
-        // After logging in or signing up, /new is where hosts see their events and create new ones.
+        // After logging in or signing up, the dashboard opens in place of this page.
         wire('form-login', 'li-err', 'Could not log in.', async function () {
             var r = await post('/api/account/login', { username: document.getElementById('li-user').value.trim(), password: document.getElementById('li-pass').value });
             if (!r.ok) return showMsg('li-err', r.data.error || 'Could not log in.');
-            location.href = '/new';
+            onAuthed(r.data.username);
         });
         wire('form-signup', 'su-err', 'Could not create account.', async function () {
             var r = await post('/api/account/signup', { username: document.getElementById('su-user').value.trim(), email: document.getElementById('su-mail').value.trim(), password: document.getElementById('su-pass').value });
             if (!r.ok) return showMsg('su-err', r.data.error || 'Could not create account.');
-            location.href = '/new';
+            onAuthed(r.data.username);
+        });
+        wire('form-reset', 'rp-err', 'Could not reset your password.', async function () {
+            var pw = document.getElementById('rp-pass').value;
+            if (pw.length < 8) return showMsg('rp-err', 'Password must be at least 8 characters.');
+            var r = await post('/api/account/reset-password', { username: resetUser, token: resetToken, newPassword: pw });
+            if (!r.ok) return showMsg('rp-err', r.data.error || 'That reset link is invalid or has expired.');
+            history.replaceState(null, '', '/'); showView('login');
+            showMsg('li-err', 'Password updated. Log in with your new password.');
+            document.getElementById('li-err').style.color = '#1DB954';
         });
         wire('form-forgot', 'fp-err', 'Could not send the reset link.', async function () {
             var r = await post('/api/account/forgot-password', { email: document.getElementById('fp-mail').value.trim() });
             showMsg('fp-ok', r.data.message || 'If that email is registered, a reset link has been sent.');
         });
 
-        document.querySelectorAll('[data-signin]').forEach(function (el) { el.addEventListener('click', function () { openModal(false); }); });
-        document.querySelectorAll('[data-signup]').forEach(function (el) { el.addEventListener('click', function () { openModal(true); }); });
+        document.addEventListener('click', function (e) {
+            var t = e.target.closest('[data-signin],[data-signup],[data-dash]'); if (!t) return;
+            if (t.hasAttribute('data-dash')) showDashboard();
+            else openModal(t.hasAttribute('data-signup'));
+        });
         document.getElementById('close-signin').addEventListener('click', closeModal);
         document.getElementById('tab-login').addEventListener('click', function () { showView('login'); });
         document.getElementById('tab-signup').addEventListener('click', function () { showView('signup'); });
@@ -460,15 +556,124 @@
         privacy.addEventListener('click', function (e) { if (e.target === privacy) privacy.classList.remove('open'); });
         document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { closeModal(); privacy.classList.remove('open'); } });
 
-        // Already logged in on this device? Then "Sign in" becomes a shortcut to their events.
-        fetch('/api/account/me').then(function (r) { return r.json(); }).then(function (d) {
-            if (!d || !d.loggedIn) return;
-            document.querySelectorAll('[data-signin]').forEach(function (el) {
-                var fresh = el.cloneNode(true); fresh.textContent = 'My events'; fresh.removeAttribute('data-signin');
-                fresh.addEventListener('click', function () { location.href = '/new'; });
-                el.replaceWith(fresh);
+        // ---------- Dashboard ----------
+        var resetUser = '', resetToken = '', evLoaded = false;
+        function esc(t) { return String(t == null ? '' : t).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+        function $(id) { return document.getElementById(id); }
+        function showDashboard() { closeModal(); document.body.classList.add('dash-mode'); window.scrollTo(0, 0); loadEvents(); }
+        function leaveDashboard() { document.body.classList.remove('dash-mode'); window.scrollTo(0, 0); }
+        function relabelSignedIn() {
+            document.querySelectorAll('[data-signin],[data-signup]').forEach(function (el) {
+                el.textContent = 'My events'; el.removeAttribute('data-signin'); el.removeAttribute('data-signup'); el.setAttribute('data-dash', '');
             });
-        }).catch(function () { /* not logged in, or offline */ });
+        }
+        function onAuthed(username) { $('dash-user').textContent = username; relabelSignedIn(); evLoaded = false; showDashboard(); }
+        function dtab(name) {
+            document.querySelectorAll('.dtab').forEach(function (b) { b.classList.toggle('active', b.dataset.dtab === name); });
+            document.querySelectorAll('.dpane').forEach(function (p) { p.classList.toggle('active', p.id === 'dpane-' + name); });
+        }
+        document.querySelectorAll('.dtab').forEach(function (b) { b.addEventListener('click', function () { dtab(b.dataset.dtab); }); });
+        $('dash-home').addEventListener('click', function (e) { e.preventDefault(); leaveDashboard(); });
+        $('dash-logout').addEventListener('click', async function () {
+            try { await fetch('/api/account/logout', { method: 'POST' }); } catch (e) { /* log out on screen regardless */ }
+            location.href = '/';
+        });
+
+        // Same details master shows for each event: name, requests status, guest path, venue, created date.
+        async function loadEvents() {
+            var grid = $('evgrid');
+            if (!evLoaded) grid.innerHTML = '<div class="card empty"><p>Loading your events...</p></div>';
+            try {
+                var res = await fetch('/api/account/my-events');
+                if (res.status === 401) { location.href = '/'; return; }
+                var list = (await res.json()).events || [];
+                evLoaded = true;
+                if (!list.length) {
+                    grid.innerHTML = '<div class="card empty"><p>You have no events yet.</p><button type="button" class="btn btn-primary" id="first-event">Create your first event</button></div>';
+                    $('first-event').addEventListener('click', function () { dtab('create'); });
+                    return;
+                }
+                grid.innerHTML = list.map(function (ev) {
+                    var when = ev.createdAt ? new Date(ev.createdAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : 'Unknown';
+                    return '<div class="card ev"><div><div class="ev-name">' + esc(ev.eventName || ev.slug) +
+                        (ev.requestsAllowed ? '<span class="badge open">Requests open</span>' : '<span class="badge closed">Requests off</span>') + '</div>' +
+                        '<div class="ev-meta"><code>/e/' + esc(ev.slug) + '</code>' + (ev.venueName ? ' &middot; ' + esc(ev.venueName) : '') + '<br>Created ' + esc(when) + '</div></div>' +
+                        '<div class="ev-actions"><a class="btn btn-primary small" href="/e/' + encodeURIComponent(ev.slug) + '/admin" target="_blank" rel="noopener">Open Admin</a>' +
+                        '<button type="button" class="btn btn-ghost small" data-copy="' + esc(ev.slug) + '">Copy guest link</button></div></div>';
+                }).join('');
+                grid.querySelectorAll('[data-copy]').forEach(function (b) {
+                    b.addEventListener('click', function () {
+                        var link = location.origin + '/e/' + b.dataset.copy, done = function () { b.textContent = 'Copied'; setTimeout(function () { b.textContent = 'Copy guest link'; }, 1600); };
+                        if (navigator.clipboard) navigator.clipboard.writeText(link).then(done, function () { prompt('Guest link', link); }); else prompt('Guest link', link);
+                    });
+                });
+            } catch (e) { grid.innerHTML = '<div class="card empty"><p>Could not load your events. Try again.</p></div>'; }
+        }
+
+        // New event: the venue is found with a search (OpenStreetMap).
+        var lat = null, lng = null, searchTimer = null;
+        function pick(la, lo, label) {
+            lat = la; lng = lo;
+            $('ce-sugg').classList.add('hidden');
+            var pk = $('ce-picked'); pk.textContent = 'Location set: ' + label; pk.classList.remove('hidden');
+            if (!$('ce-venue').value.trim()) $('ce-venue').value = label.split(',')[0].trim();
+        }
+        $('ce-loc').addEventListener('input', function () {
+            clearTimeout(searchTimer); lat = lng = null; $('ce-picked').classList.add('hidden');
+            var q = this.value.trim(), box = $('ce-sugg');
+            if (q.length < 3) { box.classList.add('hidden'); return; }
+            searchTimer = setTimeout(async function () {
+                try {
+                    var r = await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=5&q=' + encodeURIComponent(q), { headers: { 'Accept': 'application/json' } });
+                    var list = await r.json();
+                    box.innerHTML = '';
+                    list.forEach(function (it) {
+                        var b = document.createElement('button'); b.type = 'button'; b.textContent = it.display_name;
+                        b.addEventListener('click', function () { $('ce-loc').value = it.display_name; pick(parseFloat(it.lat), parseFloat(it.lon), it.display_name); });
+                        box.appendChild(b);
+                    });
+                    box.classList.toggle('hidden', !list.length);
+                } catch (e) { box.classList.add('hidden'); }
+            }, 400);
+        });
+        $('ce-here').addEventListener('click', function () {
+            if (!navigator.geolocation) return showMsg('ce-err', 'This browser can’t share your location. Search for the venue instead.');
+            navigator.geolocation.getCurrentPosition(function (pos) { pick(pos.coords.latitude, pos.coords.longitude, 'your current location'); },
+                function () { showMsg('ce-err', 'Couldn’t get your location. Search for the venue instead.'); });
+        });
+        wire('form-create', 'ce-err', 'Could not create the event.', async function () {
+            var name = $('ce-name').value.trim(), pw = $('ce-pass').value;
+            if (!name) return showMsg('ce-err', 'Give your event a name.');
+            if (pw.length < 4) return showMsg('ce-err', 'Admin password must be at least 4 characters.');
+            if (lat === null) return showMsg('ce-err', 'Search for your venue and pick it from the list so guests can find it.');
+            var r = await post('/api/events', { eventName: name, adminPassword: pw, latitude: lat, longitude: lng, venueName: $('ce-venue').value.trim() });
+            if (!r.ok) return showMsg('ce-err', r.data.error || 'Could not create the event.');
+            location.href = '/e/' + r.data.slug + '/admin';
+        });
+
+        // Change password
+        wire('form-pass', 'cp-err', 'Could not change your password.', async function () {
+            $('cp-ok').style.display = 'none';
+            var cur = $('cp-cur').value, nw = $('cp-new').value;
+            if (nw.length < 8) return showMsg('cp-err', 'Password must be at least 8 characters.');
+            if (nw !== $('cp-new2').value) return showMsg('cp-err', 'The new passwords don’t match.');
+            var r = await post('/api/account/change-password', { currentPassword: cur, newPassword: nw });
+            if (!r.ok) return showMsg('cp-err', r.data.error || 'Could not change your password.');
+            $('form-pass').reset(); showMsg('cp-ok', 'Password changed.');
+        });
+
+        // On load: password-reset link from an email, otherwise open the dashboard if already signed in.
+        (function () {
+            var q = new URLSearchParams(location.search);
+            if (q.get('resetUser') && q.get('resetToken')) {
+                resetUser = q.get('resetUser'); resetToken = q.get('resetToken');
+                openModal(false); showView('reset'); $('rp-pass').focus();
+                return;
+            }
+            fetch('/api/account/me').then(function (r) { return r.json(); }).then(function (d) {
+                if (d && d.loggedIn) { $('dash-user').textContent = d.username; relabelSignedIn(); showDashboard(); }
+            }).catch(function () { /* not signed in, or offline */ });
+        })();
     </script>
 </body>
 </html>
