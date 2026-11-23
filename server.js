@@ -7370,6 +7370,38 @@ app.get('/video-catalog.csv', async (req, res) => {
         res.status(500).type('text/plain').send('Could not load the video catalogue right now.');
     }
 });
+// The public catalogue as a plain page that opens in a browser tab: just the table.
+// Artist | Title | Video Type, A-Z by artist then title; only videos that are ON and have a YouTube link.
+const PUBLIC_KIND_LABELS = { video: 'Music video', visualizer: 'Visualizer', lyric: 'Lyric video', audio: 'Audio' };
+const htmlEsc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+let publicCatalogPage = { at: 0, html: '' };
+app.get('/video-catalogue', async (req, res) => {
+    try {
+        if (!publicCatalogPage.html || Date.now() - publicCatalogPage.at > 60 * 1000) {
+            const cmp = (a, b) => String(a || '').localeCompare(String(b || ''), 'en', { sensitivity: 'base', numeric: true });
+            const rows = (await videoCatalog.list()).filter(r => r && r.enabled && r.youtubeId && r.artist && r.song)
+                .sort((a, b) => cmp(a.artist, b.artist) || cmp(a.song, b.song));
+            const body = rows.map(r => `<tr><td>${htmlEsc(r.artist)}</td><td>${htmlEsc(r.song)}</td><td>${htmlEsc(PUBLIC_KIND_LABELS[r.kind] || '')}</td></tr>`).join('');
+            publicCatalogPage = { at: Date.now(), html: `<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Video Catalogue</title>
+<link rel="icon" type="image/svg+xml" href="/assets/cuelistr-icon.svg">
+<style>
+body{margin:0;padding:24px 20px 48px;background:#fff;color:#000;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:15px}
+table{width:100%;max-width:900px;margin:0 auto;border-collapse:collapse}
+th{text-align:left;padding:8px 10px;border-bottom:2px solid #000}
+td{padding:7px 10px;border-bottom:1px solid #ddd}
+thead{display:table-header-group}tr{page-break-inside:avoid}
+</style></head><body>
+<table><thead><tr><th>Artist</th><th>Title</th><th>Video Type</th></tr></thead><tbody>${body}</tbody></table>
+</body></html>` };
+        }
+        res.set({ 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'public, max-age=60' });
+        res.send(publicCatalogPage.html);
+    } catch (e) {
+        res.status(500).type('text/plain').send('Could not load the video catalogue right now.');
+    }
+});
 app.get(['/request', '/join', '/app', '/cuelistr'], (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
