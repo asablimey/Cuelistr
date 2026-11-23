@@ -1,1 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cuelistr - Let the crowd pick the music</title>
+<link rel="icon" type="image/svg+xml" href="/assets/cuelistr-icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Khula:wght@600&display=swap">
+<style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+        min-height: 100vh; color: #fff; overflow-x: hidden; position: relative;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        /* same background as the kiosk screensaver */
+        background:
+            radial-gradient(120% 80% at 50% 0%, #0b6b30 0%, rgba(11,107,48,0) 60%),
+            linear-gradient(165deg, #0f8f40 0%, #1DB954 45%, #7fe3a6 78%, #e9fff1 100%);
+        background-attachment: fixed;
+    }
 
+    /* ---------- layered background (copied from the screensaver) ---------- */
+    .bg { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+    .glow { position: absolute; border-radius: 50%; filter: blur(40px); will-change: transform; }
+    .glow.g1 { width: 70vmax; height: 70vmax; left: -22vmax; bottom: -30vmax; background: radial-gradient(circle, rgba(255,255,255,0.85) 0%, rgba(255,255,255,0) 68%); animation: driftA 26s ease-in-out infinite alternate; }
+    .glow.g2 { width: 55vmax; height: 55vmax; right: -20vmax; top: 18vh; background: radial-gradient(circle, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0) 66%); animation: driftB 32s ease-in-out infinite alternate; }
+    .glow.g3 { width: 48vmax; height: 48vmax; left: 8vmax; top: -18vmax; background: radial-gradient(circle, rgba(6,90,38,0.75) 0%, rgba(6,90,38,0) 68%); animation: driftB 38s ease-in-out infinite alternate-reverse; }
+    .slab { position: absolute; border-radius: 6vmax; transform: rotate(-24deg); will-change: transform;
+        background: linear-gradient(135deg, rgba(255,255,255,0.30), rgba(255,255,255,0.04));
+        box-shadow: 0 2.5vmax 5vmax rgba(0,60,25,0.28), inset 0 0 0 1px rgba(255,255,255,0.28); }
+    .slab.s1 { width: 60vmax; height: 24vmax; left: -14vmax; top: 30vh; animation: slabA 34s ease-in-out infinite alternate; }
+    .slab.s2 { width: 50vmax; height: 20vmax; right: -16vmax; bottom: 12vh; animation: slabB 42s ease-in-out infinite alternate; background: linear-gradient(135deg, rgba(14,120,55,0.40), rgba(14,120,55,0.05)); }
+    .slab.s3 { width: 34vmax; height: 14vmax; left: 38vw; top: -6vh; animation: slabC 30s ease-in-out infinite alternate; }
+    @keyframes driftA { from { transform: translate3d(0,0,0) scale(1); } to { transform: translate3d(16vmax,-12vmax,0) scale(1.18); } }
+    @keyframes driftB { from { transform: translate3d(0,0,0) scale(1); } to { transform: translate3d(-14vmax,13vmax,0) scale(1.15); } }
+    @keyframes slabA { from { transform: rotate(-30deg) translate3d(-6vmax,5vmax,0); } to { transform: rotate(-16deg) translate3d(14vmax,-9vmax,0); } }
+    @keyframes slabB { from { transform: rotate(-18deg) translate3d(8vmax,-6vmax,0); } to { transform: rotate(-32deg) translate3d(-14vmax,8vmax,0); } }
+    @keyframes slabC { from { transform: rotate(-12deg) translate3d(-10vmax,0,0); } to { transform: rotate(-28deg) translate3d(12vmax,6vmax,0); } }
+    @media (prefers-reduced-motion: reduce) { .glow, .slab { animation: none; } }
+
+    /* ---------- page ---------- */
+    .page { position: relative; z-index: 1; min-height: 100vh; display: flex; flex-direction: column;
+        padding: calc(26px + env(safe-area-inset-top, 0px)) 0 calc(28px + env(safe-area-inset-bottom, 0px)); }
+    .brand { display: inline-block; color: #fff; text-decoration: none; font-size: 1.9rem; font-weight: 800; letter-spacing: -0.02em; text-shadow: 0 2px 12px rgba(0,50,20,0.45); }
+    .brand img { display: block; height: clamp(46px, 5.2vw, 62px); width: auto; max-width: 70vw; filter: drop-shadow(0 2px 12px rgba(0,50,20,0.4)); }
+    .hero { flex: 1; display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr); align-items: center; gap: 4vw; padding: 4vh 6vw; max-width: calc(1200px + 12vw); width: 100%; margin: 0 auto; }
+    h1 { margin: 0; font-size: clamp(2.6rem, 6.4vw, 5.2rem); line-height: 1.02; font-weight: 800; letter-spacing: -0.035em; text-shadow: 0 3px 22px rgba(0,50,20,0.5); }
+    .lede { margin: 20px 0 0; max-width: 30em; font-size: clamp(1.05rem, 1.7vw, 1.3rem); line-height: 1.45; font-weight: 600; text-shadow: 0 1px 10px rgba(0,50,20,0.55); }
+    .actions { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 34px; }
+    .btn { appearance: none; border: 0; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; justify-content: center;
+        font: inherit; font-weight: 800; font-size: 1.08rem; padding: 17px 30px; border-radius: 999px; transition: transform .15s ease, background-color .15s ease; }
+    .btn:active { transform: scale(0.97); }
+    .btn:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+    .btn-primary { background: #fff; color: #08371a; box-shadow: 0 10px 28px rgba(0,55,22,0.35); }
+    .btn-primary:hover { background: #f1fff6; }
+    .btn-ghost { background: rgba(8,55,26,0.55); color: #fff; box-shadow: inset 0 0 0 2px rgba(255,255,255,0.7); backdrop-filter: blur(6px); }
+    .btn-ghost:hover { background: rgba(8,55,26,0.72); }
+
+    /* ---------- phone mockup ---------- */
+    .phone-wrap { display: flex; justify-content: center; perspective: 1500px; }
+    .phone { position: relative; width: min(340px, 78vw); aspect-ratio: 9 / 19; border-radius: 56px; padding: 3px;
+        background: linear-gradient(145deg, #8b9098 0%, #2b2d31 22%, #b4b8bf 48%, #2b2d31 74%, #7d828a 100%);   /* brushed-metal frame */
+        box-shadow: 0 4vmin 9vmin rgba(0,45,18,0.6), 0 1.2vmin 2.4vmin rgba(0,30,12,0.35);
+        transform: rotateY(-14deg) rotateX(5deg) rotateZ(2.5deg); transform-style: preserve-3d; }
+    .bezel { height: 100%; border-radius: 53px; padding: 9px; background: #040404; box-shadow: inset 0 0 0 1.5px #1a1a1a; }
+    .screen { position: relative; height: 100%; border-radius: 44px; overflow: hidden; background: #121212; color: #fff; display: flex; flex-direction: column; }
+    .screen::after { content: ''; position: absolute; inset: 0; z-index: 5; pointer-events: none; background: linear-gradient(118deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0) 32%); }
+    .sb { position: absolute; width: 4px; border-radius: 2px; background: linear-gradient(90deg, #5d6168, #a3a7ae 50%, #4a4d53); }
+    .sb.a { left: -3.5px; top: 14%; height: 4.5%; }
+    .sb.b { left: -3.5px; top: 22%; height: 8%; }
+    .sb.c { left: -3.5px; top: 32%; height: 8%; }
+    .sb.p { right: -3.5px; top: 26%; height: 13%; }
+    .island { position: absolute; top: 11px; left: 50%; transform: translateX(-50%); width: 29%; height: 25px; border-radius: 16px; background: #000; z-index: 4; }
+    .island::after { content: ''; position: absolute; right: 9px; top: 8px; width: 9px; height: 9px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #2a3a5c, #0a0f1a 70%); }
+    .status { position: absolute; top: 14px; left: 0; right: 0; z-index: 4; display: flex; justify-content: space-between; align-items: center; padding: 0 26px 0 30px; font-size: 0.74rem; font-weight: 700; }
+    .status .ico { display: flex; gap: 5px; align-items: center; }
+    .status svg { height: 11px; fill: #fff; }
+    .home-ind { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); width: 34%; height: 5px; border-radius: 3px; background: rgba(255,255,255,0.75); z-index: 4; }
+    /* ---------- the guest page inside the phone: same values as index.html, drawn at 390px wide then scaled to fit ---------- */
+    .ga { position: absolute; top: 0; left: 0; width: 390px; transform-origin: 0 0; background: #121212; color: #fff; overflow: hidden;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; --muted: #a7a7a7; --inset: #1c1c1c; --hover: #2c2c2c; --panel: #181818; --card: #242424; --green: #1DB954; }
+    .ga .g-container { padding: 52px 16px 0; }
+    .ga .g-header { display: flex; align-items: center; justify-content: space-between; gap: 15px; padding-bottom: 12px; margin-bottom: 10px; border-bottom: 1px solid #282828; }
+    .ga .g-menu { flex-shrink: 0; width: 40px; height: 40px; border-radius: 10px; background: var(--inset); border: 1px solid var(--hover); display: flex; align-items: center; justify-content: center; }
+    .ga .g-menu svg { width: 16px; height: 16px; fill: #fff; }
+    .ga h3 { margin: 0; flex: 1 1 auto; min-width: 0; font-family: 'Khula', sans-serif; font-size: 1.2rem; font-weight: 600; line-height: 1.25; }
+    .ga .g-badge { width: 46px; height: 46px; flex-shrink: 0; border-radius: 11px; background: var(--inset); border: 1px solid var(--hover); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; }
+    .ga .g-badge b { font-size: 1.15rem; font-weight: 400; line-height: 1; }
+    .ga .g-badge span { font-size: 0.46rem; font-weight: 700; color: var(--muted); line-height: 1; }
+    .ga .g-search { width: 100%; background: var(--panel); border: 1px solid #333; border-radius: 50px; padding: 14px 20px; color: #777; font-size: 1rem; margin-bottom: 10px; }
+    .ga .g-title { font-size: 1.2rem; font-weight: 700; color: var(--green); margin-bottom: 10px; }
+    .ga .g-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 10px 14px; background: var(--card); margin-bottom: 8px; border-radius: 8px; border: 1px solid var(--hover); }
+    .ga .g-det { display: flex; align-items: center; gap: 16px; flex: 1; min-width: 0; }
+    .ga .g-art { width: 48px; height: 48px; border-radius: 4px; flex-shrink: 0; }
+    .ga .g-txt { flex: 1; min-width: 0; }
+    .ga .g-song { font-weight: 700; font-size: 1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ga .g-artist { color: var(--muted); margin-top: 4px; font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ga .g-vote { display: flex; flex-direction: column; align-items: center; min-width: 34px; flex-shrink: 0; }
+    .ga .g-vote svg { width: 22px; height: 22px; fill: none; stroke: #666; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; padding: 4px; box-sizing: content-box; }
+    .ga .g-vote.on svg { stroke: var(--green); fill: var(--green); }
+    .ga .g-vote i { font-style: normal; font-size: 0.8rem; font-weight: 700; margin-top: 4px; color: var(--muted); }
+    .ga .g-np { position: absolute; left: 0; right: 0; bottom: 0; height: 84px; padding: 0 10px 24px 16px; background: var(--panel); border-top: 1px solid #282828; display: flex; align-items: center; gap: 10px; }
+    .ga .g-np .g-track { position: absolute; top: 0; left: 0; right: 0; height: 2px; background: rgba(255,255,255,0.08); }
+    .ga .g-np .g-track i { display: block; height: 100%; width: 38%; background: var(--green); }
+    .ga .g-np .g-art { width: 40px; height: 40px; }
+    .ga .g-np .g-song { font-size: 0.85rem; }
+    .ga .g-np .g-artist { margin-top: 2px; font-size: 0.75rem; }
+    .ga .g-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); margin-right: 6px; box-shadow: 0 0 8px rgba(29,185,84,0.8); }
+
+    /* ---------- page structure ---------- */
+    html { scroll-behavior: smooth; }
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+    .page { min-height: 92vh; }
+    .top { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 0 clamp(20px, 3.4vw, 48px); }   /* full width: logo and nav sit at the screen edges */
+    .top nav { display: flex; align-items: center; gap: 26px; }
+    .top nav a { color: #fff; text-decoration: none; font-weight: 700; font-size: 0.98rem; text-shadow: 0 1px 8px rgba(0,50,20,0.5); }
+    .top nav a:hover { text-decoration: underline; text-underline-offset: 5px; }
+    .nav-btn { appearance: none; border: 0; cursor: pointer; font: inherit; font-weight: 800; font-size: 0.95rem; color: #08371a; background: #fff; padding: 10px 20px; border-radius: 999px; }
+    .nav-btn:focus-visible, .top a:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+    .section { position: relative; z-index: 1; max-width: 1200px; margin: 0 auto; padding: 9vh 6vw 0; }
+    .section h2 { margin: 0 0 28px; font-size: clamp(1.8rem, 3.6vw, 2.6rem); font-weight: 800; letter-spacing: -0.03em; line-height: 1.1; text-shadow: 0 2px 16px rgba(0,50,20,0.5); }
+    .cards { display: grid; gap: 18px; }
+    .cards.three { grid-template-columns: repeat(3, 1fr); }
+    .cards.four { grid-template-columns: repeat(4, 1fr); }
+    .card { background: rgba(6,48,23,0.62); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-radius: 20px; padding: 26px 24px; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18), 0 14px 34px rgba(0,50,20,0.28); }
+    .card h3 { margin: 0 0 8px; font-size: 1.2rem; font-weight: 800; letter-spacing: -0.01em; }
+    .card p { margin: 0; color: rgba(255,255,255,0.86); line-height: 1.5; font-size: 0.98rem; }
+    .step-n { display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 50%; background: #fff; color: #08371a; font-weight: 800; margin-bottom: 14px; }
+    .band { text-align: center; padding: 7vh 6vw; border-radius: 28px; background: rgba(6,48,23,0.66); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18), 0 18px 44px rgba(0,50,20,0.32); }
+    .band h2 { margin-bottom: 12px; }
+    .band p { margin: 0 auto 28px; max-width: 32em; color: rgba(255,255,255,0.88); font-size: 1.1rem; line-height: 1.5; }
+    .band .actions { justify-content: center; margin-top: 0; }
+    footer { position: relative; z-index: 1; max-width: 1200px; margin: 0 auto; padding: 9vh 6vw calc(36px + env(safe-area-inset-bottom, 0px)); text-align: center; color: #08371a; font-size: 0.9rem; line-height: 1.7; font-weight: 600; }
+    @media (max-width: 860px) {
+        .cards.three, .cards.four { grid-template-columns: 1fr 1fr; }
+        .top nav a { display: none; }
+    }
+    @media (max-width: 560px) { .cards.three, .cards.four { grid-template-columns: 1fr; } }
+
+    /* ---------- sign in / create account modal ---------- */
+    .backdrop { position: fixed; inset: 0; z-index: 10; background: rgba(2,24,11,0.62); backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; padding: 20px; }
+    .backdrop.open { display: flex; }
+    .modal { width: 100%; max-width: 560px; max-height: calc(100vh - 40px); overflow-y: auto; background: #181818; border: 1px solid #282828; border-radius: 20px; padding: 40px 40px 36px; position: relative; box-shadow: 0 28px 70px rgba(0,0,0,0.55); }
+    .modal h2 { margin: 0 0 22px; font-size: 1.7rem; font-weight: 800; letter-spacing: -0.02em; padding-right: 36px; }
+    .modal-note { margin: -8px 0 20px; color: #a7a7a7; font-size: 0.95rem; line-height: 1.45; }
+    .x { position: absolute; top: 16px; right: 16px; width: 38px; height: 38px; border-radius: 50%; border: 0; background: transparent; color: #a7a7a7; font-size: 1.2rem; cursor: pointer; }
+    .x:hover { color: #fff; background: #242424; }
+    .tabs { display: flex; gap: 4px; background: #242424; padding: 5px; border-radius: 12px; margin-bottom: 26px; }
+    .tab { flex: 1; border: 0; background: transparent; color: #a7a7a7; font: inherit; font-weight: 700; font-size: 1rem; padding: 12px; border-radius: 8px; cursor: pointer; }
+    .tab.active { background: #fff; color: #000; }
+    .field { display: flex; flex-direction: column; gap: 8px; margin-bottom: 18px; }
+    .field label { font-size: 0.9rem; color: #a7a7a7; font-weight: 700; }
+    .field input, .field textarea { background: #242424; border: 1px solid #333; color: #fff; border-radius: 8px; padding: 15px 16px; font: inherit; font-size: 1.05rem; width: 100%; }
+    .field textarea { min-height: 120px; resize: vertical; }
+    .field input:focus, .field textarea:focus { outline: none; border-color: #1DB954; }
+    .submit { width: 100%; margin-top: 6px; padding: 17px; font-size: 1.1rem; background: #fff; color: #000; }
+    .submit:hover { background: #1DB954; color: #fff; }
+    .forgot { display: block; margin: 16px auto 0; background: none; border: 0; color: #1DB954; font: inherit; font-size: 0.95rem; cursor: pointer; }
+    .sent { text-align: center; padding: 28px 0 8px; }
+    .sent strong { display: block; font-size: 1.3rem; margin-bottom: 8px; }
+    .sent span { color: #a7a7a7; line-height: 1.5; }
+    @media (max-width: 560px) { .modal { padding: 32px 22px 26px; } }
+    .hidden { display: none; }
+    .modal.wide { max-width: 720px; }
+    .privacy-body h4 { margin: 24px 0 8px; font-size: 1.02rem; color: #1DB954; }
+    .privacy-body h4:first-of-type { margin-top: 0; }
+    .privacy-body p, .privacy-body li { font-size: 0.95rem; color: #c8c8c8; line-height: 1.6; }
+    .privacy-body ul { margin: 8px 0; padding-left: 22px; }
+    .privacy-body li { margin-bottom: 8px; }
+    .privacy-body a { color: #1DB954; }
+    .privacy-body strong { color: #fff; }
+    .privacy-updated { font-size: 0.85rem !important; color: #777 !important; margin: -8px 0 18px; }
+    .foot-link { appearance: none; background: none; border: 0; padding: 0; font: inherit; font-weight: 700; color: #08371a; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+    .err, .okmsg { display: none; margin: -4px 0 16px; font-size: 0.95rem; line-height: 1.4; }
+    .err { color: #ff5a6b; }
+    .okmsg { color: #1DB954; }
+    .submit:disabled { opacity: 0.6; cursor: default; }
+
+    @media (max-width: 860px) {
+        .hero { grid-template-columns: 1fr; gap: 36px; padding-top: 2vh; }
+        .phone { transform: rotateY(-8deg) rotateX(3deg) rotateZ(1.5deg); }
+        .actions .btn { flex: 1 1 auto; }
+    }
+</style>
+</head>
+<body>
+    <div class="bg" aria-hidden="true">
+        <div class="glow g3"></div><div class="glow g1"></div><div class="glow g2"></div>
+        <div class="slab s1"></div><div class="slab s2"></div><div class="slab s3"></div>
+    </div>
+
+    <div class="page">
+        <header class="top">
+            <a class="brand" href="/" aria-label="Cuelistr home"><img src="/assets/cuelistr-logo-dark.svg" alt="Cuelistr" onerror="this.replaceWith(document.createTextNode('Cuelistr'))"></a>
+            <nav>
+                <a href="#how">How it works</a>
+                <a href="#features">Features</a>
+                <button type="button" class="nav-btn" data-signin>Sign in</button>
+            </nav>
+        </header>
+
+        <main class="hero">
+            <section>
+                <h1>Your music, your night.</h1>
+                <p class="lede">Scan the code, search a song and request it. No app needed.</p>
+                <div class="actions">
+                    <a class="btn btn-primary" href="/request">Join the party</a>
+                    <button type="button" class="btn btn-ghost" data-signin>Sign in</button>
+                </div>
+            </section>
+
+            <section class="phone-wrap" aria-label="Example of the guest request page">
+                <div class="phone">
+                    <i class="sb a"></i><i class="sb b"></i><i class="sb c"></i><i class="sb p"></i>
+                    <div class="bezel"><div class="screen">
+                        <div class="island"></div>
+                        <div class="status"><span>9:41</span><span class="ico">
+                            <svg viewBox="0 0 18 11"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="5" y="5" width="3" height="6" rx="1"/><rect x="10" y="2.5" width="3" height="8.5" rx="1"/><rect x="15" y="0" width="3" height="11" rx="1"/></svg>
+                            <svg viewBox="0 0 16 11"><path d="M8 2.2c2.2 0 4.2.9 5.7 2.3l1.1-1.2C12.9 1.5 10.6.4 8 .4S3.1 1.5 1.2 3.3l1.1 1.2C3.8 3.1 5.8 2.2 8 2.2zm0 3.6c1.3 0 2.4.5 3.3 1.3l1.1-1.2C11.2 4.8 9.7 4.1 8 4.1s-3.2.7-4.4 1.8l1.1 1.2c.9-.8 2-1.3 3.3-1.3zM8 9.4l1.7-1.8a2.4 2.4 0 0 0-3.4 0L8 9.4z"/></svg>
+                            <svg viewBox="0 0 26 12"><rect x="0.5" y="0.5" width="22" height="11" rx="3.2" fill="none" stroke="#fff" stroke-opacity=".55"/><rect x="2" y="2" width="17" height="8" rx="2"/><rect x="23.5" y="4" width="2" height="4" rx="1" fill-opacity=".55"/></svg>
+                        </span></div>
+                        <div class="ga" id="ga">
+                            <div class="g-container">
+                                <div class="g-header">
+                                    <div class="g-menu"><svg viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg></div>
+                                    <h3>Cuelistr</h3>
+                                    <div class="g-badge"><b>3</b><span>Credits</span></div>
+                                </div>
+                                <div class="g-search">Search for songs or artists...</div>
+                                <div class="g-title">Up Next</div>
+                                <div id="queue"></div>
+                            </div>
+                            <div class="g-np">
+                                <div class="g-track"><i></i></div>
+                                <div class="g-art" style="background:linear-gradient(135deg,#ff8a00,#e52e71)"></div>
+                                <div class="g-txt"><div class="g-song">Dancing Queen</div><div class="g-artist">ABBA</div></div>
+                                <div class="g-dot"></div>
+                            </div>
+                        </div>
+                        <div class="home-ind"></div>
+                    </div></div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+
+    <section class="section" id="how">
+        <h2>How it works</h2>
+        <div class="cards three">
+            <div class="card"><div class="step-n">1</div><h3>Scan the code</h3><p>Guests scan the QR code at the venue. Nothing to download and no account to make.</p></div>
+            <div class="card"><div class="step-n">2</div><h3>Search and request</h3><p>Find any song on Spotify and send it to the queue. Everyone can vote on what plays next.</p></div>
+            <div class="card"><div class="step-n">3</div><h3>Watch it play</h3><p>The queue updates live on every phone, the kiosk and the big screen, with a music video for the song.</p></div>
+        </div>
+    </section>
+
+    <section class="section" id="features">
+        <h2>Everything the venue needs</h2>
+        <div class="cards four">
+            <div class="card"><h3>Music videos</h3><p>The official video for each song plays on your venue screen, in time with the music.</p></div>
+            <div class="card"><h3>Kiosk mode</h3><p>A touch screen where guests search and request, with a QR code when nobody is using it.</p></div>
+            <div class="card"><h3>Scheduler</h3><p>Plan what plays and what shows on the screens by day and time.</p></div>
+            <div class="card"><h3>Family mode</h3><p>Keep requests, lyrics and videos suitable for every age in the room.</p></div>
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="band">
+            <h2>Running an event?</h2>
+            <p>Set up your venue, connect Spotify and share the code. Your guests can be requesting songs in minutes.</p>
+            <div class="actions">
+                <button type="button" class="btn btn-primary" data-signup>Sign up</button>
+                <a class="btn btn-ghost" href="/request">Join the party</a>
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <div>Made by Sam B &nbsp;|&nbsp; <button type="button" class="foot-link" id="open-privacy">Privacy Policy</button></div>
+        <div>Song search and playback powered by Spotify. Music videos from YouTube.</div>
+    </footer>
+
+    <!-- Admin sign in / create account (mockup only: the real forms and API calls live on /new) -->
+    <div class="backdrop" id="signin-backdrop" role="dialog" aria-modal="true" aria-labelledby="signin-title">
+        <div class="modal">
+            <button type="button" class="x" id="close-signin" aria-label="Close">&times;</button>
+            <h2 id="signin-title">Host sign in</h2>
+            <div class="tabs">
+                <button type="button" class="tab active" id="tab-login">Log in</button>
+                <button type="button" class="tab" id="tab-signup">Sign up</button>
+            </div>
+            <form id="form-login">
+                <div class="field"><label for="li-user">Username</label><input id="li-user" autocomplete="username" autocapitalize="off" autocorrect="off"></div>
+                <div class="field"><label for="li-pass">Password</label><input id="li-pass" type="password" autocomplete="current-password"></div>
+                <div class="err" id="li-err"></div>
+                <button type="submit" class="btn submit">Log in</button>
+                <button type="button" class="forgot" id="go-forgot">Forgot password?</button>
+            </form>
+            <form id="form-signup" class="hidden">
+                <div class="field"><label for="su-user">Username</label><input id="su-user" autocomplete="username" autocapitalize="off" autocorrect="off" placeholder="3-30 characters, no spaces"></div>
+                <div class="field"><label for="su-mail">Email</label><input id="su-mail" type="email" autocomplete="email" autocapitalize="off" autocorrect="off"></div>
+                <div class="field"><label for="su-pass">Password</label><input id="su-pass" type="password" autocomplete="new-password" placeholder="At least 8 characters"></div>
+                <div class="err" id="su-err"></div>
+                <button type="submit" class="btn submit">Sign up</button>
+            </form>
+            <form id="form-forgot" class="hidden">
+                <div class="field"><label for="fp-mail">Email</label><input id="fp-mail" type="email" autocomplete="email" autocapitalize="off" autocorrect="off"></div>
+                <div class="err" id="fp-err"></div>
+                <div class="okmsg" id="fp-ok"></div>
+                <button type="submit" class="btn submit">Send reset link</button>
+                <button type="button" class="forgot" id="back-login">Back to log in</button>
+            </form>
+        </div>
+    </div>
+
+
+    <!-- Privacy policy (same text as the guest page) -->
+    <div class="backdrop" id="privacy-backdrop" role="dialog" aria-modal="true" aria-labelledby="privacy-title">
+        <div class="modal wide">
+            <button type="button" class="x" id="close-privacy" aria-label="Close">&times;</button>
+            <h2 id="privacy-title">Privacy Policy</h2>
+            <div class="privacy-body">
+                <p class="privacy-updated">Last updated: September 2026</p>
+
+                <h4>What this site is</h4>
+                <p>This is a small, independent song-request tool built for live events. It's not a company product - there's no ad tracking and no data resale.</p>
+
+                <h4>What guests see collected</h4>
+                <ul>
+                    <li><strong>The name you type in</strong> when you make your first request. It's shown to the admin so they know who requested each song - that's the only reason it's collected.</li>
+                    <li><strong>A random anonymous ID</strong>, stored as a cookie on your device, used only to stop the same device from voting on a song more than once. It isn't linked to your name or any personal info.</li>
+                    <li><strong>Your song requests and votes themselves</strong> (title, artist, timestamp), so the queue can function and the admin can see request history for the event.</li>
+                </ul>
+
+                <h4>Location (optional)</h4>
+                <p>If you allow it, your browser's location is used for two things: showing how far away each event is when you're picking a venue from the list/map, and - if the event's DJ has turned this on - confirming you're actually near the venue before letting you request or vote. Both checks happen entirely on your own device by comparing your coordinates to the venue's; your location is never sent to or stored on this site's server. You can decline the location prompt and still use the site - you just won't see distances, and a DJ-enabled venue check won't be able to confirm you're there.</p>
+
+                <h4>DJ / admin accounts</h4>
+                <p>Running an event requires a separate account, created with a username, an email address, and a password. Passwords are stored using a one-way cryptographic hash (scrypt) - never in plain text, and not readable by anyone including us. Logging in sets a session cookie so you stay signed in; it identifies your session only, not you personally. If you request a password reset, a one-time link (valid for 30 minutes) is emailed to the address on the account, sent through a third-party email delivery service (Brevo) whose own handling of that email address is covered by <a href="https://www.brevo.com/legal/privacypolicy/" target="_blank" rel="noopener">Brevo's privacy policy</a>, not this one.</p>
+
+                <h4>Music videos</h4>
+                <p>If an event has this feature turned on, the site looks for the official YouTube video matching whatever's playing on Spotify and shows it alongside the audio. To find and verify the right video, the site temporarily downloads short audio clips from candidate YouTube videos and compares them against the actual song using audio analysis on the server - these clips are never stored, saved, or shown to anyone, and are discarded immediately after comparison. The video itself is only ever played through YouTube's own embedded player; nothing is downloaded, stored, or rehosted from the video itself. As an additional safety check, sample frames from candidate videos may be checked by an automated content-moderation service before a video is ever shown, and event organizers can also turn on a stricter "family mode" that only shows videos from a manually pre-approved list. None of this involves your name, your requests, or any guest-identifying information - it's entirely about the song and the video, not about you.</p>
+
+                <h4>What we don't do</h4>
+                <ul>
+                    <li>Guests don't need an account, email, or password to use this site - that's only required to run an event as a DJ/admin.</li>
+                    <li>We don't sell, share, or use your data for advertising.</li>
+                    <li>We don't use third-party tracking or advertising cookies. The cookies and storage described above are functional only - they make the site work, and aren't used to track you across other sites.</li>
+                </ul>
+
+                <h4>How long data is kept</h4>
+                <p>Event data - including guest names, requests, votes, and DJ/admin account details - is stored in a database so an event can be paused and resumed, and isn't automatically wiped when the server restarts. It's kept until the event's admin deletes the event, which removes it. Technical data about which YouTube video matches a given song (and any content-safety decisions made about it) is cached separately and shared across all events - it's about the song/video, not about any guest, and isn't tied to your name, requests, or votes.</p>
+
+                <h4>Third parties</h4>
+                <p>Song search and playback use the Spotify API. You don't log into Spotify yourself to use this site - only the event's DJ connects a Spotify account, separately, to enable playback. Music videos are embedded from YouTube. Password-reset emails are sent through Brevo. The venue map is rendered using tiles from CARTO, which sees your device's IP address and the map area you're viewing (not your precise location, unless you've allowed the location prompt described above). Each of these services' own handling of the data they see is covered by their own privacy policy, not this one: <a href="https://www.spotify.com/legal/privacy-policy/" target="_blank" rel="noopener">Spotify</a>, <a href="https://www.google.com/policies/privacy/" target="_blank" rel="noopener">YouTube/Google</a>, <a href="https://www.brevo.com/legal/privacypolicy/" target="_blank" rel="noopener">Brevo</a>, <a href="https://carto.com/privacy-policy" target="_blank" rel="noopener">CARTO</a>.</p>
+
+                <h4>Questions</h4>
+                <p>This site is made and maintained by Sam B. If you have questions about how it works, ask whoever's running the event tonight, or reach out directly if you know how to find them.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Stock queue for the phone mockup
+        const SONGS = [
+            ['Mr. Brightside', 'The Killers', 24, 1],
+            ['Blinding Lights', 'The Weeknd', 19, 1],
+            ['September', 'Earth, Wind & Fire', 15, 0],
+            ['Levitating', 'Dua Lipa', 12, 1],
+            ['Valerie', 'Amy Winehouse', 9, 0],
+            ['Don’t Stop Me Now', 'Queen', 8, 0],
+            ['Sweet Child O’ Mine', 'Guns N’ Roses', 6, 0],
+            ['Uptown Funk', 'Mark Ronson, Bruno Mars', 4, 0]
+        ];
+        const HEART = '<svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54z"/></svg>';
+        const THUMB = '<svg viewBox="0 0 24 24"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>';
+        document.getElementById('queue').innerHTML = SONGS.map(function (s, i) {
+            var hue = (i * 47 + 150) % 360;
+            return '<div class="g-row"><div class="g-det"><div class="g-art" style="background:linear-gradient(135deg,hsl(' + hue + ',70%,52%),hsl(' + ((hue + 50) % 360) + ',65%,32%))"></div>' +
+                '<div class="g-txt"><div class="g-song">' + s[0] + '</div><div class="g-artist">' + s[1] + '</div></div></div>' +
+                '<div class="g-vote' + (s[3] ? ' on' : '') + '">' + THUMB + '<i>' + s[2] + '</i></div></div>';
+        }).join('');
+
+        // The page is laid out at a true 390px phone width, then scaled to whatever size the phone is shown at.
+        (function () {
+            var screen = document.querySelector('.screen'), ga = document.getElementById('ga');
+            function fit() {
+                var k = screen.clientWidth / 390;
+                ga.style.transform = 'scale(' + k + ')';
+                ga.style.height = (screen.clientHeight / k) + 'px';
+            }
+            fit();
+            window.addEventListener('resize', fit);
+            if (window.ResizeObserver) new ResizeObserver(fit).observe(screen);
+        })();
+
+        // ---------- Host sign in / sign up / forgot password: same account API as /new ----------
+        var backdrop = document.getElementById('signin-backdrop');
+        var TITLES = { login: 'Host sign in', signup: 'Create your host account', forgot: 'Reset your password' };
+        function showView(name) {
+            ['login', 'signup', 'forgot'].forEach(function (n) { document.getElementById('form-' + n).classList.toggle('hidden', n !== name); });
+            document.getElementById('tab-login').classList.toggle('active', name === 'login');
+            document.getElementById('tab-signup').classList.toggle('active', name === 'signup');
+            document.querySelector('.tabs').classList.toggle('hidden', name === 'forgot');
+            document.getElementById('signin-title').textContent = TITLES[name];
+            document.querySelectorAll('.err, .okmsg').forEach(function (e) { e.style.display = 'none'; });
+        }
+        function openModal(signup) {
+            showView(signup ? 'signup' : 'login'); backdrop.classList.add('open');
+            setTimeout(function () { document.getElementById(signup ? 'su-user' : 'li-user').focus(); }, 30);
+        }
+        function closeModal() { backdrop.classList.remove('open'); }
+        function showMsg(id, text) { var e = document.getElementById(id); e.textContent = text; e.style.display = 'block'; }
+        async function post(url, body) {
+            var res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+            var data = {}; try { data = await res.json(); } catch (e) { /* non-JSON reply */ }
+            return { ok: res.ok, data: data };
+        }
+        // Runs a form's request with the button disabled; `go` returns true when it worked.
+        function wire(formId, errId, failText, go) {
+            var form = document.getElementById(formId), btn = form.querySelector('.submit');
+            form.addEventListener('submit', async function (e) {
+                e.preventDefault();
+                document.getElementById(errId).style.display = 'none';
+                var label = btn.textContent; btn.disabled = true; btn.textContent = 'One moment...';
+                try { await go(); }
+                catch (err) { showMsg(errId, 'Could not reach the server. Try again.'); }
+                btn.disabled = false; btn.textContent = label;
+            });
+        }
+        // After logging in or signing up, /new is where hosts see their events and create new ones.
+        wire('form-login', 'li-err', 'Could not log in.', async function () {
+            var r = await post('/api/account/login', { username: document.getElementById('li-user').value.trim(), password: document.getElementById('li-pass').value });
+            if (!r.ok) return showMsg('li-err', r.data.error || 'Could not log in.');
+            location.href = '/new';
+        });
+        wire('form-signup', 'su-err', 'Could not create account.', async function () {
+            var r = await post('/api/account/signup', { username: document.getElementById('su-user').value.trim(), email: document.getElementById('su-mail').value.trim(), password: document.getElementById('su-pass').value });
+            if (!r.ok) return showMsg('su-err', r.data.error || 'Could not create account.');
+            location.href = '/new';
+        });
+        wire('form-forgot', 'fp-err', 'Could not send the reset link.', async function () {
+            var r = await post('/api/account/forgot-password', { email: document.getElementById('fp-mail').value.trim() });
+            showMsg('fp-ok', r.data.message || 'If that email is registered, a reset link has been sent.');
+        });
+
+        document.querySelectorAll('[data-signin]').forEach(function (el) { el.addEventListener('click', function () { openModal(false); }); });
+        document.querySelectorAll('[data-signup]').forEach(function (el) { el.addEventListener('click', function () { openModal(true); }); });
+        document.getElementById('close-signin').addEventListener('click', closeModal);
+        document.getElementById('tab-login').addEventListener('click', function () { showView('login'); });
+        document.getElementById('tab-signup').addEventListener('click', function () { showView('signup'); });
+        document.getElementById('go-forgot').addEventListener('click', function () { showView('forgot'); document.getElementById('fp-mail').focus(); });
+        document.getElementById('back-login').addEventListener('click', function () { showView('login'); });
+        backdrop.addEventListener('click', function (e) { if (e.target === backdrop) closeModal(); });
+        var privacy = document.getElementById('privacy-backdrop');
+        document.getElementById('open-privacy').addEventListener('click', function () { privacy.classList.add('open'); privacy.querySelector('.modal').scrollTop = 0; });
+        document.getElementById('close-privacy').addEventListener('click', function () { privacy.classList.remove('open'); });
+        privacy.addEventListener('click', function (e) { if (e.target === privacy) privacy.classList.remove('open'); });
+        document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { closeModal(); privacy.classList.remove('open'); } });
+
+        // Already logged in on this device? Then "Sign in" becomes a shortcut to their events.
+        fetch('/api/account/me').then(function (r) { return r.json(); }).then(function (d) {
+            if (!d || !d.loggedIn) return;
+            document.querySelectorAll('[data-signin]').forEach(function (el) {
+                var fresh = el.cloneNode(true); fresh.textContent = 'My events'; fresh.removeAttribute('data-signin');
+                fresh.addEventListener('click', function () { location.href = '/new'; });
+                el.replaceWith(fresh);
+            });
+        }).catch(function () { /* not logged in, or offline */ });
+    </script>
+</body>
+</html>
