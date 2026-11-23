@@ -189,6 +189,12 @@ function voterIdentityMiddleware(req, res, next) {
 // The landing page lives at the bare address only. This has to come BEFORE express.static below,
 // otherwise static would serve public/landing.html directly and "/landing.html" would show in the bar.
 app.get('/landing.html', (req, res) => res.redirect(301, '/'));
+// Account pages now live in the dashboard on the home page. Old bookmarks and password-reset emails still work:
+app.get('/new-event.html', (req, res) => res.redirect('/'));
+app.get('/reset-password.html', (req, res) => {
+    const u = encodeURIComponent(String(req.query.username || '')), t = encodeURIComponent(String(req.query.token || ''));
+    res.redirect(u && t ? `/?resetUser=${u}&resetToken=${t}` : '/');
+});
 
 // { index: false } stops express.static from auto-serving public/index.html
 // for GET '/' - without this, requests to the bare root would silently serve
@@ -3253,7 +3259,7 @@ app.post('/api/account/forgot-password', forgotPasswordLimiter, async (req, res)
         const token = await events.createPasswordResetToken(user.username);
         if (token) {
             const origin = `${req.protocol}://${req.get('host')}`;
-            const resetUrl = `${origin}/reset-password.html?username=${encodeURIComponent(user.username)}&token=${encodeURIComponent(token)}`;
+            const resetUrl = `${origin}/?resetUser=${encodeURIComponent(user.username)}&resetToken=${encodeURIComponent(token)}`;
             sendPasswordResetEmail(user.email, resetUrl).catch(err => console.error('[EMAIL] Unexpected send error:', err.message));
         }
         // If token creation failed (DB hiccup), we still return the generic
@@ -3274,6 +3280,20 @@ app.post('/api/account/reset-password', accountAuthLimiter, async (req, res) => 
     const valid = await events.verifyAndConsumeResetToken(username, token);
     if (!valid) return res.status(400).json({ error: 'That reset link is invalid or has expired. Request a new one.' });
     const result = await events.setUserPassword(username, newPassword);
+    if (result.error) return res.status(statusForAccountError(result.error, 400)).json({ error: result.error });
+    res.json({ success: true });
+});
+
+// Change password from the dashboard: needs the current password as well as the session.
+app.post('/api/account/change-password', accountAuthLimiter, requireAccountAuth, async (req, res) => {
+    const { currentPassword, newPassword } = req.body || {};
+    if (typeof currentPassword !== 'string' || typeof newPassword !== 'string') {
+        return res.status(400).json({ error: 'Current and new password are required.' });
+    }
+    if (newPassword.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+    const ok = await events.verifyUserCredentials(req.accountUsername, currentPassword);
+    if (!ok) return res.status(401).json({ error: 'Your current password is incorrect.' });
+    const result = await events.setUserPassword(req.accountUsername, newPassword);
     if (result.error) return res.status(statusForAccountError(result.error, 400)).json({ error: result.error });
     res.json({ success: true });
 });
@@ -7298,7 +7318,7 @@ app.post('/e/:slug/api/music-video/sync-failed', publicReadLimiter, (req, res) =
 // Bare, un-slugged paths from old bookmarks/muscle memory - point people at
 // the new event-creation flow instead of silently 404ing.
 app.get('/admin', (req, res) => {
-    res.redirect('/new');
+    res.redirect('/');
 });
 
 // Slugless pages, so each can be installed once as an Android app. Both read which
@@ -7314,7 +7334,7 @@ app.get('/manager', (req, res) => {
 // guest page (see below), not this. voterIdentityMiddleware isn't relevant
 // here since there's no :slug yet to scope a cookie to.
 app.get('/new', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'new-event.html'));
+    res.redirect('/');   // event creation is now a tab in the home-page dashboard (see landing.html)
 });
 
 // Public home page. Hosts and curious visitors land on public/landing.html; guests go straight
