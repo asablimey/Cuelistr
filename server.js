@@ -186,6 +186,10 @@ function voterIdentityMiddleware(req, res, next) {
     next();
 }
 
+// The landing page lives at the bare address only. This has to come BEFORE express.static below,
+// otherwise static would serve public/landing.html directly and "/landing.html" would show in the bar.
+app.get('/landing.html', (req, res) => res.redirect(301, '/'));
+
 // { index: false } stops express.static from auto-serving public/index.html
 // for GET '/' - without this, requests to the bare root would silently serve
 // the guest page directly, bypassing new-event.html and every /e/:slug route
@@ -7311,6 +7315,19 @@ app.get('/manager', (req, res) => {
 // here since there's no :slug yet to scope a cookie to.
 app.get('/new', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'new-event.html'));
+});
+
+// Public home page. Hosts and curious visitors land on public/landing.html; guests go straight
+// to the guest page at /request (or its aliases). If landing.html hasn't been deployed yet, the
+// bare root falls back to the guest page exactly as before, so nothing breaks.
+// IMPORTANT: landing.html must be saved as public/landing.html, NOT public/index.html -
+// index.html is the guest page that /request, /e/:slug and the fallback below all serve.
+const LANDING_FILE = path.join(__dirname, 'public', 'landing.html');
+app.get('/', (req, res) => {
+    res.sendFile(require('fs').existsSync(LANDING_FILE) ? LANDING_FILE : path.join(__dirname, 'public', 'index.html'));
+});
+app.get(['/request', '/join', '/app', '/cuelistr'], (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 // The single guest URL. With no event chosen yet, index.html renders itself
