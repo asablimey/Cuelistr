@@ -186,16 +186,6 @@ function voterIdentityMiddleware(req, res, next) {
     next();
 }
 
-// The landing page lives at the bare address only. This has to come BEFORE express.static below,
-// otherwise static would serve public/landing.html directly and "/landing.html" would show in the bar.
-app.get('/landing.html', (req, res) => res.redirect(301, '/'));
-// Account pages now live in the dashboard on the home page. Old bookmarks and password-reset emails still work:
-app.get('/new-event.html', (req, res) => res.redirect('/'));
-app.get('/reset-password.html', (req, res) => {
-    const u = encodeURIComponent(String(req.query.username || '')), t = encodeURIComponent(String(req.query.token || ''));
-    res.redirect(u && t ? `/?resetUser=${u}&resetToken=${t}` : '/');
-});
-
 // { index: false } stops express.static from auto-serving public/index.html
 // for GET '/' - without this, requests to the bare root would silently serve
 // the guest page directly, bypassing new-event.html and every /e/:slug route
@@ -3259,7 +3249,7 @@ app.post('/api/account/forgot-password', forgotPasswordLimiter, async (req, res)
         const token = await events.createPasswordResetToken(user.username);
         if (token) {
             const origin = `${req.protocol}://${req.get('host')}`;
-            const resetUrl = `${origin}/?resetUser=${encodeURIComponent(user.username)}&resetToken=${encodeURIComponent(token)}`;
+            const resetUrl = `${origin}/reset-password.html?username=${encodeURIComponent(user.username)}&token=${encodeURIComponent(token)}`;
             sendPasswordResetEmail(user.email, resetUrl).catch(err => console.error('[EMAIL] Unexpected send error:', err.message));
         }
         // If token creation failed (DB hiccup), we still return the generic
@@ -7318,7 +7308,7 @@ app.post('/e/:slug/api/music-video/sync-failed', publicReadLimiter, (req, res) =
 // Bare, un-slugged paths from old bookmarks/muscle memory - point people at
 // the new event-creation flow instead of silently 404ing.
 app.get('/admin', (req, res) => {
-    res.redirect('/');
+    res.redirect('/new');
 });
 
 // Slugless pages, so each can be installed once as an Android app. Both read which
@@ -7334,18 +7324,9 @@ app.get('/manager', (req, res) => {
 // guest page (see below), not this. voterIdentityMiddleware isn't relevant
 // here since there's no :slug yet to scope a cookie to.
 app.get('/new', (req, res) => {
-    res.redirect('/');   // event creation is now a tab in the home-page dashboard (see landing.html)
+    res.sendFile(path.join(__dirname, 'public', 'new-event.html'));
 });
 
-// Public home page. Hosts and curious visitors land on public/landing.html; guests go straight
-// to the guest page at /request (or its aliases). If landing.html hasn't been deployed yet, the
-// bare root falls back to the guest page exactly as before, so nothing breaks.
-// IMPORTANT: landing.html must be saved as public/landing.html, NOT public/index.html -
-// index.html is the guest page that /request, /e/:slug and the fallback below all serve.
-const LANDING_FILE = path.join(__dirname, 'public', 'landing.html');
-app.get('/', (req, res) => {
-    res.sendFile(require('fs').existsSync(LANDING_FILE) ? LANDING_FILE : path.join(__dirname, 'public', 'index.html'));
-});
 // Public list of songs that have a music video: Artist | Title | Video Type, A-Z by artist then title.
 // Only rows that are switched ON and have a YouTube link are included (the others can't play). Cached for a minute.
 let publicCatalogCsv = { at: 0, csv: '' };
