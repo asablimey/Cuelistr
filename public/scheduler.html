@@ -2321,10 +2321,28 @@
         }
 
         // ---------- Timetable ----------
+        // Picks how many hours apart the ruler labels sit. The more you zoom in (bigger
+        // hourPx), the finer the step gets - 2h, 1h, 30min, 15min - while the labels
+        // always keep a readable minimum width so they never overlap when zoomed out.
+        const RULER_MIN_LABEL_PX = 56;
+        const RULER_STEPS_HOURS = [0.25, 0.5, 1, 2, 3, 4, 6]; // all divide 24 evenly
+        function rulerStepHours() {
+            return RULER_STEPS_HOURS.find(st => st * hourPx >= RULER_MIN_LABEL_PX) || 6;
+        }
+        function formatRulerLabel(hoursFloat) {
+            const totalMin = Math.round(hoursFloat * 60);
+            const h24 = Math.floor(totalMin / 60) % 24;
+            const m = totalMin % 60;
+            const suffix = h24 < 12 ? 'am' : 'pm';
+            const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+            return m === 0 ? `${h12}${suffix}` : `${h12}:${String(m).padStart(2, '0')}${suffix}`;
+        }
         function buildRulerHtml() {
             let html = `<div class="ruler-spacer" style="width:${LANE_LABEL_WIDTH}px;"></div>`;
-            for (let h = 0; h < 24; h += 2) {
-                html += `<div class="hour-label" style="width:${hourPx * 2}px;">${h === 0 ? '12am' : h < 12 ? h + 'am' : h === 12 ? '12pm' : (h - 12) + 'pm'}</div>`;
+            const step = rulerStepHours();
+            const count = Math.round(24 / step);
+            for (let i = 0; i < count; i++) {
+                html += `<div class="hour-label" style="width:${hourPx * step}px;">${formatRulerLabel(i * step)}</div>`;
             }
             return html;
         }
