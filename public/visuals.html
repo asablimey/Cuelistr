@@ -564,6 +564,18 @@
          if it fails) from inside the script below, not as a static tag -
          see loadYouTubeApi(). -->
     <script>
+        /* ---- Smooth progress ticker ----
+           Redraws every animation frame (instead of a 250ms timer) so progress bars glide
+           instead of stepping. smoothTick(fn) returns a handle; smoothStop(handle) stops it.
+           smoothStop also accepts a plain setInterval id. setTxt only writes when text changed. */
+        function smoothTick(fn) {
+            const h = { on: true };
+            (function loop() { if (!h.on) return; try { fn(); } catch (e) { /* keep ticking */ } requestAnimationFrame(loop); })();
+            return h;
+        }
+        function smoothStop(h) { if (typeof h === 'number') clearInterval(h); else if (h) h.on = false; }
+        function setTxt(el, v) { if (el && el.textContent !== v) el.textContent = v; }
+
         const EVENT_SLUG = location.pathname.split('/')[2] || '';
         function eventUrl(p) { return `/e/${EVENT_SLUG}${p}`; }
 
@@ -615,8 +627,8 @@
                 const pct = s && s.durationMs ? (currentMs() / s.durationMs) * 100 : 0;
                 el.style.width = pct.toFixed(2) + '%';
             };
-            const ensureTimer = () => { if (!timer) timer = setInterval(paint, 250); };
-            const stopTimer = () => { if (timer) { clearInterval(timer); timer = null; } };
+            const ensureTimer = () => { if (!timer) timer = smoothTick(paint); };
+            const stopTimer = () => { if (timer) { smoothStop(timer); timer = null; } };
 
             return {
                 update(np) {
