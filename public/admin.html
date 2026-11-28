@@ -225,13 +225,6 @@
         .btn-add-track:hover { filter: brightness(1.1); }
         .btn-add-track:disabled { opacity: 0.6; cursor: default; }
 
-        /* ---- Song History: All / Requests toggle + per-row Add button ---- */
-        .history-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-        .history-heading-sub { font-size: 0.8em; font-weight: 600; color: var(--text-muted); }
-        .history-seg button { padding: 5px 12px; font-size: 0.78rem; }
-        .history-row .song-details { align-items: center; }
-        .history-row .btn-add-track { margin-left: auto; align-self: center; }
-
         .save-config-btn {
             background-color: var(--text);
             color: var(--panel-bg);
@@ -584,48 +577,6 @@
 
         .playback-disconnected { color: var(--text-muted); padding: 40px 20px; }
         .playback-disconnected a { color: var(--spotify-green); }
-
-        /* ---- Playback & Queue tab: slim "Add a Song" bar + playback box pinned to the bottom ---- */
-        .add-song-bar { margin-bottom: 12px; }
-        .add-song-bar input[type="text"] {
-            width: 100%; box-sizing: border-box; background-color: var(--card-bg);
-            border: 1px solid var(--border-strong); padding: 8px 12px; color: var(--text);
-            border-radius: 8px; font-size: 0.9rem;
-        }
-        .add-song-bar input[type="text"]:focus { outline: none; border-color: var(--spotify-green); }
-        .playback-dock {
-            flex: none; margin-top: 12px;
-            background: var(--panel-bg); border: 1px solid var(--border); border-radius: 14px;
-            padding: 10px 16px; box-sizing: border-box;
-        }
-        #admin-search-results { max-height: 40vh; overflow-y: auto; }
-
-        /* Playback & Queue tab fills the screen like manager: header at the top, playback box pinned
-           at the bottom, and ONLY the queue list scrolls in between. (The thin now-playing strip is
-           hidden here - the playback box already shows the same thing.) */
-        html:has(body.tab-queue) { overflow: hidden; }
-        body.tab-queue { height: 100vh; height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
-        body.tab-queue.has-now-playing-bar { padding-bottom: var(--page-pad, 20px); }
-        body.tab-queue .now-playing-bar { display: none !important; }
-        body.tab-queue > .header { flex: none; }
-        body.tab-queue > #tab-panel-queue.active-content { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-        body.tab-queue #tab-panel-queue > .panel { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-        body.tab-queue #tab-panel-queue > .panel > h2,
-        body.tab-queue #tab-panel-queue .add-song-bar { flex: none; }
-        body.tab-queue #queue-list { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
-        .playback-dock .playback-panel { flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: flex-start; text-align: left; gap: 8px 20px; }
-        .playback-dock .playback-artwork { width: 52px; height: 52px; border-radius: 8px; box-shadow: none; order: 0; }
-        .playback-dock .playback-panel > div:not([class]) { order: 1; flex: 1 1 180px; min-width: 0; }
-        .playback-dock .playback-title { font-size: 1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .playback-dock .playback-artist { font-size: 0.85rem; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .playback-dock .playback-device { font-size: 0.72rem; margin-top: 2px; }
-        .playback-dock .playback-transport { order: 2; gap: 10px; }
-        .playback-dock .playback-icon-btn.playback-play-pause { width: 44px; height: 44px; }
-        .playback-dock .playback-icon-btn.playback-play-pause svg { width: 22px; height: 22px; }
-        .playback-dock .playback-progress-wrap { order: 3; flex: 2 1 260px; max-width: none; width: auto; }
-        .playback-dock .playback-volume-row { order: 4; flex: 1 1 150px; max-width: 220px; width: auto; }
-        .playback-dock .playback-upcoming { display: none !important; } /* the queue above already shows what is next */
-        .playback-dock .playback-disconnected { padding: 10px 6px; font-size: 0.9rem; }
 
         .playback-upcoming { width: 100%; max-width: 460px; text-align: left; margin-top: 8px; }
         .playback-upcoming h3 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin: 0 0 10px 0; }
@@ -1005,6 +956,17 @@
             margin: 2px 0 0 0; font-size: 0.75rem; color: var(--text-muted);
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
+        .now-playing-live-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            background-color: var(--spotify-green);
+            flex-shrink: 0;
+            animation: now-playing-pulse 1.5s ease-in-out infinite;
+        }
+        .now-playing-live-dot.is-paused { animation: none; opacity: 0.3; }
+        @keyframes now-playing-pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.35; }
+        }
         body.has-now-playing-bar { padding-bottom: 76px; }
 
             .video-tag { color: var(--spotify-green, #1DB954); font-size: 0.75rem; font-weight: 700; margin-left: 6px; white-space: nowrap; }
@@ -1014,7 +976,7 @@
         .pend-no { background: var(--red-action, #e91429); }
     </style>
 </head>
-<body class="tab-queue">
+<body>
 
     <div id="admin-lock-screen">
         <div class="lock-container">
@@ -1032,7 +994,8 @@
             <h3>Menu</h3>
             <button class="sidebar-close-btn" onclick="closeSidebar()">✕</button>
         </div>
-        <button type="button" id="sidebar-nav-queue" class="sidebar-nav-item active-tab" onclick="switchTab('queue')">Playback &amp; Queue</button>
+        <button type="button" id="sidebar-nav-playback" class="sidebar-nav-item" onclick="switchTab('playback')">Playback</button>
+        <button type="button" id="sidebar-nav-queue" class="sidebar-nav-item active-tab" onclick="switchTab('queue')">Up Next</button>
         <button type="button" id="sidebar-nav-pending" class="sidebar-nav-item" onclick="switchTab('pending')">Pending</button>
         <button type="button" id="sidebar-nav-history" class="sidebar-nav-item" onclick="switchTab('history')">Song History</button>
         <button type="button" id="sidebar-nav-settings" class="sidebar-nav-item" onclick="switchTab('settings')">Settings</button>
@@ -1094,73 +1057,78 @@
         </div>
     </div>
 
+    <div id="tab-panel-playback" class="tab-content">
+        <div class="panel">
+            <h2>Playback</h2>
+            <div id="playback-connected-view" class="playback-panel" style="display:none;">
+                <img class="playback-artwork" id="playback-artwork" src="" alt="">
+                <div>
+                    <p class="playback-title" id="playback-title"></p>
+                    <p class="playback-artist" id="playback-artist"></p>
+                    <p class="playback-device" id="playback-device"></p>
+                </div>
+
+                <div class="playback-progress-wrap">
+                    <span id="playback-elapsed">0:00</span>
+                    <input type="range" id="playback-seek" min="0" max="1000" value="0"
+                        onmousedown="isDraggingSeek = true" ontouchstart="isDraggingSeek = true"
+                        onchange="onSeekSliderChange(this)">
+                    <span id="playback-duration">0:00</span>
+                </div>
+
+                <div class="playback-transport">
+                    <button class="playback-icon-btn" id="playback-shuffle-btn" onclick="togglePlaybackShuffle()" title="Shuffle">
+                        <svg viewBox="0 0 24 24"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.42 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg>
+                    </button>
+                    <button class="playback-icon-btn" onclick="playbackCommand('previous')" title="Previous">
+                        <svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+                    </button>
+                    <button class="playback-icon-btn playback-play-pause" id="playback-play-pause-btn" onclick="togglePlayPause()" title="Play/Pause">
+                        <svg id="playback-play-icon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                        <svg id="playback-pause-icon" viewBox="0 0 24 24" style="display:none;"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                    </button>
+                    <button class="playback-icon-btn" onclick="playbackCommand('next')" title="Next">
+                        <svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+                    </button>
+                    <button class="playback-icon-btn" id="playback-repeat-btn" onclick="cyclePlaybackRepeat()" title="Repeat">
+                        <svg viewBox="0 0 24 24"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>
+                    </button>
+                </div>
+
+                <div class="playback-volume-row">
+                    <svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+                    <input type="range" id="playback-volume" min="0" max="100" value="50"
+                        onmousedown="isDraggingVolume = true" ontouchstart="isDraggingVolume = true"
+                        oninput="onVolumeSliderInput(this)" onchange="onVolumeSliderChange(this); isDraggingVolume = false">
+                    <span id="playback-volume-label" style="font-size:0.8rem; color:#888; min-width:28px;">50%</span>
+                </div>
+
+                <div class="playback-upcoming" id="playback-upcoming-wrap" style="display:none;">
+                    <h3>Up Next (Spotify Queue)</h3>
+                    <div id="playback-upcoming-list"></div>
+                </div>
+            </div>
+            <div id="playback-disconnected-view" class="playback-disconnected">
+                Connect the admin Spotify account under <strong>Settings → Spotify</strong> to control playback from here.
+            </div>
+        </div>
+    </div>
+
     <div id="tab-panel-queue" class="tab-content active-content">
         <div class="panel">
             <h2>Current Queue</h2>
 
-            <div class="add-song-bar full-only">
-                <input type="text" id="admin-search-input" placeholder="+ Add a song to the queue (search song or artist)" title="Drops a track straight into the queue - skips credits, filters, and the queue cap. Good for a verbal request or seeding the queue before doors open." oninput="onAdminSearchInput()" autocomplete="off">
+            <div class="settings-card full-only" style="margin-bottom: 20px;">
+                <div class="settings-section-label">Add a Song</div>
+                <p class="settings-card-hint" style="margin-top: 0;">Drop a track straight into the queue - skips credits, filters, and the queue cap. Good for a verbal request or seeding the queue before doors open.</p>
+                <div class="join-row" style="margin-bottom: 10px;">
+                    <input type="text" id="admin-search-input" placeholder="Search for a song or artist" oninput="onAdminSearchInput()">
+                    <input type="text" id="admin-search-label" placeholder="Requested by (optional)" maxlength="30" style="flex: 0 0 180px;">
+                </div>
                 <div id="admin-search-results"></div>
             </div>
 
             <div id="queue-list"></div>
-        </div>
-
-        <!-- Playback controls: pinned to the bottom of the Playback & Queue tab -->
-        <div class="playback-dock" id="playback-dock">
-            <div class="playback-dock-inner">
-                <div id="playback-connected-view" class="playback-panel" style="display:none;">
-                    <img class="playback-artwork" id="playback-artwork" src="" alt="">
-                    <div>
-                        <p class="playback-title" id="playback-title"></p>
-                        <p class="playback-artist" id="playback-artist"></p>
-                        <p class="playback-device" id="playback-device"></p>
-                    </div>
-
-                    <div class="playback-progress-wrap">
-                        <span id="playback-elapsed">0:00</span>
-                        <input type="range" id="playback-seek" min="0" max="1000" value="0"
-                            onmousedown="isDraggingSeek = true" ontouchstart="isDraggingSeek = true"
-                            onchange="onSeekSliderChange(this)">
-                        <span id="playback-duration">0:00</span>
-                    </div>
-
-                    <div class="playback-transport">
-                        <button class="playback-icon-btn" id="playback-shuffle-btn" onclick="togglePlaybackShuffle()" title="Shuffle">
-                            <svg viewBox="0 0 24 24"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.42 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg>
-                        </button>
-                        <button class="playback-icon-btn" onclick="playbackCommand('previous')" title="Previous">
-                            <svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
-                        </button>
-                        <button class="playback-icon-btn playback-play-pause" id="playback-play-pause-btn" onclick="togglePlayPause()" title="Play/Pause">
-                            <svg id="playback-play-icon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                            <svg id="playback-pause-icon" viewBox="0 0 24 24" style="display:none;"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
-                        </button>
-                        <button class="playback-icon-btn" onclick="playbackCommand('next')" title="Next">
-                            <svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
-                        </button>
-                        <button class="playback-icon-btn" id="playback-repeat-btn" onclick="cyclePlaybackRepeat()" title="Repeat">
-                            <svg viewBox="0 0 24 24"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>
-                        </button>
-                    </div>
-
-                    <div class="playback-volume-row">
-                        <svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
-                        <input type="range" id="playback-volume" min="0" max="100" value="50"
-                            onmousedown="isDraggingVolume = true" ontouchstart="isDraggingVolume = true"
-                            oninput="onVolumeSliderInput(this)" onchange="onVolumeSliderChange(this); isDraggingVolume = false">
-                        <span id="playback-volume-label" style="font-size:0.8rem; color:#888; min-width:28px;">50%</span>
-                    </div>
-
-                    <div class="playback-upcoming" id="playback-upcoming-wrap" style="display:none;">
-                        <h3>Up Next (Spotify Queue)</h3>
-                        <div id="playback-upcoming-list"></div>
-                    </div>
-                </div>
-                <div id="playback-disconnected-view" class="playback-disconnected">
-                    Connect the admin Spotify account under <strong>Settings → Spotify</strong> to control playback from here.
-                </div>
-            </div>
         </div>
     </div>
 
@@ -1178,13 +1146,7 @@
 
     <div id="tab-panel-history" class="tab-content">
         <div class="panel">
-            <h2 class="history-heading">
-                <span>Song History <span class="history-heading-sub">(Played)</span></span>
-                <div class="theme-seg history-seg" id="history-filter-seg" role="group" aria-label="Which songs to show">
-                    <button type="button" data-mode="all" class="is-active" onclick="setHistoryFilter('all')">All</button>
-                    <button type="button" data-mode="requests" onclick="setHistoryFilter('requests')">Requests</button>
-                </div>
-            </h2>
+            <h2>Song History (Played)</h2>
             <div id="history-list"></div>
         </div>
     </div>
@@ -1493,7 +1455,7 @@
                             </div>
                             <p class="settings-card-hint" style="margin-top: 16px; margin-bottom: 0;">
                                 <strong>Mute Visuals</strong> blanks the visuals display to a black screen with a large centred Cuelistr logo. <strong>Mute All</strong> does
-                                the same and also sets Spotify's volume to 0% (playback keeps going; the old volume returns when switched back off). <strong>Show Queue</strong>
+                                the same and also pauses playback (resuming it when switched back off). <strong>Show Queue</strong>
                                 pins the Now Playing + Up Next board on screen, overriding any scheduled Ambient Visuals content,
                                 until switched off. <strong>Show Time</strong> puts a 12-hour clock in the top-left corner of the
                                 visuals display (hidden while a music video is on screen). <strong>Show Venue Code</strong> keeps the
@@ -1740,18 +1702,6 @@
          so there's no scheduler tab-panel in this document anymore. -->
 
     <script>
-        /* ---- Smooth progress ticker ----
-           Redraws every animation frame (instead of a 250ms timer) so progress bars glide
-           instead of stepping. smoothTick(fn) returns a handle; smoothStop(handle) stops it.
-           smoothStop also accepts a plain setInterval id. setTxt only writes when text changed. */
-        function smoothTick(fn) {
-            const h = { on: true };
-            (function loop() { if (!h.on) return; try { fn(); } catch (e) { /* keep ticking */ } requestAnimationFrame(loop); })();
-            return h;
-        }
-        function smoothStop(h) { if (typeof h === 'number') clearInterval(h); else if (h) h.on = false; }
-        function setTxt(el, v) { if (el && el.textContent !== v) el.textContent = v; }
-
         // This page is served at /e/{slug}/admin, so the event's slug is
         // always the second path segment - every relative API call below
         // goes through eventUrl() so it hits the right event's data.
@@ -1827,7 +1777,7 @@
         // chip selection before they hit "Save Filters".
         let filtersInitialized = false;
 
-        const TAB_NAMES = ['queue', 'pending', 'history', 'settings', 'stats', 'blocked'];
+        const TAB_NAMES = ['playback', 'queue', 'pending', 'history', 'settings', 'stats', 'blocked'];
 
         // --- Sidebar (hamburger menu) ---
         function openSidebar() {
@@ -1897,7 +1847,6 @@
                 document.getElementById(`sidebar-nav-${name}`).classList.toggle('active-tab', isActive);
                 document.getElementById(`tab-panel-${name}`).classList.toggle('active-content', isActive);
             });
-            document.body.classList.toggle('tab-queue', targetTab === 'queue');
             closeSidebar();
             if (targetTab === 'stats') loadStats();
             if (targetTab === 'blocked') { renderBlockedTabGuests(); renderBlockedEverything(); }
@@ -2135,11 +2084,12 @@ async function verifyPassword() {
         async function addTrackToQueue(trackId, btnEl) {
             btnEl.disabled = true;
             btnEl.textContent = 'Adding...';
+            const label = document.getElementById('admin-search-label').value.trim();
             try {
                 const res = await fetch(eventUrl('/api/admin/add-track'), {
                     method: 'POST',
                     headers: adminHeaders({ 'Content-Type': 'application/json' }),
-                    body: JSON.stringify({ trackId })
+                    body: JSON.stringify({ trackId, label })
                 });
                 if (res.ok) {
                     showToast('Added to the queue.', 'success');
@@ -3271,72 +3221,26 @@ async function verifyPassword() {
                 renderBlockedTabGuests();
                 renderBlockedEverything();
 
-                lastHistory = data.history || [];
-                renderHistory();
-            } catch(e) { console.log("Sync error."); }
-        }
-
-        // ---- Song History ----
-        // 'all' = every song that played (Spotify's own plus guest requests); 'requests' = guest requests only.
-        let historyFilter = 'all';
-        let lastHistory = [];
-        function setHistoryFilter(mode) {
-            historyFilter = mode === 'requests' ? 'requests' : 'all';
-            markSeg('history-filter-seg', historyFilter);
-            renderHistory();
-        }
-        function renderHistory() {
-            const historyList = document.getElementById('history-list');
-            const shown = historyFilter === 'requests' ? lastHistory.filter(h => h.source !== 'spotify') : lastHistory;
-            if (shown.length === 0) {
-                historyList.innerHTML = `<p class="empty-placeholder">${historyFilter === 'requests' ? 'No requested tracks have played yet.' : 'No tracks logged as played yet.'}</p>`;
-                return;
-            }
-            historyList.innerHTML = shown.map(song => `
-                <div class="song-row history-row">
-                    <div class="song-details">
-                        <img src="${safeImageUrl(song.artwork)}">
-                        <div class="text-container">
-                            <div class="title-wrapper">
-                                <p class="song-title">${escapeHtml(song.title)}</p>
-                                ${song.explicit ? '<span class="explicit-badge">E</span>' : ''}
-                            </div>
-                            <p class="song-artist">${escapeHtml(artistWithYear(song.artist, song.year))}</p>
-                            <div class="length-requester-row">
-                                <span class="length-text">Length: ${song.duration}</span>
-                                ${buildRequesterBadge(song.requesters)}
+                const historyList = document.getElementById('history-list');
+                historyList.innerHTML = data.history.length === 0 ? '<p class="empty-placeholder">No tracks logged as played yet.</p>' : data.history.map(song => `
+                    <div class="song-row history-row">
+                        <div class="song-details">
+                            <img src="${safeImageUrl(song.artwork)}">
+                            <div class="text-container">
+                                <div class="title-wrapper">
+                                    <p class="song-title">${escapeHtml(song.title)}</p>
+                                    ${song.explicit ? '<span class="explicit-badge">E</span>' : ''}
+                                </div>
+                                <p class="song-artist">${escapeHtml(artistWithYear(song.artist, song.year))}</p>
+                                <div class="length-requester-row">
+                                    <span class="length-text">Length: ${song.duration}</span>
+                                    ${buildRequesterBadge(song.requesters)}
+                                </div>
                             </div>
                         </div>
-                        ${/^[A-Za-z0-9]{22}$/.test(song.trackId || '') ? `<button type="button" class="btn-add-track" onclick="addHistoryTrackToQueue('${song.trackId}', this)">+ Add</button>` : ''}
                     </div>
-                </div>
-            `).join('');
-        }
-        // Same route as the "Add a Song" box: skips credits, filters, the queue cap and the repeat limit.
-        async function addHistoryTrackToQueue(trackId, btnEl) {
-            btnEl.disabled = true;
-            btnEl.textContent = 'Adding...';
-            try {
-                const res = await fetch(eventUrl('/api/admin/add-track'), {
-                    method: 'POST',
-                    headers: adminHeaders({ 'Content-Type': 'application/json' }),
-                    body: JSON.stringify({ trackId })
-                });
-                if (res.ok) {
-                    showToast('Added to the queue.', 'success');
-                    btnEl.textContent = 'Added';
-                    setTimeout(() => { btnEl.textContent = '+ Add'; btnEl.disabled = false; }, 1500);
-                    updateDashboard();
-                } else {
-                    showToast('Could not add that track.', 'error');
-                    btnEl.textContent = '+ Add';
-                    btnEl.disabled = false;
-                }
-            } catch (err) {
-                showToast('Could not reach the server.', 'error');
-                btnEl.textContent = '+ Add';
-                btnEl.disabled = false;
-            }
+                `).join('');
+            } catch(e) { console.log("Sync error."); }
         }
 
         async function saveSystemRules() {
@@ -3986,10 +3890,7 @@ async function verifyPassword() {
             if (!r.ok) return acctMsg('err', r.data.error || 'Could not send the reset link.');
             acctMsg('ok', r.data.message || 'If that email is registered, a reset link has been sent.');
         }
-        document.addEventListener('keydown', (e) => {
-            // Esc is also how password managers dismiss their suggestion list - don't treat that as "close the popup".
-            if (e.key === 'Escape' && !(document.activeElement && document.activeElement.matches('input, textarea, select'))) closeAccountModal();
-        });
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeAccountModal(); });
 
         // ---- Rotating venue code (sidebar) ----
         let venueScreenKey = '';
@@ -4026,7 +3927,7 @@ async function verifyPassword() {
         loadFamilyLists();
     </script>
     <!-- Account login popup (replaces the old redirect to the New Event page) -->
-    <div id="account-modal-overlay" onpointerdown="this._downOnBackdrop = (event.target === this)" onclick="if (event.target === this && this._downOnBackdrop) closeAccountModal(); this._downOnBackdrop = false">
+    <div id="account-modal-overlay" onclick="if(event.target === this) closeAccountModal()">
         <div class="acct-modal" role="dialog" aria-modal="true" aria-labelledby="acct-title">
             <button type="button" class="acct-close" onclick="closeAccountModal()" aria-label="Close">&#10005;</button>
             <h2 id="acct-title">Your Account</h2>
@@ -4035,25 +3936,25 @@ async function verifyPassword() {
                 <button type="button" class="acct-tab" id="acct-tab-signup" onclick="switchAcctTab('signup')">Create Account</button>
             </div>
 
-            <form class="acct-form active" id="acct-form-login" onsubmit="event.preventDefault(); acctLogin();">
+            <div class="acct-form active" id="acct-form-login">
                 <div class="acct-field"><label>Username</label><input type="text" id="acct-login-username" autocapitalize="off" autocorrect="off" autocomplete="username"></div>
-                <div class="acct-field"><label>Password</label><input type="password" id="acct-login-password" autocomplete="current-password"></div>
+                <div class="acct-field"><label>Password</label><input type="password" id="acct-login-password" autocomplete="current-password" onkeydown="if(event.key === 'Enter') acctLogin()"></div>
                 <button type="button" class="acct-link" onclick="switchAcctTab('forgot')">Forgot password?</button>
-                <button type="submit" class="acct-submit" id="acct-login-btn">Log In</button>
-            </form>
+                <button type="button" class="acct-submit" id="acct-login-btn" onclick="acctLogin()">Log In</button>
+            </div>
 
-            <form class="acct-form" id="acct-form-signup" onsubmit="event.preventDefault(); acctSignup();">
+            <div class="acct-form" id="acct-form-signup">
                 <div class="acct-field"><label>Username</label><input type="text" id="acct-signup-username" autocapitalize="off" autocorrect="off" placeholder="3-30 characters, no spaces" autocomplete="username"></div>
                 <div class="acct-field"><label>Email</label><input type="email" id="acct-signup-email" autocapitalize="off" autocorrect="off" autocomplete="email"></div>
-                <div class="acct-field"><label>Password</label><input type="password" id="acct-signup-password" placeholder="At least 8 characters" autocomplete="new-password"></div>
-                <button type="submit" class="acct-submit" id="acct-signup-btn">Create Account</button>
-            </form>
+                <div class="acct-field"><label>Password</label><input type="password" id="acct-signup-password" placeholder="At least 8 characters" autocomplete="new-password" onkeydown="if(event.key === 'Enter') acctSignup()"></div>
+                <button type="button" class="acct-submit" id="acct-signup-btn" onclick="acctSignup()">Create Account</button>
+            </div>
 
-            <form class="acct-form" id="acct-form-forgot" onsubmit="event.preventDefault(); acctForgot();">
-                <div class="acct-field"><label>Account email</label><input type="email" id="acct-forgot-email" autocapitalize="off" autocorrect="off" autocomplete="email"></div>
-                <button type="submit" class="acct-submit" id="acct-forgot-btn">Send Reset Link</button>
+            <div class="acct-form" id="acct-form-forgot">
+                <div class="acct-field"><label>Account email</label><input type="email" id="acct-forgot-email" autocapitalize="off" autocorrect="off" autocomplete="email" onkeydown="if(event.key === 'Enter') acctForgot()"></div>
+                <button type="button" class="acct-submit" id="acct-forgot-btn" onclick="acctForgot()">Send Reset Link</button>
                 <div style="text-align:center; margin-top:12px;"><button type="button" class="acct-link" onclick="switchAcctTab('login')">Back to log in</button></div>
-            </form>
+            </div>
 
             <div class="acct-error" id="acct-error"></div>
             <div class="acct-ok" id="acct-ok"></div>
@@ -4075,6 +3976,7 @@ async function verifyPassword() {
             <p class="now-playing-title" id="now-playing-title"></p>
             <p class="now-playing-artist" id="now-playing-artist"></p>
         </div>
+        <div class="now-playing-live-dot" id="now-playing-live-dot"></div>
     </div>
 
     <script>
@@ -4105,7 +4007,7 @@ async function verifyPassword() {
                 document.body.classList.remove('has-now-playing-bar');
                 nowPlayingState = null;
                 nowPlayingLastTrackId = null;
-                if (nowPlayingTicker) { smoothStop(nowPlayingTicker); nowPlayingTicker = null; }
+                if (nowPlayingTicker) { clearInterval(nowPlayingTicker); nowPlayingTicker = null; }
                 spotifyUpcomingQueue = [];
                 renderQueueList();
                 return;
@@ -4114,6 +4016,7 @@ async function verifyPassword() {
             document.getElementById('now-playing-artwork').src = data.artwork || '';
             document.getElementById('now-playing-title').innerHTML = escapeHtml(data.title) + bpmTag(data.trackId);
             document.getElementById('now-playing-artist').innerText = data.artist || '';
+            document.getElementById('now-playing-live-dot').classList.toggle('is-paused', !data.isPlaying);
 
             bar.classList.add('is-visible');
             document.body.classList.add('has-now-playing-bar');
@@ -4130,7 +4033,7 @@ async function verifyPassword() {
             renderNowPlayingProgress();
             nowPlayingLastTrackId = data.trackId || null;
 
-            if (!nowPlayingTicker) nowPlayingTicker = smoothTick(renderNowPlayingProgress);
+            if (!nowPlayingTicker) nowPlayingTicker = setInterval(renderNowPlayingProgress, 250);
 
             // Feeds the merged Up Next renderer (see renderQueueList() near
             // updateDashboard) rather than drawing its own separate list -
