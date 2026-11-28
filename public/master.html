@@ -300,6 +300,9 @@
         table.vc th { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         table.vc th .col-resize { position: absolute; top: 0; right: 0; width: 9px; height: 100%; cursor: col-resize; z-index: 5; touch-action: none; }
         table.vc th .col-resize::after { content: ''; position: absolute; right: 3px; top: 22%; height: 56%; width: 3px; border-radius: 2px; background: transparent; }
+        table.vc th.col-dragging { opacity: 0.45; }
+        table.vc th.drop-before { box-shadow: inset 3px 0 0 #1a73e8; }
+        table.vc th.drop-after { box-shadow: inset -3px 0 0 #1a73e8; }
         table.vc th:hover .col-resize::after, table.vc th .col-resize.active::after { background: #1a73e8; }
         body.col-resizing, body.col-resizing * { cursor: col-resize !important; user-select: none !important; }
 </style>
@@ -395,6 +398,7 @@
                     <button class="btn btn-admin" onclick="vcOpenPasteModal()">Paste rows…</button>
                     <button class="btn btn-admin" onclick="document.getElementById('vc-csv-file').click()">Import CSV</button>
                     <button class="btn btn-admin" onclick="vcExportCsv()">Export CSV</button>
+                    <button class="btn btn-admin" onclick="vcResetColumns()" title="Put the columns back in their original order and widths">Reset columns</button>
                     <input type="file" id="vc-csv-file" accept=".csv,text/csv" style="display:none" onchange="vcImportCsv(this)">
                 </div>
                 <span class="vc-spacer"></span>
@@ -403,7 +407,7 @@
             <div class="vc-wrap">
                 <table class="vc">
                     <thead>
-                        <tr class="heads"><th class="rn" data-k="_num" onclick="vcSort('_num')" title="Catalog number. Click to sort by it.">#</th><th data-k="song" onclick="vcSort('song')">Title</th><th data-k="artist" onclick="vcSort('artist')">Artist</th><th data-k="spotifyId" onclick="vcSort('spotifyId')">Spotify link/ID</th><th data-k="youtubeId" onclick="vcSort('youtubeId')">Youtube Link/ID</th><th data-k="startMs" onclick="vcSort('startMs')">Start time</th><th class="nosort" title="Parts of the video to jump over while it plays (talking, skits, breaks the song does not have). Use VIDEO times, as ranges: 2:14-2:31, 3:40-3:52. The video skips each one seamlessly and stays in sync afterwards.">Skip points</th><th data-k="enabled" onclick="vcSort('enabled')">Video ON/OFF</th><th data-k="nsfw" onclick="vcSort('nsfw')" title="Is the video suggestive in any way? YES = blocked in Family mode. NO = plays in Family mode. Blank = not checked yet (treated as suggestive).">Suggestive? YES/NO</th><th data-k="notes" onclick="vcSort('notes')">Notes</th><th data-k="kind" onclick="vcSort('kind')" title="What kind of video this is. If a song has several videos, Music video is preferred over Visualizer, then Lyric video, then Audio.">Video type</th><th class="nosort"></th></tr>
+                        <tr class="heads"><th class="rn" data-k="_num" onclick="vcSort('_num')" title="Catalog number. Click to sort by it.">#</th><th data-k="song" onclick="vcSort('song')">Title</th><th data-k="artist" onclick="vcSort('artist')">Artist</th><th data-k="spotifyId" onclick="vcSort('spotifyId')">Spotify link/ID</th><th data-k="youtubeId" onclick="vcSort('youtubeId')">Youtube Link/ID</th><th data-k="startMs" onclick="vcSort('startMs')">Start time</th><th class="nosort" data-k="skips" title="Parts of the video to jump over while it plays (talking, skits, breaks the song does not have). Use VIDEO times, as ranges: 2:14-2:31, 3:40-3:52. The video skips each one seamlessly and stays in sync afterwards.">Skip points</th><th data-k="enabled" onclick="vcSort('enabled')">Video ON/OFF</th><th data-k="nsfw" onclick="vcSort('nsfw')" title="Is the video suggestive in any way? YES = blocked in Family mode. NO = plays in Family mode. Blank = not checked yet (treated as suggestive).">Suggestive? YES/NO</th><th data-k="notes" onclick="vcSort('notes')">Notes</th><th data-k="kind" onclick="vcSort('kind')" title="What kind of video this is. If a song has several videos, Music video is preferred over Visualizer, then Lyric video, then Audio.">Video type</th><th class="nosort"></th></tr>
                     </thead>
                     <tbody id="vc-body"></tbody>
                 </table>
@@ -788,19 +792,25 @@
         function vcRowHtml(r) {
             const raw = !!r._raw; // an unsaved row: show exactly what was typed
             const start = raw ? (r.startMs == null ? '' : r.startMs) : vcFmtStart(r.startMs);
-            const txt = (f, v, cls, ph, list) => `<td class="${cls}"><input type="text" data-f="${f}" value="${escapeHtml(v)}" placeholder="${ph || ''}" ${list ? `list="${list}"` : ''} autocomplete="off" spellcheck="false"></td>`;
+            const txt = (f, v, cls, ph, list) => `<td class="${cls}" data-col="${f}"><input type="text" data-f="${f}" value="${escapeHtml(v)}" placeholder="${ph || ''}" ${list ? `list="${list}"` : ''} autocomplete="off" spellcheck="false"></td>`;
+            // Cells are built per column key, then joined in the order saved by the column-layout
+            // script (drag the header cells to reorder). Falls back to the default order.
+            const cells = {
+                song: txt('song', r.song || '', 'c-song'),
+                artist: txt('artist', r.artist || '', 'c-artist'),
+                spotifyId: txt('spotifyId', r.spotifyId || '', 'c-spotify', 'link or ID'),
+                youtubeId: txt('youtubeId', r.youtubeId || '', 'c-youtube', 'link or ID'),
+                startMs: txt('startMs', start, 'c-start', '0:00'),
+                skips: txt('skips', raw ? (r.skips == null ? '' : r.skips) : vcFmtSkips(r.skips), 'c-skips', 'e.g. 2:14-2:31'),
+                enabled: txt('enabled', vcShowOnOff(r.enabled == null ? true : r.enabled), 'c-onoff', '', 'vc-dl-onoff'),
+                nsfw: txt('nsfw', vcShowNsfw(r.nsfw), 'c-nsfw ' + (r._raw ? '' : vcNsfwClass(r.nsfw)), 'not set', 'vc-dl-nsfw'),
+                notes: txt('notes', r.notes || '', 'c-notes'),
+                kind: txt('kind', vcShowKind(r.kind), 'c-kind', 'not set', 'vc-dl-kind')
+            };
+            const colOrder = window.vcColOrder ? window.vcColOrder() : ['song', 'artist', 'spotifyId', 'youtubeId', 'startMs', 'skips', 'enabled', 'nsfw', 'notes', 'kind'];
             return `<tr data-row="1" ${r.id ? `data-id="${escapeHtml(r.id)}"` : ''}>
                 <td class="rn" data-num="${r._num || '+'}"></td>
-                ${txt('song', r.song || '', 'c-song')}
-                ${txt('artist', r.artist || '', 'c-artist')}
-                ${txt('spotifyId', r.spotifyId || '', 'c-spotify', 'link or ID')}
-                ${txt('youtubeId', r.youtubeId || '', 'c-youtube', 'link or ID')}
-                ${txt('startMs', start, 'c-start', '0:00')}
-                ${txt('skips', raw ? (r.skips == null ? '' : r.skips) : vcFmtSkips(r.skips), 'c-skips', 'e.g. 2:14-2:31')}
-                ${txt('enabled', vcShowOnOff(r.enabled == null ? true : r.enabled), 'c-onoff', '', 'vc-dl-onoff')}
-                ${txt('nsfw', vcShowNsfw(r.nsfw), 'c-nsfw ' + (r._raw ? '' : vcNsfwClass(r.nsfw)), 'not set', 'vc-dl-nsfw')}
-                ${txt('notes', r.notes || '', 'c-notes')}
-                ${txt('kind', vcShowKind(r.kind), 'c-kind', 'not set', 'vc-dl-kind')}
+                ${colOrder.map(k => cells[k]).join('')}
                 <td class="c-act"><span class="tick">✓</span><div class="act-wrap">
                     <button type="button" class="act-btn" data-act="preview" title="Preview, and mark the start time"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="7 4 19 12 7 20 7 4" fill="currentColor" stroke="none"/></svg></button>
                     <button type="button" class="act-btn" data-act="spotify" title="Search Spotify to fill this row"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><line x1="16" y1="16" x2="21" y2="21"/></svg></button>
@@ -1902,29 +1912,55 @@
     </script>
 
     <script>
-        /* ===================== Video table: drag header edges to resize columns ===================== */
-        // 11 data columns (# to Video type) get explicit pixel widths; the last (actions) column takes
-        // whatever is left, so a dragged edge follows the mouse 1:1. Until you drag one,
-        // the columns are scaled to fill the table exactly. Dragged widths are remembered
-        // on this browser; double-click any edge to go back to fitting the screen.
+        /* ===================== Video table: column layout (resize + reorder) ===================== */
+        // Drag a header's edge to resize it, drag a header cell onto another to reorder. Both are
+        // remembered on this browser (widths and order are stored per column KEY, so they stay
+        // matched up however the columns are arranged). The # column stays first and the actions
+        // column stays last. The 10 data columns get explicit pixel widths; the actions column takes
+        // whatever is left, so a dragged edge follows the mouse 1:1. Until you drag an edge, the
+        // columns are scaled to fill the table exactly. Double-click any edge to go back to fitting
+        // the screen; the "Reset columns" toolbar button resets both widths and order.
         (function () {
-            const KEY = 'vcColWidths.v2';   // v2: new column order, ISRC removed (old saved widths no longer line up)
+            const W_KEY = 'vcColWidths.v3';       // { columnKey: px }
+            const W_KEY_V2 = 'vcColWidths.v2';    // older format: array in the default order (migrated once)
+            const O_KEY = 'vcColOrder.v1';        // [columnKey, ...] for the 10 movable columns
             const table = document.querySelector('table.vc');
             if (!table) return;
             const wrap = table.closest('.vc-wrap');
-            const ths = Array.from(table.querySelectorAll('thead tr.heads th'));
-            const N = ths.length - 1;                       // resizable columns (all but actions)
-            const BASE = [56, 210, 210, 190, 180, 96, 210, 130, 170, 210, 130]; // # Title Artist Spotify YouTube Start Skips ON/OFF Suggestive Notes Type
-            const MIN  = [46, 80, 80, 80, 80, 64, 100, 100, 120, 80, 80];
+            const headRow = table.querySelector('thead tr.heads');
+            const ths = Array.from(headRow.querySelectorAll('th'));
+            const actTh = ths[ths.length - 1];
+            const thByKey = {};
+            ths.forEach(th => { if (th.dataset.k) thByKey[th.dataset.k] = th; });
+
+            const DEFAULT_ORDER = ['song', 'artist', 'spotifyId', 'youtubeId', 'startMs', 'skips', 'enabled', 'nsfw', 'notes', 'kind'];
+            const BASE = { _num: 56, song: 210, artist: 210, spotifyId: 190, youtubeId: 180, startMs: 96, skips: 210, enabled: 130, nsfw: 170, notes: 210, kind: 130 };
+            const MIN  = { _num: 46, song: 80, artist: 80, spotifyId: 80, youtubeId: 80, startMs: 64, skips: 100, enabled: 100, nsfw: 120, notes: 80, kind: 80 };
             const ACT_MIN = 200;
-            const baseSum = BASE.reduce((a, b) => a + b, 0);
-            let widths = null;                               // null = auto-fit
+            const ALL_DEFAULT = ['_num'].concat(DEFAULT_ORDER);
+            const baseSum = ALL_DEFAULT.reduce((a, k) => a + BASE[k], 0);
+
+            let order = DEFAULT_ORDER.slice();
+            let widths = null;                    // null = auto-fit, else { key: px }
+            let resizing = false;
 
             try {
-                const saved = JSON.parse(localStorage.getItem(KEY) || 'null');
-                if (Array.isArray(saved) && saved.length === N && saved.every(n => Number.isFinite(n) && n >= 30 && n < 3000)) widths = saved;
+                const savedOrder = JSON.parse(localStorage.getItem(O_KEY) || 'null');
+                if (Array.isArray(savedOrder) && savedOrder.length === DEFAULT_ORDER.length && DEFAULT_ORDER.every(k => savedOrder.includes(k))) order = savedOrder;
+            } catch (e) { /* storage unavailable */ }
+            try {
+                const saved = JSON.parse(localStorage.getItem(W_KEY) || 'null');
+                const good = n => Number.isFinite(n) && n >= 30 && n < 3000;
+                if (saved && !Array.isArray(saved) && ALL_DEFAULT.every(k => good(saved[k]))) widths = saved;
+                else {
+                    const old = JSON.parse(localStorage.getItem(W_KEY_V2) || 'null');
+                    if (Array.isArray(old) && old.length === ALL_DEFAULT.length && old.every(good)) {
+                        widths = {}; ALL_DEFAULT.forEach((k, i) => { widths[k] = old[i]; });
+                    }
+                }
             } catch (e) { /* storage unavailable */ }
 
+            const keys = () => ['_num'].concat(order);       // data columns, left to right
             const colgroup = document.createElement('colgroup');
             const cols = ths.map(() => colgroup.appendChild(document.createElement('col')));
             table.insertBefore(colgroup, table.firstChild);
@@ -1932,46 +1968,114 @@
 
             function fit() {
                 const room = Math.max(0, (wrap ? wrap.clientWidth : 1400) - ACT_MIN - 2);
-                const k = room / baseSum;                       // scale up OR down so the table fits the screen
-                return BASE.map((w, i) => Math.max(MIN[i], Math.round(w * k)));
+                const k = room / baseSum;                    // scale up OR down so the table fits the screen
+                const out = {};
+                ALL_DEFAULT.forEach(key => { out[key] = Math.max(MIN[key], Math.round(BASE[key] * k)); });
+                return out;
             }
             function apply() {
                 if (!widths && wrap && wrap.clientWidth < 300) return;   // hidden tab: nothing to measure yet
                 const w = widths || fit();
-                cols.forEach((c, i) => { c.style.width = i < N ? w[i] + 'px' : ''; });
-                table.style.minWidth = (w.reduce((a, b) => a + b, 0) + ACT_MIN) + 'px';
+                const ks = keys();
+                cols.forEach((c, i) => { c.style.width = i < ks.length ? w[ks[i]] + 'px' : ''; });
+                table.style.minWidth = (ks.reduce((a, k) => a + w[k], 0) + ACT_MIN) + 'px';
             }
-            function reset() { widths = null; try { localStorage.removeItem(KEY); } catch (e) {} apply(); }
+            function saveWidths() { try { localStorage.setItem(W_KEY, JSON.stringify(widths)); } catch (e) { /* ignore */ } }
+            function saveOrder() { try { localStorage.setItem(O_KEY, JSON.stringify(order)); } catch (e) { /* ignore */ } }
+            function resetWidths() { widths = null; try { localStorage.removeItem(W_KEY); localStorage.removeItem(W_KEY_V2); } catch (e) {} apply(); }
 
-            ths.slice(0, N).forEach((th, i) => {
+            // Move the header cells and every existing row's cells (including rows typed but not
+            // saved yet) into the current order. Freshly rendered rows are already built in order.
+            function applyOrder() {
+                order.forEach(k => headRow.insertBefore(thByKey[k], actTh));
+                table.querySelectorAll('tbody tr[data-row]').forEach(tr => {
+                    const actTd = tr.querySelector(':scope > td.c-act');
+                    order.forEach(k => {
+                        const td = tr.querySelector(':scope > td[data-col="' + k + '"]');
+                        if (td) tr.insertBefore(td, actTd);
+                    });
+                });
+                apply();
+            }
+            window.vcColOrder = () => order.slice();
+            window.vcResetColumns = function () {
+                order = DEFAULT_ORDER.slice();
+                try { localStorage.removeItem(O_KEY); } catch (e) {}
+                resetWidths();
+                applyOrder();
+            };
+
+            // ---- resize handles ----
+            ths.forEach(th => {
+                const key = th.dataset.k;
+                if (!key) return;                            // the actions column has no handle
                 const h = document.createElement('span');
                 h.className = 'col-resize';
-                h.title = 'Drag to resize. Double-click to reset all columns.';
+                h.title = 'Drag to resize. Double-click to reset all column widths.';
                 h.addEventListener('click', e => e.stopPropagation());   // never trigger a sort
-                h.addEventListener('dblclick', e => { e.stopPropagation(); reset(); });
+                h.addEventListener('dblclick', e => { e.stopPropagation(); resetWidths(); });
                 h.addEventListener('pointerdown', e => {
                     if (e.pointerType === 'mouse' && e.button !== 0) return;
                     e.preventDefault(); e.stopPropagation();
-                    widths = (widths || fit()).slice();                   // freeze current widths
-                    const startX = e.clientX, startW = widths[i];
+                    resizing = true;
+                    widths = Object.assign({}, widths || fit());          // freeze current widths
+                    const startX = e.clientX, startW = widths[key];
                     h.setPointerCapture(e.pointerId);
                     h.classList.add('active'); document.body.classList.add('col-resizing');
-                    const move = ev => { widths[i] = Math.max(MIN[i], Math.round(startW + ev.clientX - startX)); apply(); };
+                    const move = ev => { widths[key] = Math.max(MIN[key], Math.round(startW + ev.clientX - startX)); apply(); };
                     const up = () => {
                         h.removeEventListener('pointermove', move); h.removeEventListener('pointerup', up); h.removeEventListener('pointercancel', up);
                         h.classList.remove('active'); document.body.classList.remove('col-resizing');
-                        try { localStorage.setItem(KEY, JSON.stringify(widths)); } catch (err) {}
+                        resizing = false;
+                        saveWidths();
                     };
                     h.addEventListener('pointermove', move); h.addEventListener('pointerup', up); h.addEventListener('pointercancel', up);
                 });
                 th.appendChild(h);
             });
 
+            // ---- drag a header cell to reorder (mouse / trackpad; # and actions stay put) ----
+            let dragKey = null;
+            const clearMarks = () => ths.forEach(t => t.classList.remove('drop-before', 'drop-after', 'col-dragging'));
+            DEFAULT_ORDER.forEach(key => {
+                const th = thByKey[key];
+                th.draggable = true;
+                th.addEventListener('dragstart', e => {
+                    if (resizing) { e.preventDefault(); return; }
+                    dragKey = key;
+                    e.dataTransfer.effectAllowed = 'move';
+                    try { e.dataTransfer.setData('text/plain', key); } catch (err) { /* ignore */ }
+                    th.classList.add('col-dragging');
+                });
+                th.addEventListener('dragover', e => {
+                    if (!dragKey || dragKey === key) return;
+                    e.preventDefault();
+                    const r = th.getBoundingClientRect();
+                    const after = e.clientX > r.left + r.width / 2;
+                    ths.forEach(t => { if (t !== th) t.classList.remove('drop-before', 'drop-after'); });
+                    th.classList.toggle('drop-after', after);
+                    th.classList.toggle('drop-before', !after);
+                });
+                th.addEventListener('dragleave', () => th.classList.remove('drop-before', 'drop-after'));
+                th.addEventListener('drop', e => {
+                    if (!dragKey || dragKey === key) return;
+                    e.preventDefault();
+                    const after = th.classList.contains('drop-after');
+                    order = order.filter(k => k !== dragKey);
+                    const at = order.indexOf(key) + (after ? 1 : 0);
+                    order.splice(at, 0, dragKey);
+                    saveOrder();
+                    clearMarks();
+                    applyOrder();
+                });
+                th.addEventListener('dragend', () => { dragKey = null; clearMarks(); });
+            });
+
             // Re-fit whenever the table's box changes size: window resize, or the
             // Videos tab being shown for the first time (it starts hidden).
             if (wrap && window.ResizeObserver) new ResizeObserver(() => { if (!widths) apply(); }).observe(wrap);
             else window.addEventListener('resize', () => { if (!widths) apply(); });
-            apply();
+            applyOrder();
         })();
     </script>
 </body>
