@@ -692,17 +692,6 @@
             margin: 2px 0 0 0; font-size: 0.75rem; color: var(--text-muted);
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
-        .now-playing-live-dot {
-            width: 8px; height: 8px; border-radius: 50%;
-            background-color: var(--spotify-green);
-            flex-shrink: 0;
-            animation: now-playing-pulse 1.5s ease-in-out infinite;
-        }
-        .now-playing-live-dot.is-paused { animation: none; opacity: 0.3; }
-        @keyframes now-playing-pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.35; }
-        }
         body.has-now-playing-bar { padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
 
 
@@ -1311,7 +1300,6 @@
             <p class="now-playing-title" id="now-playing-title"></p>
             <p class="now-playing-artist" id="now-playing-artist"></p>
         </div>
-        <div class="now-playing-live-dot" id="now-playing-live-dot"></div>
     </div>
 
     <script>
@@ -1352,7 +1340,6 @@
             document.getElementById('now-playing-artwork').src = data.artwork || '';
             document.getElementById('now-playing-title').innerText = data.title;
             document.getElementById('now-playing-artist').innerText = data.artist || '';
-            document.getElementById('now-playing-live-dot').classList.toggle('is-paused', !data.isPlaying);
 
             bar.classList.add('is-visible');
             document.body.classList.add('has-now-playing-bar');
