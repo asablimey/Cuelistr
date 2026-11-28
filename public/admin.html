@@ -225,6 +225,13 @@
         .btn-add-track:hover { filter: brightness(1.1); }
         .btn-add-track:disabled { opacity: 0.6; cursor: default; }
 
+        /* ---- Song History: All / Requests toggle + per-row Add button ---- */
+        .history-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+        .history-heading-sub { font-size: 0.8em; font-weight: 600; color: var(--text-muted); }
+        .history-seg button { padding: 5px 12px; font-size: 0.78rem; }
+        .history-row .song-details { align-items: center; }
+        .history-row .btn-add-track { margin-left: auto; align-self: center; }
+
         .save-config-btn {
             background-color: var(--text);
             color: var(--panel-bg);
@@ -1156,7 +1163,13 @@
 
     <div id="tab-panel-history" class="tab-content">
         <div class="panel">
-            <h2>Song History (Played)</h2>
+            <h2 class="history-heading">
+                <span>Song History <span class="history-heading-sub">(Played)</span></span>
+                <div class="theme-seg history-seg" id="history-filter-seg" role="group" aria-label="Which songs to show">
+                    <button type="button" data-mode="all" class="is-active" onclick="setHistoryFilter('all')">All</button>
+                    <button type="button" data-mode="requests" onclick="setHistoryFilter('requests')">Requests</button>
+                </div>
+            </h2>
             <div id="history-list"></div>
         </div>
     </div>
@@ -3242,26 +3255,72 @@ async function verifyPassword() {
                 renderBlockedTabGuests();
                 renderBlockedEverything();
 
-                const historyList = document.getElementById('history-list');
-                historyList.innerHTML = data.history.length === 0 ? '<p class="empty-placeholder">No tracks logged as played yet.</p>' : data.history.map(song => `
-                    <div class="song-row history-row">
-                        <div class="song-details">
-                            <img src="${safeImageUrl(song.artwork)}">
-                            <div class="text-container">
-                                <div class="title-wrapper">
-                                    <p class="song-title">${escapeHtml(song.title)}</p>
-                                    ${song.explicit ? '<span class="explicit-badge">E</span>' : ''}
-                                </div>
-                                <p class="song-artist">${escapeHtml(artistWithYear(song.artist, song.year))}</p>
-                                <div class="length-requester-row">
-                                    <span class="length-text">Length: ${song.duration}</span>
-                                    ${buildRequesterBadge(song.requesters)}
-                                </div>
+                lastHistory = data.history || [];
+                renderHistory();
+            } catch(e) { console.log("Sync error."); }
+        }
+
+        // ---- Song History ----
+        // 'all' = every song that played (Spotify's own plus guest requests); 'requests' = guest requests only.
+        let historyFilter = 'all';
+        let lastHistory = [];
+        function setHistoryFilter(mode) {
+            historyFilter = mode === 'requests' ? 'requests' : 'all';
+            markSeg('history-filter-seg', historyFilter);
+            renderHistory();
+        }
+        function renderHistory() {
+            const historyList = document.getElementById('history-list');
+            const shown = historyFilter === 'requests' ? lastHistory.filter(h => h.source !== 'spotify') : lastHistory;
+            if (shown.length === 0) {
+                historyList.innerHTML = `<p class="empty-placeholder">${historyFilter === 'requests' ? 'No requested tracks have played yet.' : 'No tracks logged as played yet.'}</p>`;
+                return;
+            }
+            historyList.innerHTML = shown.map(song => `
+                <div class="song-row history-row">
+                    <div class="song-details">
+                        <img src="${safeImageUrl(song.artwork)}">
+                        <div class="text-container">
+                            <div class="title-wrapper">
+                                <p class="song-title">${escapeHtml(song.title)}</p>
+                                ${song.explicit ? '<span class="explicit-badge">E</span>' : ''}
+                            </div>
+                            <p class="song-artist">${escapeHtml(artistWithYear(song.artist, song.year))}</p>
+                            <div class="length-requester-row">
+                                <span class="length-text">Length: ${song.duration}</span>
+                                ${buildRequesterBadge(song.requesters)}
                             </div>
                         </div>
+                        ${/^[A-Za-z0-9]{22}$/.test(song.trackId || '') ? `<button type="button" class="btn-add-track" onclick="addHistoryTrackToQueue('${song.trackId}', this)">+ Add</button>` : ''}
                     </div>
-                `).join('');
-            } catch(e) { console.log("Sync error."); }
+                </div>
+            `).join('');
+        }
+        // Same route as the "Add a Song" box: skips credits, filters, the queue cap and the repeat limit.
+        async function addHistoryTrackToQueue(trackId, btnEl) {
+            btnEl.disabled = true;
+            btnEl.textContent = 'Adding...';
+            try {
+                const res = await fetch(eventUrl('/api/admin/add-track'), {
+                    method: 'POST',
+                    headers: adminHeaders({ 'Content-Type': 'application/json' }),
+                    body: JSON.stringify({ trackId })
+                });
+                if (res.ok) {
+                    showToast('Added to the queue.', 'success');
+                    btnEl.textContent = 'Added';
+                    setTimeout(() => { btnEl.textContent = '+ Add'; btnEl.disabled = false; }, 1500);
+                    updateDashboard();
+                } else {
+                    showToast('Could not add that track.', 'error');
+                    btnEl.textContent = '+ Add';
+                    btnEl.disabled = false;
+                }
+            } catch (err) {
+                showToast('Could not reach the server.', 'error');
+                btnEl.textContent = '+ Add';
+                btnEl.disabled = false;
+            }
         }
 
         async function saveSystemRules() {
