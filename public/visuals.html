@@ -126,13 +126,6 @@
             display: flex; align-items: center; gap: 8px;
             overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
         }
-        .qv-live-dot {
-            width: 9px; height: 9px; border-radius: 50%; background: var(--spotify-green);
-            flex-shrink: 0;
-            animation: qv-pulse 1.5s ease-in-out infinite;
-        }
-        .qv-live-dot.is-paused { animation: none; opacity: 0.3; }
-        @keyframes qv-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
         .qv-np-title {
             font-size: clamp(1.2rem, 3vh, 1.7rem); font-weight: 700; margin: 0 0 4px;
             overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -521,7 +514,7 @@
         <div class="qv-now-playing" id="qv-now-playing" style="display:none;">
             <img class="qv-artwork" id="qv-artwork" src="" alt="">
             <div class="qv-np-text">
-                <p class="qv-np-label"><span class="qv-live-dot" id="qv-live-dot"></span> Now Playing</p>
+                <p class="qv-np-label">Now Playing</p>
                 <p class="qv-np-title" id="qv-np-title"></p>
                 <p class="qv-np-artist" id="qv-np-artist"></p>
                 <div class="qv-progress-track"><div class="qv-progress-fill" id="qv-progress-fill"></div></div>
@@ -905,7 +898,7 @@
                     <div class="qv-now-playing" id="amb-qv-now-playing" style="display:none;">
                         <img class="qv-artwork" id="amb-qv-artwork" src="" alt="">
                         <div class="qv-np-text">
-                            <p class="qv-np-label"><span class="qv-live-dot" id="amb-qv-live-dot"></span> Now Playing</p>
+                            <p class="qv-np-label">Now Playing</p>
                             <p class="qv-np-title" id="amb-qv-np-title"></p>
                             <p class="qv-np-artist" id="amb-qv-np-artist"></p>
                             <div class="qv-progress-track"><div class="qv-progress-fill" id="amb-qv-progress-fill"></div></div>
@@ -939,7 +932,6 @@
                         if (artEl && artEl.getAttribute('src') !== art) artEl.setAttribute('src', art);
                         el.querySelector('#amb-qv-np-title').innerText = np.title;
                         el.querySelector('#amb-qv-np-artist').innerText = np.artist || '';
-                        el.querySelector('#amb-qv-live-dot').classList.toggle('is-paused', !np.isPlaying);
                     }
                     tracker.update(np);
                 }
@@ -978,7 +970,6 @@
                                 if (artEl && artEl.getAttribute('src') !== art) artEl.setAttribute('src', art);
                                 el.querySelector('#amb-qv-np-title').innerText = np.title;
                                 el.querySelector('#amb-qv-np-artist').innerText = np.artist || '';
-                                el.querySelector('#amb-qv-live-dot').classList.toggle('is-paused', !np.isPlaying);
                             }
                             tracker.update(np);
                         } else {
@@ -1196,7 +1187,6 @@
             document.getElementById('qv-np-artist').innerText = data.artist || '';
             npLiveTitle = data.title;
             npLiveArtist = data.artist || '';
-            document.getElementById('qv-live-dot').classList.toggle('is-paused', !data.isPlaying);
 
             boardTracker.update(data);
             boardUpcoming = data.upcoming || [];
