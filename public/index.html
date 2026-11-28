@@ -78,6 +78,7 @@
         body.basic-mode #sidebar-playlist-item,
         body.basic-mode #sidebar-myrequests-item,
         body.basic-mode #inline-playlists-btn,
+        body.basic-mode .youtube-attribution-inline,
         body.basic-mode #list-title { display: none !important; }
 
 
@@ -202,6 +203,25 @@
         }
         .spotify-attribution-inline img {
             height: 22px;
+            width: auto;
+            flex-shrink: 0;
+        }
+        /* Same pattern as .spotify-attribution-inline above, for YouTube
+           attribution - added so the sidebar footer shows required
+           branding for both third-party services this site embeds, not
+           just Spotify. */
+        .youtube-attribution-inline {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            color: var(--text);
+            font-size: 0.8rem;
+            font-weight: 600;
+            margin-top: 8px;
+        }
+        .youtube-attribution-inline img {
+            height: 30px;
             width: auto;
             flex-shrink: 0;
         }
@@ -827,6 +847,17 @@
             margin: 2px 0 0 0; font-size: 0.75rem; color: var(--text-muted);
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
+        .now-playing-live-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            background-color: var(--spotify-green);
+            flex-shrink: 0;
+            animation: now-playing-pulse 1.5s ease-in-out infinite;
+        }
+        .now-playing-live-dot.is-paused { animation: none; opacity: 0.3; }
+        @keyframes now-playing-pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.35; }
+        }
         body.has-now-playing-bar { padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
 
         /* --- Hamburger menu button ---
@@ -947,6 +978,7 @@
         }
         .venue-list-item-name { font-weight: 700; font-size: 1rem; }
         .venue-list-item-sub { color: var(--text-muted); font-size: 0.8rem; margin-top: 2px; }
+        .venue-history-clear { background: none; border: none; color: var(--text-muted); font: inherit; font-size: 0.8rem; text-decoration: underline; cursor: pointer; }
         .venue-list-item-distance { color: var(--spotify-green); font-size: 0.75rem; font-weight: 700; margin-top: 4px; }
         .venue-select-btn {
             background-color: var(--spotify-green); color: white; border: none;
@@ -1065,6 +1097,10 @@
                 <span>Powered by</span>
                 <img src="/assets/spotify-full-logo-white.svg" alt="Spotify">
             </div>
+            <div class="youtube-attribution-inline">
+                <span>Videos by</span>
+                <img src="/assets/yt_logo_white_digital.png" alt="YouTube">
+            </div>
             <div class="site-credit">Made by Sam B | <a onclick="openPrivacyModal()">Privacy</a> | <a onclick="openTermsModal()">Terms</a></div>
         </div>
     </div>
@@ -1169,7 +1205,7 @@
                 <button class="modal-close-btn" onclick="closePrivacyModal()">✕</button>
             </div>
             <div class="modal-body privacy-body">
-                <p class="privacy-updated">Last updated: November 2026</p>
+                <p class="privacy-updated">Last updated: September 2026</p>
 
                 <h4>What this site is</h4>
                 <p>This is a small, independent song-request tool built for live events. It's not a company product - there's no ad tracking and no data resale.</p>
@@ -1177,12 +1213,9 @@
                 <h4>What guests see collected</h4>
                 <ul>
                     <li><strong>The name you type in</strong> when you make your first request. It's shown to the admin so they know who requested each song - that's the only reason it's collected.</li>
-                    <li><strong>A random anonymous ID</strong>, stored in your browser's local storage on your device, used only to stop the same device from voting on a song more than once. It isn't linked to your name or any personal info.</li>
+                    <li><strong>A random anonymous ID</strong>, stored as a cookie on your device, used only to stop the same device from voting on a song more than once. It isn't linked to your name or any personal info.</li>
                     <li><strong>Your song requests and votes themselves</strong> (title, artist, timestamp), so the queue can function and the admin can see request history for the event.</li>
                 </ul>
-
-                <h4>Saved on your device only</h4>
-                <p>Your browser keeps a few things in its local storage on your own device: the name you typed in and the anonymous ID above (both described earlier), and a short list of recent venues so you can jump back to them. The recent venues list stays on your device, and each venue is forgotten automatically 3 days after your last visit to it. Clearing your browser's site data removes all of it at any time.</p>
 
                 <h4>Location (optional)</h4>
                 <p>If you allow it, your browser's location is used for two things: showing how far away each event is when you're picking a venue from the list/map, and - if the event's DJ has turned this on - confirming you're actually near the venue before letting you request or vote. Both checks happen entirely on your own device by comparing your coordinates to the venue's; your location is never sent to or stored on this site's server. You can decline the location prompt and still use the site - you just won't see distances, and a DJ-enabled venue check won't be able to confirm you're there.</p>
@@ -1250,18 +1283,6 @@
     </div>
 
     <script>
-        /* ---- Smooth progress ticker ----
-           Redraws every animation frame (instead of a 250ms timer) so progress bars glide
-           instead of stepping. smoothTick(fn) returns a handle; smoothStop(handle) stops it.
-           smoothStop also accepts a plain setInterval id. setTxt only writes when text changed. */
-        function smoothTick(fn) {
-            const h = { on: true };
-            (function loop() { if (!h.on) return; try { fn(); } catch (e) { /* keep ticking */ } requestAnimationFrame(loop); })();
-            return h;
-        }
-        function smoothStop(h) { if (typeof h === 'number') clearInterval(h); else if (h) h.on = false; }
-        function setTxt(el, v) { if (el && el.textContent !== v) el.textContent = v; }
-
         // The whole site now lives on one guest URL - there's no more
         // /e/{slug} in the address bar for guests. Instead the chosen venue's
         // slug is kept here in memory + localStorage (so it survives a
@@ -1361,26 +1382,16 @@
         }
 
         // --- Venue history: the venues this device has recently checked in to ---
-        // Saved on this device only (localStorage), newest first, capped at 10, and forgotten
-        // automatically VENUE_HISTORY_MAX_AGE_DAYS days after the last visit. A venue is
+        // Saved on this device only (localStorage), newest first, capped at 10. A venue is
         // recorded once it has actually loaded (see fetchSystemState), so QR-code visits count
         // as well as venues picked from the list, and a venue that doesn't exist is never saved.
         const VENUE_HISTORY_KEY = 'crowddj_venue_history';
         const VENUE_HISTORY_MAX = 10;
-        const VENUE_HISTORY_MAX_AGE_DAYS = 3; // entries older than this are dropped automatically
         let lastRecordedVenueSlug = null;
         function readVenueHistory() {
             try {
                 const raw = JSON.parse(localStorage.getItem(VENUE_HISTORY_KEY) || '[]');
-                if (!Array.isArray(raw)) return [];
-                const cutoff = Date.now() - VENUE_HISTORY_MAX_AGE_DAYS * 86400000;
-                const valid = raw.filter(v => v && typeof v.slug === 'string' && v.slug);
-                const fresh = valid.filter(v => typeof v.at === 'number' && v.at >= cutoff);
-                // Write the pruned list back so expired visits are really gone, not just hidden.
-                if (fresh.length !== raw.length) {
-                    try { localStorage.setItem(VENUE_HISTORY_KEY, JSON.stringify(fresh)); } catch (e) { /* storage blocked */ }
-                }
-                return fresh;
+                return Array.isArray(raw) ? raw.filter(v => v && typeof v.slug === 'string' && v.slug) : [];
             } catch (e) { return []; }
         }
         function recordVenueVisit(slug, eventName, venueName) {
@@ -1388,6 +1399,10 @@
             const list = readVenueHistory().filter(v => v.slug !== slug);
             list.unshift({ slug, eventName: eventName || slug, venueName: venueName || '', at: Date.now() });
             try { localStorage.setItem(VENUE_HISTORY_KEY, JSON.stringify(list.slice(0, VENUE_HISTORY_MAX))); } catch (e) { /* storage blocked */ }
+        }
+        function clearVenueHistory() {
+            try { localStorage.removeItem(VENUE_HISTORY_KEY); } catch (e) { /* ignore */ }
+            renderVenueHistory();
         }
         function formatLastVisit(ts) {
             const startOfDay = d => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
@@ -1401,7 +1416,7 @@
             const el = document.getElementById('venue-history-content');
             const list = readVenueHistory();
             if (list.length === 0) {
-                el.innerHTML = '<p class="venue-empty-msg">No recent venues yet. Venues you check in to will show up here for a few days.</p>';
+                el.innerHTML = '<p class="venue-empty-msg">No recent venues yet. Venues you check in to will show up here.</p>';
                 return;
             }
             el.innerHTML = list.map(v => `
@@ -1414,7 +1429,7 @@
                     </div>
                     <button class="venue-select-btn" data-slug="${escapeHtml(v.slug)}" data-name="${escapeHtml(v.eventName)}" onclick="selectVenue(this.dataset.slug, this.dataset.name)">Select</button>
                 </div>
-            `).join('');
+            `).join('') + '<div style="text-align:center;padding:14px;"><button type="button" class="venue-history-clear" onclick="clearVenueHistory()">Clear history</button></div>';
         }
 
         function selectVenue(slug, displayName) {
@@ -1551,7 +1566,6 @@
         // could be a while from any venue, or unavailable/denied).
         const NZ_MAP_CENTER = [172.8, -41.2];
         const NZ_MAP_ZOOM = 4.6;
-        const VENUE_MAP_USER_ZOOM = 12; // zoom when opening on the guest's own location
         let venueMapUserMarker = null;
 
         function userLocationIcon() {
@@ -1562,13 +1576,11 @@
             if (venueMapInitialized) return;
             venueMapInitialized = true;
             const loc = await getUserLocation();
-            // Opens moderately zoomed on the guest's own position when location is
-            // available (city level - close enough to see nearby venues, not street
-            // level). Without a location it falls back to the whole of New Zealand.
-            // The "locate me" button below still flies in closer on demand.
-            venueMap = L.map('venue-map', { attributionControl: true });
-            if (loc) venueMap.setView([loc.latitude, loc.longitude], VENUE_MAP_USER_ZOOM); // Leaflet takes [lat, lng]
-            else venueMap.setView([NZ_MAP_CENTER[1], NZ_MAP_CENTER[0]], NZ_MAP_ZOOM);
+            // Always opens centred on New Zealand, regardless of where
+            // the guest actually is - the "locate me" button below is
+            // how they zoom to their own position instead.
+            venueMap = L.map('venue-map', { attributionControl: true })
+                .setView([NZ_MAP_CENTER[1], NZ_MAP_CENTER[0]], NZ_MAP_ZOOM); // Leaflet takes [lat, lng]
 
             L.tileLayer(`https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=${CARTO_API_KEY}`, {
                 attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>',
@@ -2494,6 +2506,7 @@
             <p class="now-playing-title" id="now-playing-title"></p>
             <p class="now-playing-artist" id="now-playing-artist"></p>
         </div>
+        <div class="now-playing-live-dot" id="now-playing-live-dot"></div>
     </div>
 
     <script>
@@ -2522,7 +2535,7 @@
                 document.body.classList.remove('has-now-playing-bar');
                 nowPlayingState = null;
                 nowPlayingLastTrackId = null;
-                if (nowPlayingTicker) { smoothStop(nowPlayingTicker); nowPlayingTicker = null; }
+                if (nowPlayingTicker) { clearInterval(nowPlayingTicker); nowPlayingTicker = null; }
                 spotifyUpcomingQueue = [];
                 renderQueue();
                 return;
@@ -2531,6 +2544,7 @@
             document.getElementById('now-playing-artwork').src = data.artwork || '';
             document.getElementById('now-playing-title').innerText = data.title;
             document.getElementById('now-playing-artist').innerText = data.artist || '';
+            document.getElementById('now-playing-live-dot').classList.toggle('is-paused', !data.isPlaying);
 
             bar.classList.add('is-visible');
             document.body.classList.add('has-now-playing-bar');
@@ -2547,7 +2561,7 @@
             renderNowPlayingProgress();
             nowPlayingLastTrackId = data.trackId || null;
 
-            if (!nowPlayingTicker) nowPlayingTicker = smoothTick(renderNowPlayingProgress);
+            if (!nowPlayingTicker) nowPlayingTicker = setInterval(renderNowPlayingProgress, 250);
 
             // Feeds the merged Up Next renderer (see renderQueue() above)
             // rather than drawing its own separate list - Spotify's live "up
