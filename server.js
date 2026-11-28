@@ -2537,7 +2537,9 @@ async function tickMusicScheduler(event) {
             // to, so those apply the moment the boundary is crossed - only
             // the playlist content itself needs to wait for a clean handoff.
             if (typeof currentRule.volume === 'number') {
-                spotifyPlayerCommand(event, 'PUT', '/volume', `?volume_percent=${currentRule.volume}`).catch(() => {});
+                const vc = ensureVisualsConfigs(event);
+                if (vc.muteAll) vc.volumeBeforeMuteAll = currentRule.volume; // stay muted; applied on un-mute
+                else spotifyPlayerCommand(event, 'PUT', '/volume', `?volume_percent=${currentRule.volume}`).catch(() => {});
             }
             if (typeof currentRule.requestsAllowed === 'boolean') {
                 event.systemConfigs.requestsAllowed = currentRule.requestsAllowed;
@@ -5428,6 +5430,12 @@ app.post('/e/:slug/api/admin/playback/volume', async (req, res) => {
     if (!Number.isInteger(vol) || vol < 0 || vol > 100) {
         return res.status(400).json({ error: 'volumePercent must be an integer 0-100.' });
     }
+    const vc = ensureVisualsConfigs(req.event);
+    if (vc.muteAll) { // Mute All is on: remember the level for un-mute, keep Spotify at 0%
+        vc.volumeBeforeMuteAll = vol;
+        events.scheduleSave(req.event.slug);
+        return res.json({ success: true, heldByMuteAll: true });
+    }
     const result = await spotifyPlayerCommand(req.event, 'PUT', '/volume', `?volume_percent=${vol}`);
     res.status(result.success ? 200 : 400).json(result);
 });
@@ -5884,8 +5892,10 @@ app.post('/e/:slug/api/admin/visuals/music-video-cache/clear', (req, res) => {
     res.json({ success: true, removed, remaining: verifiedMusicVideoCache.size });
 });
 
-// Mute All = Mute Visuals + pause Spotify. Switching it back off resumes
-// playback, but only if this toggle was the thing that paused it.
+// Mute All = Mute Visuals + Spotify volume to 0% (playback keeps running). Switching it
+// back off restores the volume that was set before. If the volume was changed while muted
+// (manual slider or schedule rule) the new value is stored in volumeBeforeMuteAll instead,
+// so un-muting lands on the latest level the admin/schedule asked for.
 app.post('/e/:slug/api/admin/visuals/toggle-mute-all', async (req, res) => {
     const { enabled } = req.body || {};
     if (typeof enabled !== 'boolean') return res.status(400).json({ error: 'enabled must be true or false.' });
@@ -5895,18 +5905,20 @@ app.post('/e/:slug/api/admin/visuals/toggle-mute-all', async (req, res) => {
     let playbackOk = null;
     try {
         if (enabled && !wasOn) {
-            const result = await spotifyPlayerCommand(req.event, 'PUT', '/pause');
+            const cur = req.event.cachedNowPlaying && req.event.cachedNowPlaying.volumePercent;
+            v.volumeBeforeMuteAll = (typeof cur === 'number' && cur > 0) ? cur : (typeof v.volumeBeforeMuteAll === 'number' ? v.volumeBeforeMuteAll : 50);
+            const result = await spotifyPlayerCommand(req.event, 'PUT', '/volume', '?volume_percent=0');
             playbackOk = !!(result && result.success);
-            v.pausedByMuteAll = playbackOk;
         } else if (!enabled && wasOn) {
-            if (v.pausedByMuteAll) {
-                const result = await spotifyPlayerCommand(req.event, 'PUT', '/play');
-                playbackOk = !!(result && result.success);
-            }
+            const restore = typeof v.volumeBeforeMuteAll === 'number' ? v.volumeBeforeMuteAll : 50;
+            const result = await spotifyPlayerCommand(req.event, 'PUT', '/volume', `?volume_percent=${restore}`);
+            playbackOk = !!(result && result.success);
+            // Older versions paused playback on Mute All - resume it if that is what happened.
+            if (v.pausedByMuteAll) await spotifyPlayerCommand(req.event, 'PUT', '/play');
             v.pausedByMuteAll = false;
         }
     } catch (err) {
-        console.error('[VISUALS] Mute All playback command failed:', err.message);
+        console.error('[VISUALS] Mute All volume command failed:', err.message);
         playbackOk = false;
     }
     events.scheduleSave(req.event.slug);
