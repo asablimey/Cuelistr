@@ -1625,6 +1625,18 @@ body.has-player { overflow: hidden; }
     <div id="toast-container"></div>
 
     <script>
+        /* ---- Smooth progress ticker ----
+           Redraws every animation frame (instead of a 250ms timer) so progress bars glide
+           instead of stepping. smoothTick(fn) returns a handle; smoothStop(handle) stops it.
+           smoothStop also accepts a plain setInterval id. setTxt only writes when text changed. */
+        function smoothTick(fn) {
+            const h = { on: true };
+            (function loop() { if (!h.on) return; try { fn(); } catch (e) { /* keep ticking */ } requestAnimationFrame(loop); })();
+            return h;
+        }
+        function smoothStop(h) { if (typeof h === 'number') clearInterval(h); else if (h) h.on = false; }
+        function setTxt(el, v) { if (el && el.textContent !== v) el.textContent = v; }
+
         // Served at /e/{slug}/manager - the event slug is the second path segment.
         // Works two ways: /e/{slug}/manager (old links) or the slugless /manager (the installed app), which
         // opens the event this device last used. Picking an event stores it and reloads to /manager.
@@ -3004,8 +3016,9 @@ body.has-player { overflow: hidden; }
             else if (!currentIsPlaying()) { label = 'Paused'; cls = 'paused'; }
             else if (Date.now() < mixUntil) { label = 'Mixing'; cls = 'mixing'; }
             else { label = 'Playing'; cls = ''; }
-            strip.className = 'mix-strip' + (cls ? ' ' + cls : '');
-            text.textContent = label;
+            const stripCls = 'mix-strip' + (cls ? ' ' + cls : '');
+            if (strip.className !== stripCls) strip.className = stripCls;
+            setTxt(text, label);
         }
         // Volume mode: the speaker button turns green and the progress bar becomes a volume bar
         let volMode = false, volDrag = null;
@@ -3045,8 +3058,8 @@ body.has-player { overflow: hidden; }
             if (volMode) {
                 const vol = volDrag !== null ? volDrag : optimisticValue('volume', nowPlaying && nowPlaying.volumePercent != null ? nowPlaying.volumePercent : 0);
                 $('pl-fill').style.width = vol + '%';
-                $('pl-t1').textContent = 'Volume';
-                $('pl-t2').textContent = vol + '%';
+                setTxt($('pl-t1'), 'Volume');
+                setTxt($('pl-t2'), vol + '%');
                 renderStrip();
                 return;
             }
@@ -3058,8 +3071,8 @@ body.has-player { overflow: hidden; }
             const elapsed = currentIsPlaying() ? (Date.now() - nowPlaying.fetchedAt) : 0;
             const pos = Math.min(nowPlaying.durationMs, nowPlaying.progressMs + elapsed);
             $('pl-fill').style.width = (pos / nowPlaying.durationMs) * 100 + '%';
-            $('pl-t1').textContent = formatMsToClock(pos);
-            $('pl-t2').textContent = formatMsToClock(nowPlaying.durationMs);
+            setTxt($('pl-t1'), formatMsToClock(pos));
+            setTxt($('pl-t2'), formatMsToClock(nowPlaying.durationMs));
             renderStrip();
         }
         function updateNowPlaying(data) {
@@ -3088,7 +3101,7 @@ body.has-player { overflow: hidden; }
             $('pl-loop').classList.toggle('on', repeat !== 'off');
             paintTransport();
             renderProgress();
-            if (!nowPlayingTicker) nowPlayingTicker = setInterval(renderProgress, 250);
+            if (!nowPlayingTicker) nowPlayingTicker = smoothTick(renderProgress);
             spotifyUpcomingQueue = (nowPlaying && nowPlaying.upcoming) || [];
             renderQueueList();
         }
@@ -3170,8 +3183,8 @@ body.has-player { overflow: hidden; }
                     const pct = s && s.durationMs ? (currentMs() / s.durationMs) * 100 : 0;
                     el.style.width = pct.toFixed(2) + '%';
                 };
-                const ensureTimer = () => { if (!timer) timer = setInterval(paint, 250); };
-                const stopTimer = () => { if (timer) { clearInterval(timer); timer = null; } };
+                const ensureTimer = () => { if (!timer) timer = smoothTick(paint); };
+                const stopTimer = () => { if (timer) { smoothStop(timer); timer = null; } };
 
                 return {
                     update(np) {
@@ -3424,14 +3437,14 @@ body.has-player { overflow: hidden; }
             const show = hasTrack && currentView !== 'play';
             bar.classList.toggle('is-visible', show);
             document.body.classList.toggle('has-now-playing-bar', show);
-            if (!show) { if (miniTicker) { clearInterval(miniTicker); miniTicker = null; } return; }
+            if (!show) { if (miniTicker) { smoothStop(miniTicker); miniTicker = null; } return; }
             const art = safeImageUrl(nowPlaying.artwork);
             const artEl = $('now-playing-artwork');
             if (artEl.getAttribute('src') !== art) artEl.setAttribute('src', art);
             $('now-playing-title').innerHTML = escapeHtml(nowPlaying.title) + bpmTag(nowPlaying.trackId);
             $('now-playing-artist').textContent = nowPlaying.artist || '';
             paintMiniProgress();
-            if (!miniTicker) miniTicker = setInterval(paintMiniProgress, 250);
+            if (!miniTicker) miniTicker = smoothTick(paintMiniProgress);
         }
 
         // ---- Start up ----
