@@ -594,10 +594,25 @@
         }
         .add-song-bar input[type="text"]:focus { outline: none; border-color: var(--spotify-green); }
         .playback-dock {
-            position: sticky; bottom: 0; z-index: 50; margin-top: 14px;
+            flex: none; margin-top: 12px;
             background: var(--panel-bg); border: 1px solid var(--border); border-radius: 14px;
-            box-shadow: 0 -6px 18px rgba(0,0,0,0.35); padding: 10px 16px; box-sizing: border-box;
+            padding: 10px 16px; box-sizing: border-box;
         }
+        #admin-search-results { max-height: 40vh; overflow-y: auto; }
+
+        /* Playback & Queue tab fills the screen like manager: header at the top, playback box pinned
+           at the bottom, and ONLY the queue list scrolls in between. (The thin now-playing strip is
+           hidden here - the playback box already shows the same thing.) */
+        html:has(body.tab-queue) { overflow: hidden; }
+        body.tab-queue { height: 100vh; height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
+        body.tab-queue.has-now-playing-bar { padding-bottom: var(--page-pad, 20px); }
+        body.tab-queue .now-playing-bar { display: none !important; }
+        body.tab-queue > .header { flex: none; }
+        body.tab-queue > #tab-panel-queue.active-content { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+        body.tab-queue #tab-panel-queue > .panel { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+        body.tab-queue #tab-panel-queue > .panel > h2,
+        body.tab-queue #tab-panel-queue .add-song-bar { flex: none; }
+        body.tab-queue #queue-list { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
         .playback-dock .playback-panel { flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: flex-start; text-align: left; gap: 8px 20px; }
         .playback-dock .playback-artwork { width: 52px; height: 52px; border-radius: 8px; box-shadow: none; order: 0; }
         .playback-dock .playback-panel > div:not([class]) { order: 1; flex: 1 1 180px; min-width: 0; }
@@ -999,7 +1014,7 @@
         .pend-no { background: var(--red-action, #e91429); }
     </style>
 </head>
-<body>
+<body class="tab-queue">
 
     <div id="admin-lock-screen">
         <div class="lock-container">
@@ -1882,6 +1897,7 @@
                 document.getElementById(`sidebar-nav-${name}`).classList.toggle('active-tab', isActive);
                 document.getElementById(`tab-panel-${name}`).classList.toggle('active-content', isActive);
             });
+            document.body.classList.toggle('tab-queue', targetTab === 'queue');
             closeSidebar();
             if (targetTab === 'stats') loadStats();
             if (targetTab === 'blocked') { renderBlockedTabGuests(); renderBlockedEverything(); }
@@ -3970,7 +3986,10 @@ async function verifyPassword() {
             if (!r.ok) return acctMsg('err', r.data.error || 'Could not send the reset link.');
             acctMsg('ok', r.data.message || 'If that email is registered, a reset link has been sent.');
         }
-        document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeAccountModal(); });
+        document.addEventListener('keydown', (e) => {
+            // Esc is also how password managers dismiss their suggestion list - don't treat that as "close the popup".
+            if (e.key === 'Escape' && !(document.activeElement && document.activeElement.matches('input, textarea, select'))) closeAccountModal();
+        });
 
         // ---- Rotating venue code (sidebar) ----
         let venueScreenKey = '';
@@ -4007,7 +4026,7 @@ async function verifyPassword() {
         loadFamilyLists();
     </script>
     <!-- Account login popup (replaces the old redirect to the New Event page) -->
-    <div id="account-modal-overlay" onclick="if(event.target === this) closeAccountModal()">
+    <div id="account-modal-overlay" onpointerdown="this._downOnBackdrop = (event.target === this)" onclick="if (event.target === this && this._downOnBackdrop) closeAccountModal(); this._downOnBackdrop = false">
         <div class="acct-modal" role="dialog" aria-modal="true" aria-labelledby="acct-title">
             <button type="button" class="acct-close" onclick="closeAccountModal()" aria-label="Close">&#10005;</button>
             <h2 id="acct-title">Your Account</h2>
@@ -4016,25 +4035,25 @@ async function verifyPassword() {
                 <button type="button" class="acct-tab" id="acct-tab-signup" onclick="switchAcctTab('signup')">Create Account</button>
             </div>
 
-            <div class="acct-form active" id="acct-form-login">
+            <form class="acct-form active" id="acct-form-login" onsubmit="event.preventDefault(); acctLogin();">
                 <div class="acct-field"><label>Username</label><input type="text" id="acct-login-username" autocapitalize="off" autocorrect="off" autocomplete="username"></div>
-                <div class="acct-field"><label>Password</label><input type="password" id="acct-login-password" autocomplete="current-password" onkeydown="if(event.key === 'Enter') acctLogin()"></div>
+                <div class="acct-field"><label>Password</label><input type="password" id="acct-login-password" autocomplete="current-password"></div>
                 <button type="button" class="acct-link" onclick="switchAcctTab('forgot')">Forgot password?</button>
-                <button type="button" class="acct-submit" id="acct-login-btn" onclick="acctLogin()">Log In</button>
-            </div>
+                <button type="submit" class="acct-submit" id="acct-login-btn">Log In</button>
+            </form>
 
-            <div class="acct-form" id="acct-form-signup">
+            <form class="acct-form" id="acct-form-signup" onsubmit="event.preventDefault(); acctSignup();">
                 <div class="acct-field"><label>Username</label><input type="text" id="acct-signup-username" autocapitalize="off" autocorrect="off" placeholder="3-30 characters, no spaces" autocomplete="username"></div>
                 <div class="acct-field"><label>Email</label><input type="email" id="acct-signup-email" autocapitalize="off" autocorrect="off" autocomplete="email"></div>
-                <div class="acct-field"><label>Password</label><input type="password" id="acct-signup-password" placeholder="At least 8 characters" autocomplete="new-password" onkeydown="if(event.key === 'Enter') acctSignup()"></div>
-                <button type="button" class="acct-submit" id="acct-signup-btn" onclick="acctSignup()">Create Account</button>
-            </div>
+                <div class="acct-field"><label>Password</label><input type="password" id="acct-signup-password" placeholder="At least 8 characters" autocomplete="new-password"></div>
+                <button type="submit" class="acct-submit" id="acct-signup-btn">Create Account</button>
+            </form>
 
-            <div class="acct-form" id="acct-form-forgot">
-                <div class="acct-field"><label>Account email</label><input type="email" id="acct-forgot-email" autocapitalize="off" autocorrect="off" autocomplete="email" onkeydown="if(event.key === 'Enter') acctForgot()"></div>
-                <button type="button" class="acct-submit" id="acct-forgot-btn" onclick="acctForgot()">Send Reset Link</button>
+            <form class="acct-form" id="acct-form-forgot" onsubmit="event.preventDefault(); acctForgot();">
+                <div class="acct-field"><label>Account email</label><input type="email" id="acct-forgot-email" autocapitalize="off" autocorrect="off" autocomplete="email"></div>
+                <button type="submit" class="acct-submit" id="acct-forgot-btn">Send Reset Link</button>
                 <div style="text-align:center; margin-top:12px;"><button type="button" class="acct-link" onclick="switchAcctTab('login')">Back to log in</button></div>
-            </div>
+            </form>
 
             <div class="acct-error" id="acct-error"></div>
             <div class="acct-ok" id="acct-ok"></div>
