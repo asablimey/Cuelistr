@@ -932,17 +932,6 @@
             margin: 2px 0 0 0; font-size: 0.75rem; color: var(--text-muted);
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
-        .now-playing-live-dot {
-            width: 8px; height: 8px; border-radius: 50%;
-            background-color: var(--spotify-green);
-            flex-shrink: 0;
-            animation: now-playing-pulse 1.5s ease-in-out infinite;
-        }
-        .now-playing-live-dot.is-paused { animation: none; opacity: 0.3; }
-        @keyframes now-playing-pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.35; }
-        }
         body.has-now-playing-bar { padding-bottom: 76px; }
 
     
@@ -1170,9 +1159,6 @@ body.has-player { overflow: hidden; }
             color: var(--spotify-green); font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; margin: 0 0 6px;
             display: flex; align-items: center; gap: 8px; overflow: hidden; white-space: nowrap;
         }
-        #screensaver .ss-live-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--spotify-green); flex-shrink: 0; animation: ss-pulse 1.5s ease-in-out infinite; }
-        #screensaver .ss-live-dot.is-paused { animation: none; opacity: 0.3; }
-        @keyframes ss-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
         #screensaver .ss-np-title { font-size: clamp(1.2rem, 3vh, 1.7rem); font-weight: 700; margin: 0 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         #screensaver .ss-np-artist { color: var(--text-muted); font-size: clamp(0.95rem, 2.2vh, 1.15rem); margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         #screensaver .ss-progress-track { width: 100%; height: 5px; background: var(--border-strong); border-radius: 3px; margin-top: clamp(8px, 1.6vh, 14px); overflow: hidden; }
@@ -1256,7 +1242,7 @@ body.has-player { overflow: hidden; }
         <div class="ss-now-playing" id="ss-now-playing" style="display:none;">
             <img class="ss-artwork" id="ss-artwork" src="" alt="">
             <div class="ss-np-text">
-                <p class="ss-np-label"><span class="ss-live-dot" id="ss-live-dot"></span> Now Playing</p>
+                <p class="ss-np-label">Now Playing</p>
                 <p class="ss-np-title" id="ss-np-title"></p>
                 <p class="ss-np-artist" id="ss-np-artist"></p>
                 <div class="ss-progress-track"><div class="ss-progress-fill" id="ss-progress-fill"></div></div>
@@ -1274,7 +1260,6 @@ body.has-player { overflow: hidden; }
             <p class="now-playing-title" id="now-playing-title"></p>
             <p class="now-playing-artist" id="now-playing-artist"></p>
         </div>
-        <div class="now-playing-live-dot" id="now-playing-live-dot"></div>
     </div>
 
     <!-- SIDEBAR -->
@@ -3330,7 +3315,6 @@ body.has-player { overflow: hidden; }
                         if (artEl.getAttribute('src') !== art) artEl.setAttribute('src', art);
                         $('ss-np-title').textContent = np.title;
                         $('ss-np-artist').textContent = np.artist || '';
-                        $('ss-live-dot').classList.toggle('is-paused', !np.isPlaying);
                         tracker.update(np);
                         upcoming = np.upcoming || [];
                     }
@@ -3446,7 +3430,6 @@ body.has-player { overflow: hidden; }
             if (artEl.getAttribute('src') !== art) artEl.setAttribute('src', art);
             $('now-playing-title').innerHTML = escapeHtml(nowPlaying.title) + bpmTag(nowPlaying.trackId);
             $('now-playing-artist').textContent = nowPlaying.artist || '';
-            $('now-playing-live-dot').classList.toggle('is-paused', !nowPlaying.isPlaying);
             paintMiniProgress();
             if (!miniTicker) miniTicker = setInterval(paintMiniProgress, 250);
         }
