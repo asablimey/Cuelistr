@@ -1248,6 +1248,18 @@
     </div>
 
     <script>
+        /* ---- Smooth progress ticker ----
+           Redraws every animation frame (instead of a 250ms timer) so progress bars glide
+           instead of stepping. smoothTick(fn) returns a handle; smoothStop(handle) stops it.
+           smoothStop also accepts a plain setInterval id. setTxt only writes when text changed. */
+        function smoothTick(fn) {
+            const h = { on: true };
+            (function loop() { if (!h.on) return; try { fn(); } catch (e) { /* keep ticking */ } requestAnimationFrame(loop); })();
+            return h;
+        }
+        function smoothStop(h) { if (typeof h === 'number') clearInterval(h); else if (h) h.on = false; }
+        function setTxt(el, v) { if (el && el.textContent !== v) el.textContent = v; }
+
         // The whole site now lives on one guest URL - there's no more
         // /e/{slug} in the address bar for guests. Instead the chosen venue's
         // slug is kept here in memory + localStorage (so it survives a
@@ -1531,6 +1543,7 @@
         // could be a while from any venue, or unavailable/denied).
         const NZ_MAP_CENTER = [172.8, -41.2];
         const NZ_MAP_ZOOM = 4.6;
+        const VENUE_MAP_USER_ZOOM = 12; // zoom when opening on the guest's own location
         let venueMapUserMarker = null;
 
         function userLocationIcon() {
@@ -1541,11 +1554,13 @@
             if (venueMapInitialized) return;
             venueMapInitialized = true;
             const loc = await getUserLocation();
-            // Always opens centred on New Zealand, regardless of where
-            // the guest actually is - the "locate me" button below is
-            // how they zoom to their own position instead.
-            venueMap = L.map('venue-map', { attributionControl: true })
-                .setView([NZ_MAP_CENTER[1], NZ_MAP_CENTER[0]], NZ_MAP_ZOOM); // Leaflet takes [lat, lng]
+            // Opens moderately zoomed on the guest's own position when location is
+            // available (city level - close enough to see nearby venues, not street
+            // level). Without a location it falls back to the whole of New Zealand.
+            // The "locate me" button below still flies in closer on demand.
+            venueMap = L.map('venue-map', { attributionControl: true });
+            if (loc) venueMap.setView([loc.latitude, loc.longitude], VENUE_MAP_USER_ZOOM); // Leaflet takes [lat, lng]
+            else venueMap.setView([NZ_MAP_CENTER[1], NZ_MAP_CENTER[0]], NZ_MAP_ZOOM);
 
             L.tileLayer(`https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=${CARTO_API_KEY}`, {
                 attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>',
@@ -2499,7 +2514,7 @@
                 document.body.classList.remove('has-now-playing-bar');
                 nowPlayingState = null;
                 nowPlayingLastTrackId = null;
-                if (nowPlayingTicker) { clearInterval(nowPlayingTicker); nowPlayingTicker = null; }
+                if (nowPlayingTicker) { smoothStop(nowPlayingTicker); nowPlayingTicker = null; }
                 spotifyUpcomingQueue = [];
                 renderQueue();
                 return;
@@ -2524,7 +2539,7 @@
             renderNowPlayingProgress();
             nowPlayingLastTrackId = data.trackId || null;
 
-            if (!nowPlayingTicker) nowPlayingTicker = setInterval(renderNowPlayingProgress, 250);
+            if (!nowPlayingTicker) nowPlayingTicker = smoothTick(renderNowPlayingProgress);
 
             // Feeds the merged Up Next renderer (see renderQueue() above)
             // rather than drawing its own separate list - Spotify's live "up
