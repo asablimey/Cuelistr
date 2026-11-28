@@ -1112,7 +1112,6 @@
                 <p class="settings-card-hint" style="margin-top: 0;">Drop a track straight into the queue - skips credits, filters, and the queue cap. Good for a verbal request or seeding the queue before doors open.</p>
                 <div class="join-row" style="margin-bottom: 10px;">
                     <input type="text" id="admin-search-input" placeholder="Search for a song or artist" oninput="onAdminSearchInput()">
-                    <input type="text" id="admin-search-label" placeholder="Requested by (optional)" maxlength="30" style="flex: 0 0 180px;">
                 </div>
                 <div id="admin-search-results"></div>
             </div>
@@ -2085,12 +2084,11 @@ async function verifyPassword() {
         async function addTrackToQueue(trackId, btnEl) {
             btnEl.disabled = true;
             btnEl.textContent = 'Adding...';
-            const label = document.getElementById('admin-search-label').value.trim();
             try {
                 const res = await fetch(eventUrl('/api/admin/add-track'), {
                     method: 'POST',
                     headers: adminHeaders({ 'Content-Type': 'application/json' }),
-                    body: JSON.stringify({ trackId, label })
+                    body: JSON.stringify({ trackId })
                 });
                 if (res.ok) {
                     showToast('Added to the queue.', 'success');
