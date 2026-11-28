@@ -3711,7 +3711,7 @@ catalogApi.delete('/row/:id', async (req, res) => {
 // scheduler (read via GET /e/:slug/api/admin/curated-playlists below). One
 // Redis hash, field = row id, value = JSON.
 //   row = { id, label, uri: 'spotify:playlist:<id>', type: 'crowddj'|'karaoke',
-//           description, createdAt, updatedAt }
+//           description, image (cover art URL from Spotify, may be ''), createdAt, updatedAt }
 const CURATED_PLAYLISTS_KEY = 'curated-playlists:rows';
 const CURATED_PLAYLISTS_MAX = 200;
 
@@ -3732,24 +3732,40 @@ function parseCuratedPlaylistId(input) {
     return id && /^[A-Za-z0-9]{22}$/.test(id) ? id : null;
 }
 
-// Best effort: Spotify's public oEmbed endpoint returns a playlist's title
-// with no login, so the master can paste just a link. Private or odd
+// Best effort: Spotify's public oEmbed endpoint returns a playlist's title and cover
+// image with no login, so the master can paste just a link. Private or odd
 // playlists can fail; the caller then asks for a typed name instead.
-async function spotifyPlaylistTitle(id) {
+async function spotifyPlaylistMeta(id) {
     try {
         const url = 'https://open.spotify.com/oembed?url=' + encodeURIComponent('https://open.spotify.com/playlist/' + id);
         const r = await fetch(url, { timeout: 5000 });
-        if (!r.ok) return '';
+        if (!r.ok) return { title: '', image: '' };
         const d = await r.json();
-        return typeof d.title === 'string' ? d.title.trim().slice(0, 60) : '';
-    } catch (e) { return ''; }
+        const thumb = typeof d.thumbnail_url === 'string' && /^https:\/\//.test(d.thumbnail_url) ? d.thumbnail_url : '';
+        return { title: typeof d.title === 'string' ? d.title.trim().slice(0, 60) : '', image: thumb };
+    } catch (e) { return { title: '', image: '' }; }
+}
+async function spotifyPlaylistTitle(id) { return (await spotifyPlaylistMeta(id)).title; }
+
+// Rows saved before cover images existed get theirs fetched the next time the list is read
+// (at most one attempt per row per day) and saved back, so nothing needs migrating by hand.
+async function curatedPlaylistsBackfillImages(rows) {
+    const DAY = 24 * 3600 * 1000, now = Date.now();
+    const todo = rows.filter(r => !r.image && !(r.imageTriedAt && now - r.imageTriedAt < DAY));
+    await Promise.all(todo.map(async r => {
+        const meta = await spotifyPlaylistMeta(parseCuratedPlaylistId(r.uri) || '');
+        r.imageTriedAt = now;
+        if (meta.image) r.image = meta.image;
+        try { await events.redis(['HSET', CURATED_PLAYLISTS_KEY, r.id, JSON.stringify(r)]); } catch (e) { /* try again next read */ }
+    }));
+    return rows;
 }
 
 const curatedPlaylistsApi = express.Router();
 app.use('/api/master/curated-playlists', catalogAuthLimiter, requireMaster, curatedPlaylistsApi);
 
 curatedPlaylistsApi.get('/', async (req, res) => {
-    try { res.json({ playlists: await curatedPlaylistsList() }); }
+    try { res.json({ playlists: await curatedPlaylistsBackfillImages(await curatedPlaylistsList()) }); }
     catch (e) { res.status(500).json({ error: 'Could not load curated playlists: ' + e.message }); }
 });
 
@@ -3776,14 +3792,17 @@ curatedPlaylistsApi.post('/', async (req, res) => {
         if (!existing && all.length >= CURATED_PLAYLISTS_MAX) return res.status(400).json({ error: `Limit of ${CURATED_PLAYLISTS_MAX} curated playlists reached.` });
 
         let label = typeof body.label === 'string' ? body.label.trim().slice(0, 60) : (existing ? existing.label : '');
-        if (!label) label = await spotifyPlaylistTitle(parseCuratedPlaylistId(uri));
+        const uriChanged = !existing || uri !== existing.uri;
+        const meta = (!label || uriChanged || !existing.image) ? await spotifyPlaylistMeta(parseCuratedPlaylistId(uri)) : { title: '', image: '' };
+        if (!label) label = meta.title;
+        const image = uriChanged ? meta.image : (existing.image || meta.image || '');
         if (!label) return res.status(400).json({ error: "Couldn't read the playlist's name from Spotify - type a name in." });
 
         const description = typeof body.description === 'string' ? body.description.trim().slice(0, 120) : (existing ? (existing.description || '') : '');
         const now = Date.now();
         const row = {
             id: existing ? existing.id : crypto.randomBytes(6).toString('hex'),
-            label, uri, type, description,
+            label, uri, type, description, image,
             createdAt: existing ? (existing.createdAt || now) : now,
             updatedAt: now
         };
@@ -3807,8 +3826,8 @@ curatedPlaylistsApi.delete('/:id', async (req, res) => {
 // (the /e/:slug/api/admin gate registered earlier).
 app.get('/e/:slug/api/admin/curated-playlists', async (req, res) => {
     try {
-        const rows = await curatedPlaylistsList();
-        res.json({ playlists: rows.map(r => ({ id: r.id, label: r.label, uri: r.uri, type: r.type, description: r.description || '' })) });
+        const rows = await curatedPlaylistsBackfillImages(await curatedPlaylistsList());
+        res.json({ playlists: rows.map(r => ({ id: r.id, label: r.label, uri: r.uri, type: r.type, description: r.description || '', image: r.image || '' })) });
     } catch (e) {
         res.status(500).json({ error: 'Could not load curated playlists.' });
     }
