@@ -1169,7 +1169,7 @@
                 <button class="modal-close-btn" onclick="closePrivacyModal()">✕</button>
             </div>
             <div class="modal-body privacy-body">
-                <p class="privacy-updated">Last updated: September 2026</p>
+                <p class="privacy-updated">Last updated: November 2026</p>
 
                 <h4>What this site is</h4>
                 <p>This is a small, independent song-request tool built for live events. It's not a company product - there's no ad tracking and no data resale.</p>
@@ -1177,9 +1177,12 @@
                 <h4>What guests see collected</h4>
                 <ul>
                     <li><strong>The name you type in</strong> when you make your first request. It's shown to the admin so they know who requested each song - that's the only reason it's collected.</li>
-                    <li><strong>A random anonymous ID</strong>, stored as a cookie on your device, used only to stop the same device from voting on a song more than once. It isn't linked to your name or any personal info.</li>
+                    <li><strong>A random anonymous ID</strong>, stored in your browser's local storage on your device, used only to stop the same device from voting on a song more than once. It isn't linked to your name or any personal info.</li>
                     <li><strong>Your song requests and votes themselves</strong> (title, artist, timestamp), so the queue can function and the admin can see request history for the event.</li>
                 </ul>
+
+                <h4>Saved on your device only</h4>
+                <p>Your browser keeps a few things in its local storage on your own device: the name you typed in and the anonymous ID above (both described earlier), and a short list of recent venues so you can jump back to them. The recent venues list stays on your device, and each venue is forgotten automatically 3 days after your last visit to it. Clearing your browser's site data removes all of it at any time.</p>
 
                 <h4>Location (optional)</h4>
                 <p>If you allow it, your browser's location is used for two things: showing how far away each event is when you're picking a venue from the list/map, and - if the event's DJ has turned this on - confirming you're actually near the venue before letting you request or vote. Both checks happen entirely on your own device by comparing your coordinates to the venue's; your location is never sent to or stored on this site's server. You can decline the location prompt and still use the site - you just won't see distances, and a DJ-enabled venue check won't be able to confirm you're there.</p>
