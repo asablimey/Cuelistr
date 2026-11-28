@@ -1592,7 +1592,7 @@ body.has-player { overflow: hidden; }
     </div>
 
     <!-- Account login popup -->
-    <div id="account-modal-overlay" onclick="if(event.target === this) closeAccountModal()">
+    <div id="account-modal-overlay" onpointerdown="this._downOnBackdrop = (event.target === this)" onclick="if (event.target === this && this._downOnBackdrop) closeAccountModal(); this._downOnBackdrop = false">
         <div class="acct-modal" role="dialog" aria-modal="true" aria-labelledby="acct-title">
             <button type="button" class="acct-close" onclick="closeAccountModal()" aria-label="Close">&#10005;</button>
             <h2 id="acct-title">Your Account</h2>
@@ -1600,23 +1600,23 @@ body.has-player { overflow: hidden; }
                 <button type="button" class="acct-tab active" id="acct-tab-login" onclick="switchAcctTab('login')">Log In</button>
                 <button type="button" class="acct-tab" id="acct-tab-signup" onclick="switchAcctTab('signup')">Create Account</button>
             </div>
-            <div class="acct-form active" id="acct-form-login">
+            <form class="acct-form active" id="acct-form-login" onsubmit="event.preventDefault(); acctLogin();">
                 <div class="acct-field"><label>Username</label><input type="text" id="acct-login-username" autocapitalize="off" autocorrect="off" autocomplete="username"></div>
-                <div class="acct-field"><label>Password</label><input type="password" id="acct-login-password" autocomplete="current-password" onkeydown="if(event.key === 'Enter') acctLogin()"></div>
+                <div class="acct-field"><label>Password</label><input type="password" id="acct-login-password" autocomplete="current-password"></div>
                 <button type="button" class="acct-link" onclick="switchAcctTab('forgot')">Forgot password?</button>
-                <button type="button" class="acct-submit" id="acct-login-btn" onclick="acctLogin()">Log In</button>
-            </div>
-            <div class="acct-form" id="acct-form-signup">
+                <button type="submit" class="acct-submit" id="acct-login-btn">Log In</button>
+            </form>
+            <form class="acct-form" id="acct-form-signup" onsubmit="event.preventDefault(); acctSignup();">
                 <div class="acct-field"><label>Username</label><input type="text" id="acct-signup-username" autocapitalize="off" autocorrect="off" placeholder="3-30 characters, no spaces" autocomplete="username"></div>
                 <div class="acct-field"><label>Email</label><input type="email" id="acct-signup-email" autocapitalize="off" autocorrect="off" autocomplete="email"></div>
-                <div class="acct-field"><label>Password</label><input type="password" id="acct-signup-password" placeholder="At least 8 characters" autocomplete="new-password" onkeydown="if(event.key === 'Enter') acctSignup()"></div>
-                <button type="button" class="acct-submit" id="acct-signup-btn" onclick="acctSignup()">Create Account</button>
-            </div>
-            <div class="acct-form" id="acct-form-forgot">
-                <div class="acct-field"><label>Account email</label><input type="email" id="acct-forgot-email" autocapitalize="off" autocorrect="off" autocomplete="email" onkeydown="if(event.key === 'Enter') acctForgot()"></div>
-                <button type="button" class="acct-submit" id="acct-forgot-btn" onclick="acctForgot()">Send Reset Link</button>
+                <div class="acct-field"><label>Password</label><input type="password" id="acct-signup-password" placeholder="At least 8 characters" autocomplete="new-password"></div>
+                <button type="submit" class="acct-submit" id="acct-signup-btn">Create Account</button>
+            </form>
+            <form class="acct-form" id="acct-form-forgot" onsubmit="event.preventDefault(); acctForgot();">
+                <div class="acct-field"><label>Account email</label><input type="email" id="acct-forgot-email" autocapitalize="off" autocorrect="off" autocomplete="email"></div>
+                <button type="submit" class="acct-submit" id="acct-forgot-btn">Send Reset Link</button>
                 <div style="text-align:center;margin-top:12px;"><button type="button" class="acct-link" onclick="switchAcctTab('login')">Back to log in</button></div>
-            </div>
+            </form>
             <div class="acct-error" id="acct-error"></div>
             <div class="acct-ok" id="acct-ok"></div>
         </div>
@@ -2604,7 +2604,10 @@ body.has-player { overflow: hidden; }
             if (!r.ok) return acctMsg('err', r.data.error || 'Could not send the reset link.');
             acctMsg('ok', r.data.message || 'If that email is registered, a reset link has been sent.');
         }
-        document.addEventListener('keydown', e => { if (e.key === 'Escape') closeAccountModal(); });
+        document.addEventListener('keydown', e => {
+            // Esc is also how password managers dismiss their suggestion list - don't treat that as "close the popup".
+            if (e.key === 'Escape' && !(document.activeElement && document.activeElement.matches('input, textarea, select'))) closeAccountModal();
+        });
 
         // ---- Dashboard poll (same endpoint + 3s interval as admin.html) ----
         function setIfIdle(id, value) {
