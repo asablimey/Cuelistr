@@ -578,6 +578,33 @@
         .playback-disconnected { color: var(--text-muted); padding: 40px 20px; }
         .playback-disconnected a { color: var(--spotify-green); }
 
+        /* ---- Playback & Queue tab: slim "Add a Song" bar + playback box pinned to the bottom ---- */
+        .add-song-bar { margin-bottom: 12px; }
+        .add-song-bar input[type="text"] {
+            width: 100%; box-sizing: border-box; background-color: var(--card-bg);
+            border: 1px solid var(--border-strong); padding: 8px 12px; color: var(--text);
+            border-radius: 8px; font-size: 0.9rem;
+        }
+        .add-song-bar input[type="text"]:focus { outline: none; border-color: var(--spotify-green); }
+        .playback-dock {
+            position: sticky; bottom: 0; z-index: 50; margin-top: 14px;
+            background: var(--panel-bg); border: 1px solid var(--border); border-radius: 14px;
+            box-shadow: 0 -6px 18px rgba(0,0,0,0.35); padding: 10px 16px; box-sizing: border-box;
+        }
+        .playback-dock .playback-panel { flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: flex-start; text-align: left; gap: 8px 20px; }
+        .playback-dock .playback-artwork { width: 52px; height: 52px; border-radius: 8px; box-shadow: none; order: 0; }
+        .playback-dock .playback-panel > div:not([class]) { order: 1; flex: 1 1 180px; min-width: 0; }
+        .playback-dock .playback-title { font-size: 1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .playback-dock .playback-artist { font-size: 0.85rem; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .playback-dock .playback-device { font-size: 0.72rem; margin-top: 2px; }
+        .playback-dock .playback-transport { order: 2; gap: 10px; }
+        .playback-dock .playback-icon-btn.playback-play-pause { width: 44px; height: 44px; }
+        .playback-dock .playback-icon-btn.playback-play-pause svg { width: 22px; height: 22px; }
+        .playback-dock .playback-progress-wrap { order: 3; flex: 2 1 260px; max-width: none; width: auto; }
+        .playback-dock .playback-volume-row { order: 4; flex: 1 1 150px; max-width: 220px; width: auto; }
+        .playback-dock .playback-upcoming { display: none !important; } /* the queue above already shows what is next */
+        .playback-dock .playback-disconnected { padding: 10px 6px; font-size: 0.9rem; }
+
         .playback-upcoming { width: 100%; max-width: 460px; text-align: left; margin-top: 8px; }
         .playback-upcoming h3 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin: 0 0 10px 0; }
         .playback-upcoming-row { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--border); }
@@ -983,8 +1010,7 @@
             <h3>Menu</h3>
             <button class="sidebar-close-btn" onclick="closeSidebar()">✕</button>
         </div>
-        <button type="button" id="sidebar-nav-playback" class="sidebar-nav-item" onclick="switchTab('playback')">Playback</button>
-        <button type="button" id="sidebar-nav-queue" class="sidebar-nav-item active-tab" onclick="switchTab('queue')">Up Next</button>
+        <button type="button" id="sidebar-nav-queue" class="sidebar-nav-item active-tab" onclick="switchTab('queue')">Playback &amp; Queue</button>
         <button type="button" id="sidebar-nav-pending" class="sidebar-nav-item" onclick="switchTab('pending')">Pending</button>
         <button type="button" id="sidebar-nav-history" class="sidebar-nav-item" onclick="switchTab('history')">Song History</button>
         <button type="button" id="sidebar-nav-settings" class="sidebar-nav-item" onclick="switchTab('settings')">Settings</button>
@@ -1046,77 +1072,73 @@
         </div>
     </div>
 
-    <div id="tab-panel-playback" class="tab-content">
-        <div class="panel">
-            <h2>Playback</h2>
-            <div id="playback-connected-view" class="playback-panel" style="display:none;">
-                <img class="playback-artwork" id="playback-artwork" src="" alt="">
-                <div>
-                    <p class="playback-title" id="playback-title"></p>
-                    <p class="playback-artist" id="playback-artist"></p>
-                    <p class="playback-device" id="playback-device"></p>
-                </div>
-
-                <div class="playback-progress-wrap">
-                    <span id="playback-elapsed">0:00</span>
-                    <input type="range" id="playback-seek" min="0" max="1000" value="0"
-                        onmousedown="isDraggingSeek = true" ontouchstart="isDraggingSeek = true"
-                        onchange="onSeekSliderChange(this)">
-                    <span id="playback-duration">0:00</span>
-                </div>
-
-                <div class="playback-transport">
-                    <button class="playback-icon-btn" id="playback-shuffle-btn" onclick="togglePlaybackShuffle()" title="Shuffle">
-                        <svg viewBox="0 0 24 24"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.42 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg>
-                    </button>
-                    <button class="playback-icon-btn" onclick="playbackCommand('previous')" title="Previous">
-                        <svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
-                    </button>
-                    <button class="playback-icon-btn playback-play-pause" id="playback-play-pause-btn" onclick="togglePlayPause()" title="Play/Pause">
-                        <svg id="playback-play-icon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                        <svg id="playback-pause-icon" viewBox="0 0 24 24" style="display:none;"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
-                    </button>
-                    <button class="playback-icon-btn" onclick="playbackCommand('next')" title="Next">
-                        <svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
-                    </button>
-                    <button class="playback-icon-btn" id="playback-repeat-btn" onclick="cyclePlaybackRepeat()" title="Repeat">
-                        <svg viewBox="0 0 24 24"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>
-                    </button>
-                </div>
-
-                <div class="playback-volume-row">
-                    <svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
-                    <input type="range" id="playback-volume" min="0" max="100" value="50"
-                        onmousedown="isDraggingVolume = true" ontouchstart="isDraggingVolume = true"
-                        oninput="onVolumeSliderInput(this)" onchange="onVolumeSliderChange(this); isDraggingVolume = false">
-                    <span id="playback-volume-label" style="font-size:0.8rem; color:#888; min-width:28px;">50%</span>
-                </div>
-
-                <div class="playback-upcoming" id="playback-upcoming-wrap" style="display:none;">
-                    <h3>Up Next (Spotify Queue)</h3>
-                    <div id="playback-upcoming-list"></div>
-                </div>
-            </div>
-            <div id="playback-disconnected-view" class="playback-disconnected">
-                Connect the admin Spotify account under <strong>Settings → Spotify</strong> to control playback from here.
-            </div>
-        </div>
-    </div>
-
     <div id="tab-panel-queue" class="tab-content active-content">
         <div class="panel">
             <h2>Current Queue</h2>
 
-            <div class="settings-card full-only" style="margin-bottom: 20px;">
-                <div class="settings-section-label">Add a Song</div>
-                <p class="settings-card-hint" style="margin-top: 0;">Drop a track straight into the queue - skips credits, filters, and the queue cap. Good for a verbal request or seeding the queue before doors open.</p>
-                <div class="join-row" style="margin-bottom: 10px;">
-                    <input type="text" id="admin-search-input" placeholder="Search for a song or artist" oninput="onAdminSearchInput()">
-                </div>
+            <div class="add-song-bar full-only">
+                <input type="text" id="admin-search-input" placeholder="+ Add a song to the queue (search song or artist)" title="Drops a track straight into the queue - skips credits, filters, and the queue cap. Good for a verbal request or seeding the queue before doors open." oninput="onAdminSearchInput()" autocomplete="off">
                 <div id="admin-search-results"></div>
             </div>
 
             <div id="queue-list"></div>
+        </div>
+
+        <!-- Playback controls: pinned to the bottom of the Playback & Queue tab -->
+        <div class="playback-dock" id="playback-dock">
+            <div class="playback-dock-inner">
+                <div id="playback-connected-view" class="playback-panel" style="display:none;">
+                    <img class="playback-artwork" id="playback-artwork" src="" alt="">
+                    <div>
+                        <p class="playback-title" id="playback-title"></p>
+                        <p class="playback-artist" id="playback-artist"></p>
+                        <p class="playback-device" id="playback-device"></p>
+                    </div>
+
+                    <div class="playback-progress-wrap">
+                        <span id="playback-elapsed">0:00</span>
+                        <input type="range" id="playback-seek" min="0" max="1000" value="0"
+                            onmousedown="isDraggingSeek = true" ontouchstart="isDraggingSeek = true"
+                            onchange="onSeekSliderChange(this)">
+                        <span id="playback-duration">0:00</span>
+                    </div>
+
+                    <div class="playback-transport">
+                        <button class="playback-icon-btn" id="playback-shuffle-btn" onclick="togglePlaybackShuffle()" title="Shuffle">
+                            <svg viewBox="0 0 24 24"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.42 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg>
+                        </button>
+                        <button class="playback-icon-btn" onclick="playbackCommand('previous')" title="Previous">
+                            <svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+                        </button>
+                        <button class="playback-icon-btn playback-play-pause" id="playback-play-pause-btn" onclick="togglePlayPause()" title="Play/Pause">
+                            <svg id="playback-play-icon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                            <svg id="playback-pause-icon" viewBox="0 0 24 24" style="display:none;"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                        </button>
+                        <button class="playback-icon-btn" onclick="playbackCommand('next')" title="Next">
+                            <svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+                        </button>
+                        <button class="playback-icon-btn" id="playback-repeat-btn" onclick="cyclePlaybackRepeat()" title="Repeat">
+                            <svg viewBox="0 0 24 24"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>
+                        </button>
+                    </div>
+
+                    <div class="playback-volume-row">
+                        <svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+                        <input type="range" id="playback-volume" min="0" max="100" value="50"
+                            onmousedown="isDraggingVolume = true" ontouchstart="isDraggingVolume = true"
+                            oninput="onVolumeSliderInput(this)" onchange="onVolumeSliderChange(this); isDraggingVolume = false">
+                        <span id="playback-volume-label" style="font-size:0.8rem; color:#888; min-width:28px;">50%</span>
+                    </div>
+
+                    <div class="playback-upcoming" id="playback-upcoming-wrap" style="display:none;">
+                        <h3>Up Next (Spotify Queue)</h3>
+                        <div id="playback-upcoming-list"></div>
+                    </div>
+                </div>
+                <div id="playback-disconnected-view" class="playback-disconnected">
+                    Connect the admin Spotify account under <strong>Settings → Spotify</strong> to control playback from here.
+                </div>
+            </div>
         </div>
     </div>
 
@@ -1777,7 +1799,7 @@
         // chip selection before they hit "Save Filters".
         let filtersInitialized = false;
 
-        const TAB_NAMES = ['playback', 'queue', 'pending', 'history', 'settings', 'stats', 'blocked'];
+        const TAB_NAMES = ['queue', 'pending', 'history', 'settings', 'stats', 'blocked'];
 
         // --- Sidebar (hamburger menu) ---
         function openSidebar() {
