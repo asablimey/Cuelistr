@@ -956,17 +956,6 @@
             margin: 2px 0 0 0; font-size: 0.75rem; color: var(--text-muted);
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
-        .now-playing-live-dot {
-            width: 8px; height: 8px; border-radius: 50%;
-            background-color: var(--spotify-green);
-            flex-shrink: 0;
-            animation: now-playing-pulse 1.5s ease-in-out infinite;
-        }
-        .now-playing-live-dot.is-paused { animation: none; opacity: 0.3; }
-        @keyframes now-playing-pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.35; }
-        }
         body.has-now-playing-bar { padding-bottom: 76px; }
 
             .video-tag { color: var(--spotify-green, #1DB954); font-size: 0.75rem; font-weight: 700; margin-left: 6px; white-space: nowrap; }
@@ -1455,7 +1444,7 @@
                             </div>
                             <p class="settings-card-hint" style="margin-top: 16px; margin-bottom: 0;">
                                 <strong>Mute Visuals</strong> blanks the visuals display to a black screen with a large centred Cuelistr logo. <strong>Mute All</strong> does
-                                the same and also pauses playback (resuming it when switched back off). <strong>Show Queue</strong>
+                                the same and also sets Spotify's volume to 0% (playback keeps going; the old volume returns when switched back off). <strong>Show Queue</strong>
                                 pins the Now Playing + Up Next board on screen, overriding any scheduled Ambient Visuals content,
                                 until switched off. <strong>Show Time</strong> puts a 12-hour clock in the top-left corner of the
                                 visuals display (hidden while a music video is on screen). <strong>Show Venue Code</strong> keeps the
@@ -3976,7 +3965,6 @@ async function verifyPassword() {
             <p class="now-playing-title" id="now-playing-title"></p>
             <p class="now-playing-artist" id="now-playing-artist"></p>
         </div>
-        <div class="now-playing-live-dot" id="now-playing-live-dot"></div>
     </div>
 
     <script>
@@ -4016,7 +4004,6 @@ async function verifyPassword() {
             document.getElementById('now-playing-artwork').src = data.artwork || '';
             document.getElementById('now-playing-title').innerHTML = escapeHtml(data.title) + bpmTag(data.trackId);
             document.getElementById('now-playing-artist').innerText = data.artist || '';
-            document.getElementById('now-playing-live-dot').classList.toggle('is-paused', !data.isPlaying);
 
             bar.classList.add('is-visible');
             document.body.classList.add('has-now-playing-bar');
