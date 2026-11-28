@@ -791,6 +791,18 @@
     <!-- USERNAME PROMPT MODAL removed on kiosk - always requests as android_kiosk -->
 
     <script>
+        /* ---- Smooth progress ticker ----
+           Redraws every animation frame (instead of a 250ms timer) so progress bars glide
+           instead of stepping. smoothTick(fn) returns a handle; smoothStop(handle) stops it.
+           smoothStop also accepts a plain setInterval id. setTxt only writes when text changed. */
+        function smoothTick(fn) {
+            const h = { on: true };
+            (function loop() { if (!h.on) return; try { fn(); } catch (e) { /* keep ticking */ } requestAnimationFrame(loop); })();
+            return h;
+        }
+        function smoothStop(h) { if (typeof h === 'number') clearInterval(h); else if (h) h.on = false; }
+        function setTxt(el, v) { if (el && el.textContent !== v) el.textContent = v; }
+
         // This page is served at /e/{slug}/kiosk, so the event's slug is
         // always the second path segment - every relative API call below
         // goes through eventUrl() so it hits the right event's data.
@@ -1331,7 +1343,7 @@
                 document.body.classList.remove('has-now-playing-bar');
                 nowPlayingState = null;
                 nowPlayingLastTrackId = null;
-                if (nowPlayingTicker) { clearInterval(nowPlayingTicker); nowPlayingTicker = null; }
+                if (nowPlayingTicker) { smoothStop(nowPlayingTicker); nowPlayingTicker = null; }
                 spotifyUpcomingQueue = [];
                 renderQueue();
                 return;
@@ -1356,7 +1368,7 @@
             renderNowPlayingProgress();
             nowPlayingLastTrackId = data.trackId || null;
 
-            if (!nowPlayingTicker) nowPlayingTicker = setInterval(renderNowPlayingProgress, 250);
+            if (!nowPlayingTicker) nowPlayingTicker = smoothTick(renderNowPlayingProgress);
 
             // Feeds the merged Up Next renderer (see renderQueue() above)
             // rather than drawing its own separate list - Spotify's live "up
