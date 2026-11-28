@@ -276,10 +276,6 @@ const BREVO_API_KEY = (process.env.BREVO_API_KEY || '').trim();
 const BREVO_FROM_EMAIL = (process.env.BREVO_FROM_EMAIL || '').trim();
 const BREVO_FROM_NAME = process.env.BREVO_FROM_NAME || 'Song Request Station';
 
-if (!BREVO_API_KEY || !BREVO_FROM_EMAIL) {
-    console.warn('[EMAIL] BREVO_API_KEY and/or BREVO_FROM_EMAIL are not set - password-reset emails will NOT be sent until both are added to the environment variables.');
-}
-
 async function sendPasswordResetEmail(toEmail, resetUrl) {
     if (!BREVO_API_KEY || !BREVO_FROM_EMAIL) {
         console.error('[EMAIL] Missing BREVO_API_KEY / BREVO_FROM_EMAIL env vars - reset email not sent.');
@@ -297,8 +293,6 @@ async function sendPasswordResetEmail(toEmail, resetUrl) {
                 sender: { email: BREVO_FROM_EMAIL, name: BREVO_FROM_NAME },
                 to: [{ email: toEmail }],
                 subject: 'Reset your Song Request Station password',
-                // Plain-text twin of the HTML below - mail without one is more likely to be marked as spam.
-                textContent: `Someone requested a password reset for your Song Request Station account.\n\nSet a new password here (expires in 30 minutes):\n${resetUrl}\n\nIf this wasn't you, you can safely ignore this email - your password hasn't changed.`,
                 htmlContent: `
                     <p>Someone requested a password reset for your Song Request Station account.</p>
                     <p><a href="${resetUrl}">Click here to set a new password</a> (expires in 30 minutes).</p>
@@ -311,7 +305,6 @@ async function sendPasswordResetEmail(toEmail, resetUrl) {
             console.error(`[EMAIL] Brevo send failed (${res.status}):`, text);
             return false;
         }
-        console.log('[EMAIL] Password-reset email accepted by Brevo.');
         return true;
     } catch (err) {
         console.error('[EMAIL] Brevo send error:', err.message);
@@ -2544,9 +2537,7 @@ async function tickMusicScheduler(event) {
             // to, so those apply the moment the boundary is crossed - only
             // the playlist content itself needs to wait for a clean handoff.
             if (typeof currentRule.volume === 'number') {
-                const vc = ensureVisualsConfigs(event);
-                if (vc.muteAll) vc.volumeBeforeMuteAll = currentRule.volume; // stay muted; applied on un-mute
-                else spotifyPlayerCommand(event, 'PUT', '/volume', `?volume_percent=${currentRule.volume}`).catch(() => {});
+                spotifyPlayerCommand(event, 'PUT', '/volume', `?volume_percent=${currentRule.volume}`).catch(() => {});
             }
             if (typeof currentRule.requestsAllowed === 'boolean') {
                 event.systemConfigs.requestsAllowed = currentRule.requestsAllowed;
@@ -3119,29 +3110,13 @@ async function pushNextTrackToSpotifyIfNeeded(event) {
     }
 }
 
-// Played history holds every song that has played: guest requests (source 'request') and songs
-// Spotify played on its own (source 'spotify'). Newest first, capped so a long event can't grow it forever.
-const PLAYED_HISTORY_MAX = 500;
-function pushPlayedHistory(event, entry) {
-    event.playedHistory.unshift(entry);
-    if (event.playedHistory.length > PLAYED_HISTORY_MAX) event.playedHistory.length = PLAYED_HISTORY_MAX;
-}
-// Guests and kiosks only ever saw requested songs in history, so they keep getting just those.
-// (Entries saved before 'source' existed have none and were all requests.)
-function requestedHistoryOnly(event) {
-    return event.playedHistory.filter(h => h.source !== 'spotify');
-}
-
 // Shared by the admin "Played" button and the auto-sync poller below - moves a
 // track out of the live local queue into playedHistory/stats. trackIndex must
 // already be a valid index into activeQueue.
 function markTrackPlayedByIndex(event, trackIndex) {
     const [track] = event.activeQueue.splice(trackIndex, 1);
     markRequestLogStatus(event, track.id, 'played');
-    pushPlayedHistory(event, {
-        trackId: track.id,
-        source: 'request',
-        playedAt: Date.now(),
+    event.playedHistory.unshift({
         title: track.title,
         artist: track.artist,
         artwork: track.artwork,
@@ -3268,24 +3243,18 @@ app.get('/api/account/my-events', requireAccountAuth, async (req, res) => {
 app.post('/api/account/forgot-password', forgotPasswordLimiter, async (req, res) => {
     const { email } = req.body || {};
     const generic = { success: true, message: 'If that email is registered, a reset link has been sent.' };
-    // The reasons below are only ever written to the server log, never sent to the browser,
-    // so this endpoint still can't be used to find out which emails have accounts.
-    if (!events.isValidEmail(email)) {
-        console.log('[EMAIL] Forgot-password: not a valid email address, nothing sent.');
-        return res.json(generic);
-    }
+    if (!events.isValidEmail(email)) return res.json(generic);
     const user = await events.getUserByEmail(email);
-    if (!user) {
-        console.log('[EMAIL] Forgot-password: no account found for that email (accounts made before the email index existed, or a typo), nothing sent.');
-    } else {
+    if (user) {
         const token = await events.createPasswordResetToken(user.username);
-        if (!token) {
-            console.error(`[EMAIL] Forgot-password: could not save a reset token for "${user.username}" (database problem), nothing sent.`);
-        } else {
+        if (token) {
             const origin = `${req.protocol}://${req.get('host')}`;
             const resetUrl = `${origin}/reset-password.html?username=${encodeURIComponent(user.username)}&token=${encodeURIComponent(token)}`;
             sendPasswordResetEmail(user.email, resetUrl).catch(err => console.error('[EMAIL] Unexpected send error:', err.message));
         }
+        // If token creation failed (DB hiccup), we still return the generic
+        // response below rather than surfacing that - same reasoning as the
+        // no-such-email case, so this endpoint never confirms which emails exist.
     }
     res.json(generic);
 });
@@ -3740,7 +3709,7 @@ catalogApi.delete('/row/:id', async (req, res) => {
 // scheduler (read via GET /e/:slug/api/admin/curated-playlists below). One
 // Redis hash, field = row id, value = JSON.
 //   row = { id, label, uri: 'spotify:playlist:<id>', type: 'crowddj'|'karaoke',
-//           description, image (cover art URL from Spotify, may be ''), createdAt, updatedAt }
+//           description, createdAt, updatedAt }
 const CURATED_PLAYLISTS_KEY = 'curated-playlists:rows';
 const CURATED_PLAYLISTS_MAX = 200;
 
@@ -3761,40 +3730,24 @@ function parseCuratedPlaylistId(input) {
     return id && /^[A-Za-z0-9]{22}$/.test(id) ? id : null;
 }
 
-// Best effort: Spotify's public oEmbed endpoint returns a playlist's title and cover
-// image with no login, so the master can paste just a link. Private or odd
+// Best effort: Spotify's public oEmbed endpoint returns a playlist's title
+// with no login, so the master can paste just a link. Private or odd
 // playlists can fail; the caller then asks for a typed name instead.
-async function spotifyPlaylistMeta(id) {
+async function spotifyPlaylistTitle(id) {
     try {
         const url = 'https://open.spotify.com/oembed?url=' + encodeURIComponent('https://open.spotify.com/playlist/' + id);
         const r = await fetch(url, { timeout: 5000 });
-        if (!r.ok) return { title: '', image: '' };
+        if (!r.ok) return '';
         const d = await r.json();
-        const thumb = typeof d.thumbnail_url === 'string' && /^https:\/\//.test(d.thumbnail_url) ? d.thumbnail_url : '';
-        return { title: typeof d.title === 'string' ? d.title.trim().slice(0, 60) : '', image: thumb };
-    } catch (e) { return { title: '', image: '' }; }
-}
-async function spotifyPlaylistTitle(id) { return (await spotifyPlaylistMeta(id)).title; }
-
-// Rows saved before cover images existed get theirs fetched the next time the list is read
-// (at most one attempt per row per day) and saved back, so nothing needs migrating by hand.
-async function curatedPlaylistsBackfillImages(rows) {
-    const DAY = 24 * 3600 * 1000, now = Date.now();
-    const todo = rows.filter(r => !r.image && !(r.imageTriedAt && now - r.imageTriedAt < DAY));
-    await Promise.all(todo.map(async r => {
-        const meta = await spotifyPlaylistMeta(parseCuratedPlaylistId(r.uri) || '');
-        r.imageTriedAt = now;
-        if (meta.image) r.image = meta.image;
-        try { await events.redis(['HSET', CURATED_PLAYLISTS_KEY, r.id, JSON.stringify(r)]); } catch (e) { /* try again next read */ }
-    }));
-    return rows;
+        return typeof d.title === 'string' ? d.title.trim().slice(0, 60) : '';
+    } catch (e) { return ''; }
 }
 
 const curatedPlaylistsApi = express.Router();
 app.use('/api/master/curated-playlists', catalogAuthLimiter, requireMaster, curatedPlaylistsApi);
 
 curatedPlaylistsApi.get('/', async (req, res) => {
-    try { res.json({ playlists: await curatedPlaylistsBackfillImages(await curatedPlaylistsList()) }); }
+    try { res.json({ playlists: await curatedPlaylistsList() }); }
     catch (e) { res.status(500).json({ error: 'Could not load curated playlists: ' + e.message }); }
 });
 
@@ -3821,17 +3774,14 @@ curatedPlaylistsApi.post('/', async (req, res) => {
         if (!existing && all.length >= CURATED_PLAYLISTS_MAX) return res.status(400).json({ error: `Limit of ${CURATED_PLAYLISTS_MAX} curated playlists reached.` });
 
         let label = typeof body.label === 'string' ? body.label.trim().slice(0, 60) : (existing ? existing.label : '');
-        const uriChanged = !existing || uri !== existing.uri;
-        const meta = (!label || uriChanged || !existing.image) ? await spotifyPlaylistMeta(parseCuratedPlaylistId(uri)) : { title: '', image: '' };
-        if (!label) label = meta.title;
-        const image = uriChanged ? meta.image : (existing.image || meta.image || '');
+        if (!label) label = await spotifyPlaylistTitle(parseCuratedPlaylistId(uri));
         if (!label) return res.status(400).json({ error: "Couldn't read the playlist's name from Spotify - type a name in." });
 
         const description = typeof body.description === 'string' ? body.description.trim().slice(0, 120) : (existing ? (existing.description || '') : '');
         const now = Date.now();
         const row = {
             id: existing ? existing.id : crypto.randomBytes(6).toString('hex'),
-            label, uri, type, description, image,
+            label, uri, type, description,
             createdAt: existing ? (existing.createdAt || now) : now,
             updatedAt: now
         };
@@ -3855,8 +3805,8 @@ curatedPlaylistsApi.delete('/:id', async (req, res) => {
 // (the /e/:slug/api/admin gate registered earlier).
 app.get('/e/:slug/api/admin/curated-playlists', async (req, res) => {
     try {
-        const rows = await curatedPlaylistsBackfillImages(await curatedPlaylistsList());
-        res.json({ playlists: rows.map(r => ({ id: r.id, label: r.label, uri: r.uri, type: r.type, description: r.description || '', image: r.image || '' })) });
+        const rows = await curatedPlaylistsList();
+        res.json({ playlists: rows.map(r => ({ id: r.id, label: r.label, uri: r.uri, type: r.type, description: r.description || '' })) });
     } catch (e) {
         res.status(500).json({ error: 'Could not load curated playlists.' });
     }
@@ -4799,7 +4749,7 @@ app.get('/e/:slug/data', publicReadLimiter, voterIdentityMiddleware, (req, res) 
         decadeFilter: event.systemConfigs.decadeFilter || [],
         spotifyConnectEnabled: event.systemConfigs.guestSpotifyConnectEnabled,
         queue: buildSortedQueue(event),
-        history: requestedHistoryOnly(event),
+        history: event.playedHistory,
         // This guest's own block status (Blocked tab) - lets the guest page
         // grey out the search bar for just this one browser/device, instead
         // of only finding out when a request/vote gets rejected.
@@ -4827,7 +4777,7 @@ app.get('/e/:slug/kiosk-data', publicReadLimiter, voterIdentityMiddleware, (req,
         spotifyConnectEnabled: event.kioskConfigs.spotifyConnectEnabled,
         displayOnlyMode: event.kioskConfigs.displayOnlyMode,
         queue: buildSortedQueue(event),
-        history: requestedHistoryOnly(event),
+        history: event.playedHistory,
         blocked: isVoterBlocked(event, req.serverVoterId)
     });
 });
@@ -5478,12 +5428,6 @@ app.post('/e/:slug/api/admin/playback/volume', async (req, res) => {
     if (!Number.isInteger(vol) || vol < 0 || vol > 100) {
         return res.status(400).json({ error: 'volumePercent must be an integer 0-100.' });
     }
-    const vc = ensureVisualsConfigs(req.event);
-    if (vc.muteAll) { // Mute All is on: remember the level for un-mute, keep Spotify at 0%
-        vc.volumeBeforeMuteAll = vol;
-        events.scheduleSave(req.event.slug);
-        return res.json({ success: true, heldByMuteAll: true });
-    }
     const result = await spotifyPlayerCommand(req.event, 'PUT', '/volume', `?volume_percent=${vol}`);
     res.status(result.success ? 200 : 400).json(result);
 });
@@ -5940,10 +5884,8 @@ app.post('/e/:slug/api/admin/visuals/music-video-cache/clear', (req, res) => {
     res.json({ success: true, removed, remaining: verifiedMusicVideoCache.size });
 });
 
-// Mute All = Mute Visuals + Spotify volume to 0% (playback keeps running). Switching it
-// back off restores the volume that was set before. If the volume was changed while muted
-// (manual slider or schedule rule) the new value is stored in volumeBeforeMuteAll instead,
-// so un-muting lands on the latest level the admin/schedule asked for.
+// Mute All = Mute Visuals + pause Spotify. Switching it back off resumes
+// playback, but only if this toggle was the thing that paused it.
 app.post('/e/:slug/api/admin/visuals/toggle-mute-all', async (req, res) => {
     const { enabled } = req.body || {};
     if (typeof enabled !== 'boolean') return res.status(400).json({ error: 'enabled must be true or false.' });
@@ -5953,20 +5895,18 @@ app.post('/e/:slug/api/admin/visuals/toggle-mute-all', async (req, res) => {
     let playbackOk = null;
     try {
         if (enabled && !wasOn) {
-            const cur = req.event.cachedNowPlaying && req.event.cachedNowPlaying.volumePercent;
-            v.volumeBeforeMuteAll = (typeof cur === 'number' && cur > 0) ? cur : (typeof v.volumeBeforeMuteAll === 'number' ? v.volumeBeforeMuteAll : 50);
-            const result = await spotifyPlayerCommand(req.event, 'PUT', '/volume', '?volume_percent=0');
+            const result = await spotifyPlayerCommand(req.event, 'PUT', '/pause');
             playbackOk = !!(result && result.success);
+            v.pausedByMuteAll = playbackOk;
         } else if (!enabled && wasOn) {
-            const restore = typeof v.volumeBeforeMuteAll === 'number' ? v.volumeBeforeMuteAll : 50;
-            const result = await spotifyPlayerCommand(req.event, 'PUT', '/volume', `?volume_percent=${restore}`);
-            playbackOk = !!(result && result.success);
-            // Older versions paused playback on Mute All - resume it if that is what happened.
-            if (v.pausedByMuteAll) await spotifyPlayerCommand(req.event, 'PUT', '/play');
+            if (v.pausedByMuteAll) {
+                const result = await spotifyPlayerCommand(req.event, 'PUT', '/play');
+                playbackOk = !!(result && result.success);
+            }
             v.pausedByMuteAll = false;
         }
     } catch (err) {
-        console.error('[VISUALS] Mute All volume command failed:', err.message);
+        console.error('[VISUALS] Mute All playback command failed:', err.message);
         playbackOk = false;
     }
     events.scheduleSave(req.event.slug);
@@ -6551,23 +6491,6 @@ async function syncNowPlayingForEvent(event) {
             const track = markTrackPlayedByIndex(event, trackIndex);
             events.scheduleSave(event.slug);
             console.log(`[SPOTIFY SYNC] (${event.slug}) Now playing, removed from local queue:`, track.title);
-        } else if (!(event.playedHistory[0] && event.playedHistory[0].trackId === nowPlayingId)) {
-            // Not a guest request - Spotify just moved on to its own next song. Log it so the admin
-            // Song History "All" view shows everything that played. (The check above stops the same
-            // song being logged twice, e.g. when the server restarts mid-song.)
-            pushPlayedHistory(event, {
-                trackId: nowPlayingId,
-                source: 'spotify',
-                playedAt: Date.now(),
-                title: item.name,
-                artist: (item.artists || []).map(a => a.name).join(', ') || 'Unknown Artist',
-                artwork: item.album?.images?.[0]?.url || null,
-                explicit: !!item.explicit,
-                year: parseInt((item.album?.release_date || '').slice(0, 4), 10) || null,
-                duration: formatDuration(item.duration_ms || 0),
-                requesters: []
-            });
-            events.scheduleSave(event.slug);
         }
     } catch (err) {
         console.error(`[SPOTIFY SYNC] (${event.slug}) Poll failed:`, err.message);
@@ -7402,13 +7325,6 @@ app.get('/manager', (req, res) => {
 // here since there's no :slug yet to scope a cookie to.
 app.get('/new', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'new-event.html'));
-});
-
-// Clean URL for the page the reset email links to (the link itself uses /reset-password.html).
-app.get('/reset-password', (req, res, next) => {
-    const file = path.join(__dirname, 'public', 'reset-password.html');
-    if (!require('fs').existsSync(file)) return next();
-    res.sendFile(file);
 });
 
 // Public list of songs that have a music video: Artist | Title | Video Type, A-Z by artist then title.
