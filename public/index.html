@@ -947,7 +947,6 @@
         }
         .venue-list-item-name { font-weight: 700; font-size: 1rem; }
         .venue-list-item-sub { color: var(--text-muted); font-size: 0.8rem; margin-top: 2px; }
-        .venue-history-clear { background: none; border: none; color: var(--text-muted); font: inherit; font-size: 0.8rem; text-decoration: underline; cursor: pointer; }
         .venue-list-item-distance { color: var(--spotify-green); font-size: 0.75rem; font-weight: 700; margin-top: 4px; }
         .venue-select-btn {
             background-color: var(--spotify-green); color: white; border: none;
@@ -1359,16 +1358,26 @@
         }
 
         // --- Venue history: the venues this device has recently checked in to ---
-        // Saved on this device only (localStorage), newest first, capped at 10. A venue is
+        // Saved on this device only (localStorage), newest first, capped at 10, and forgotten
+        // automatically VENUE_HISTORY_MAX_AGE_DAYS days after the last visit. A venue is
         // recorded once it has actually loaded (see fetchSystemState), so QR-code visits count
         // as well as venues picked from the list, and a venue that doesn't exist is never saved.
         const VENUE_HISTORY_KEY = 'crowddj_venue_history';
         const VENUE_HISTORY_MAX = 10;
+        const VENUE_HISTORY_MAX_AGE_DAYS = 3; // entries older than this are dropped automatically
         let lastRecordedVenueSlug = null;
         function readVenueHistory() {
             try {
                 const raw = JSON.parse(localStorage.getItem(VENUE_HISTORY_KEY) || '[]');
-                return Array.isArray(raw) ? raw.filter(v => v && typeof v.slug === 'string' && v.slug) : [];
+                if (!Array.isArray(raw)) return [];
+                const cutoff = Date.now() - VENUE_HISTORY_MAX_AGE_DAYS * 86400000;
+                const valid = raw.filter(v => v && typeof v.slug === 'string' && v.slug);
+                const fresh = valid.filter(v => typeof v.at === 'number' && v.at >= cutoff);
+                // Write the pruned list back so expired visits are really gone, not just hidden.
+                if (fresh.length !== raw.length) {
+                    try { localStorage.setItem(VENUE_HISTORY_KEY, JSON.stringify(fresh)); } catch (e) { /* storage blocked */ }
+                }
+                return fresh;
             } catch (e) { return []; }
         }
         function recordVenueVisit(slug, eventName, venueName) {
@@ -1376,10 +1385,6 @@
             const list = readVenueHistory().filter(v => v.slug !== slug);
             list.unshift({ slug, eventName: eventName || slug, venueName: venueName || '', at: Date.now() });
             try { localStorage.setItem(VENUE_HISTORY_KEY, JSON.stringify(list.slice(0, VENUE_HISTORY_MAX))); } catch (e) { /* storage blocked */ }
-        }
-        function clearVenueHistory() {
-            try { localStorage.removeItem(VENUE_HISTORY_KEY); } catch (e) { /* ignore */ }
-            renderVenueHistory();
         }
         function formatLastVisit(ts) {
             const startOfDay = d => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
@@ -1393,7 +1398,7 @@
             const el = document.getElementById('venue-history-content');
             const list = readVenueHistory();
             if (list.length === 0) {
-                el.innerHTML = '<p class="venue-empty-msg">No recent venues yet. Venues you check in to will show up here.</p>';
+                el.innerHTML = '<p class="venue-empty-msg">No recent venues yet. Venues you check in to will show up here for a few days.</p>';
                 return;
             }
             el.innerHTML = list.map(v => `
@@ -1406,7 +1411,7 @@
                     </div>
                     <button class="venue-select-btn" data-slug="${escapeHtml(v.slug)}" data-name="${escapeHtml(v.eventName)}" onclick="selectVenue(this.dataset.slug, this.dataset.name)">Select</button>
                 </div>
-            `).join('') + '<div style="text-align:center;padding:14px;"><button type="button" class="venue-history-clear" onclick="clearVenueHistory()">Clear history</button></div>';
+            `).join('');
         }
 
         function selectVenue(slug, displayName) {
