@@ -78,7 +78,6 @@
         body.basic-mode #sidebar-playlist-item,
         body.basic-mode #sidebar-myrequests-item,
         body.basic-mode #inline-playlists-btn,
-        body.basic-mode .youtube-attribution-inline,
         body.basic-mode #list-title { display: none !important; }
 
 
@@ -203,25 +202,6 @@
         }
         .spotify-attribution-inline img {
             height: 22px;
-            width: auto;
-            flex-shrink: 0;
-        }
-        /* Same pattern as .spotify-attribution-inline above, for YouTube
-           attribution - added so the sidebar footer shows required
-           branding for both third-party services this site embeds, not
-           just Spotify. */
-        .youtube-attribution-inline {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            color: var(--text);
-            font-size: 0.8rem;
-            font-weight: 600;
-            margin-top: 8px;
-        }
-        .youtube-attribution-inline img {
-            height: 30px;
             width: auto;
             flex-shrink: 0;
         }
@@ -847,17 +827,6 @@
             margin: 2px 0 0 0; font-size: 0.75rem; color: var(--text-muted);
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
-        .now-playing-live-dot {
-            width: 8px; height: 8px; border-radius: 50%;
-            background-color: var(--spotify-green);
-            flex-shrink: 0;
-            animation: now-playing-pulse 1.5s ease-in-out infinite;
-        }
-        .now-playing-live-dot.is-paused { animation: none; opacity: 0.3; }
-        @keyframes now-playing-pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.35; }
-        }
         body.has-now-playing-bar { padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
 
         /* --- Hamburger menu button ---
@@ -1096,10 +1065,6 @@
             <div class="spotify-attribution-inline">
                 <span>Powered by</span>
                 <img src="/assets/spotify-full-logo-white.svg" alt="Spotify">
-            </div>
-            <div class="youtube-attribution-inline">
-                <span>Videos by</span>
-                <img src="/assets/yt_logo_white_digital.png" alt="YouTube">
             </div>
             <div class="site-credit">Made by Sam B | <a onclick="openPrivacyModal()">Privacy</a> | <a onclick="openTermsModal()">Terms</a></div>
         </div>
@@ -2506,7 +2471,6 @@
             <p class="now-playing-title" id="now-playing-title"></p>
             <p class="now-playing-artist" id="now-playing-artist"></p>
         </div>
-        <div class="now-playing-live-dot" id="now-playing-live-dot"></div>
     </div>
 
     <script>
@@ -2544,7 +2508,6 @@
             document.getElementById('now-playing-artwork').src = data.artwork || '';
             document.getElementById('now-playing-title').innerText = data.title;
             document.getElementById('now-playing-artist').innerText = data.artist || '';
-            document.getElementById('now-playing-live-dot').classList.toggle('is-paused', !data.isPlaying);
 
             bar.classList.add('is-visible');
             document.body.classList.add('has-now-playing-bar');
