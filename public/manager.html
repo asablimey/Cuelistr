@@ -932,6 +932,17 @@
             margin: 2px 0 0 0; font-size: 0.75rem; color: var(--text-muted);
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
+        .now-playing-live-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            background-color: var(--spotify-green);
+            flex-shrink: 0;
+            animation: now-playing-pulse 1.5s ease-in-out infinite;
+        }
+        .now-playing-live-dot.is-paused { animation: none; opacity: 0.3; }
+        @keyframes now-playing-pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.35; }
+        }
         body.has-now-playing-bar { padding-bottom: 76px; }
 
     
@@ -1159,6 +1170,9 @@ body.has-player { overflow: hidden; }
             color: var(--spotify-green); font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; margin: 0 0 6px;
             display: flex; align-items: center; gap: 8px; overflow: hidden; white-space: nowrap;
         }
+        #screensaver .ss-live-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--spotify-green); flex-shrink: 0; animation: ss-pulse 1.5s ease-in-out infinite; }
+        #screensaver .ss-live-dot.is-paused { animation: none; opacity: 0.3; }
+        @keyframes ss-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
         #screensaver .ss-np-title { font-size: clamp(1.2rem, 3vh, 1.7rem); font-weight: 700; margin: 0 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         #screensaver .ss-np-artist { color: var(--text-muted); font-size: clamp(0.95rem, 2.2vh, 1.15rem); margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         #screensaver .ss-progress-track { width: 100%; height: 5px; background: var(--border-strong); border-radius: 3px; margin-top: clamp(8px, 1.6vh, 14px); overflow: hidden; }
@@ -1242,7 +1256,7 @@ body.has-player { overflow: hidden; }
         <div class="ss-now-playing" id="ss-now-playing" style="display:none;">
             <img class="ss-artwork" id="ss-artwork" src="" alt="">
             <div class="ss-np-text">
-                <p class="ss-np-label">Now Playing</p>
+                <p class="ss-np-label"><span class="ss-live-dot" id="ss-live-dot"></span> Now Playing</p>
                 <p class="ss-np-title" id="ss-np-title"></p>
                 <p class="ss-np-artist" id="ss-np-artist"></p>
                 <div class="ss-progress-track"><div class="ss-progress-fill" id="ss-progress-fill"></div></div>
@@ -1260,6 +1274,7 @@ body.has-player { overflow: hidden; }
             <p class="now-playing-title" id="now-playing-title"></p>
             <p class="now-playing-artist" id="now-playing-artist"></p>
         </div>
+        <div class="now-playing-live-dot" id="now-playing-live-dot"></div>
     </div>
 
     <!-- SIDEBAR -->
@@ -1592,7 +1607,7 @@ body.has-player { overflow: hidden; }
     </div>
 
     <!-- Account login popup -->
-    <div id="account-modal-overlay" onpointerdown="this._downOnBackdrop = (event.target === this)" onclick="if (event.target === this && this._downOnBackdrop) closeAccountModal(); this._downOnBackdrop = false">
+    <div id="account-modal-overlay" onclick="if(event.target === this) closeAccountModal()">
         <div class="acct-modal" role="dialog" aria-modal="true" aria-labelledby="acct-title">
             <button type="button" class="acct-close" onclick="closeAccountModal()" aria-label="Close">&#10005;</button>
             <h2 id="acct-title">Your Account</h2>
@@ -1600,23 +1615,23 @@ body.has-player { overflow: hidden; }
                 <button type="button" class="acct-tab active" id="acct-tab-login" onclick="switchAcctTab('login')">Log In</button>
                 <button type="button" class="acct-tab" id="acct-tab-signup" onclick="switchAcctTab('signup')">Create Account</button>
             </div>
-            <form class="acct-form active" id="acct-form-login" onsubmit="event.preventDefault(); acctLogin();">
+            <div class="acct-form active" id="acct-form-login">
                 <div class="acct-field"><label>Username</label><input type="text" id="acct-login-username" autocapitalize="off" autocorrect="off" autocomplete="username"></div>
-                <div class="acct-field"><label>Password</label><input type="password" id="acct-login-password" autocomplete="current-password"></div>
+                <div class="acct-field"><label>Password</label><input type="password" id="acct-login-password" autocomplete="current-password" onkeydown="if(event.key === 'Enter') acctLogin()"></div>
                 <button type="button" class="acct-link" onclick="switchAcctTab('forgot')">Forgot password?</button>
-                <button type="submit" class="acct-submit" id="acct-login-btn">Log In</button>
-            </form>
-            <form class="acct-form" id="acct-form-signup" onsubmit="event.preventDefault(); acctSignup();">
+                <button type="button" class="acct-submit" id="acct-login-btn" onclick="acctLogin()">Log In</button>
+            </div>
+            <div class="acct-form" id="acct-form-signup">
                 <div class="acct-field"><label>Username</label><input type="text" id="acct-signup-username" autocapitalize="off" autocorrect="off" placeholder="3-30 characters, no spaces" autocomplete="username"></div>
                 <div class="acct-field"><label>Email</label><input type="email" id="acct-signup-email" autocapitalize="off" autocorrect="off" autocomplete="email"></div>
-                <div class="acct-field"><label>Password</label><input type="password" id="acct-signup-password" placeholder="At least 8 characters" autocomplete="new-password"></div>
-                <button type="submit" class="acct-submit" id="acct-signup-btn">Create Account</button>
-            </form>
-            <form class="acct-form" id="acct-form-forgot" onsubmit="event.preventDefault(); acctForgot();">
-                <div class="acct-field"><label>Account email</label><input type="email" id="acct-forgot-email" autocapitalize="off" autocorrect="off" autocomplete="email"></div>
-                <button type="submit" class="acct-submit" id="acct-forgot-btn">Send Reset Link</button>
+                <div class="acct-field"><label>Password</label><input type="password" id="acct-signup-password" placeholder="At least 8 characters" autocomplete="new-password" onkeydown="if(event.key === 'Enter') acctSignup()"></div>
+                <button type="button" class="acct-submit" id="acct-signup-btn" onclick="acctSignup()">Create Account</button>
+            </div>
+            <div class="acct-form" id="acct-form-forgot">
+                <div class="acct-field"><label>Account email</label><input type="email" id="acct-forgot-email" autocapitalize="off" autocorrect="off" autocomplete="email" onkeydown="if(event.key === 'Enter') acctForgot()"></div>
+                <button type="button" class="acct-submit" id="acct-forgot-btn" onclick="acctForgot()">Send Reset Link</button>
                 <div style="text-align:center;margin-top:12px;"><button type="button" class="acct-link" onclick="switchAcctTab('login')">Back to log in</button></div>
-            </form>
+            </div>
             <div class="acct-error" id="acct-error"></div>
             <div class="acct-ok" id="acct-ok"></div>
         </div>
@@ -1625,18 +1640,6 @@ body.has-player { overflow: hidden; }
     <div id="toast-container"></div>
 
     <script>
-        /* ---- Smooth progress ticker ----
-           Redraws every animation frame (instead of a 250ms timer) so progress bars glide
-           instead of stepping. smoothTick(fn) returns a handle; smoothStop(handle) stops it.
-           smoothStop also accepts a plain setInterval id. setTxt only writes when text changed. */
-        function smoothTick(fn) {
-            const h = { on: true };
-            (function loop() { if (!h.on) return; try { fn(); } catch (e) { /* keep ticking */ } requestAnimationFrame(loop); })();
-            return h;
-        }
-        function smoothStop(h) { if (typeof h === 'number') clearInterval(h); else if (h) h.on = false; }
-        function setTxt(el, v) { if (el && el.textContent !== v) el.textContent = v; }
-
         // Served at /e/{slug}/manager - the event slug is the second path segment.
         // Works two ways: /e/{slug}/manager (old links) or the slugless /manager (the installed app), which
         // opens the event this device last used. Picking an event stores it and reloads to /manager.
@@ -2604,10 +2607,7 @@ body.has-player { overflow: hidden; }
             if (!r.ok) return acctMsg('err', r.data.error || 'Could not send the reset link.');
             acctMsg('ok', r.data.message || 'If that email is registered, a reset link has been sent.');
         }
-        document.addEventListener('keydown', e => {
-            // Esc is also how password managers dismiss their suggestion list - don't treat that as "close the popup".
-            if (e.key === 'Escape' && !(document.activeElement && document.activeElement.matches('input, textarea, select'))) closeAccountModal();
-        });
+        document.addEventListener('keydown', e => { if (e.key === 'Escape') closeAccountModal(); });
 
         // ---- Dashboard poll (same endpoint + 3s interval as admin.html) ----
         function setIfIdle(id, value) {
@@ -3019,9 +3019,8 @@ body.has-player { overflow: hidden; }
             else if (!currentIsPlaying()) { label = 'Paused'; cls = 'paused'; }
             else if (Date.now() < mixUntil) { label = 'Mixing'; cls = 'mixing'; }
             else { label = 'Playing'; cls = ''; }
-            const stripCls = 'mix-strip' + (cls ? ' ' + cls : '');
-            if (strip.className !== stripCls) strip.className = stripCls;
-            setTxt(text, label);
+            strip.className = 'mix-strip' + (cls ? ' ' + cls : '');
+            text.textContent = label;
         }
         // Volume mode: the speaker button turns green and the progress bar becomes a volume bar
         let volMode = false, volDrag = null;
@@ -3061,8 +3060,8 @@ body.has-player { overflow: hidden; }
             if (volMode) {
                 const vol = volDrag !== null ? volDrag : optimisticValue('volume', nowPlaying && nowPlaying.volumePercent != null ? nowPlaying.volumePercent : 0);
                 $('pl-fill').style.width = vol + '%';
-                setTxt($('pl-t1'), 'Volume');
-                setTxt($('pl-t2'), vol + '%');
+                $('pl-t1').textContent = 'Volume';
+                $('pl-t2').textContent = vol + '%';
                 renderStrip();
                 return;
             }
@@ -3074,8 +3073,8 @@ body.has-player { overflow: hidden; }
             const elapsed = currentIsPlaying() ? (Date.now() - nowPlaying.fetchedAt) : 0;
             const pos = Math.min(nowPlaying.durationMs, nowPlaying.progressMs + elapsed);
             $('pl-fill').style.width = (pos / nowPlaying.durationMs) * 100 + '%';
-            setTxt($('pl-t1'), formatMsToClock(pos));
-            setTxt($('pl-t2'), formatMsToClock(nowPlaying.durationMs));
+            $('pl-t1').textContent = formatMsToClock(pos);
+            $('pl-t2').textContent = formatMsToClock(nowPlaying.durationMs);
             renderStrip();
         }
         function updateNowPlaying(data) {
@@ -3104,7 +3103,7 @@ body.has-player { overflow: hidden; }
             $('pl-loop').classList.toggle('on', repeat !== 'off');
             paintTransport();
             renderProgress();
-            if (!nowPlayingTicker) nowPlayingTicker = smoothTick(renderProgress);
+            if (!nowPlayingTicker) nowPlayingTicker = setInterval(renderProgress, 250);
             spotifyUpcomingQueue = (nowPlaying && nowPlaying.upcoming) || [];
             renderQueueList();
         }
@@ -3186,8 +3185,8 @@ body.has-player { overflow: hidden; }
                     const pct = s && s.durationMs ? (currentMs() / s.durationMs) * 100 : 0;
                     el.style.width = pct.toFixed(2) + '%';
                 };
-                const ensureTimer = () => { if (!timer) timer = smoothTick(paint); };
-                const stopTimer = () => { if (timer) { smoothStop(timer); timer = null; } };
+                const ensureTimer = () => { if (!timer) timer = setInterval(paint, 250); };
+                const stopTimer = () => { if (timer) { clearInterval(timer); timer = null; } };
 
                 return {
                     update(np) {
@@ -3331,6 +3330,7 @@ body.has-player { overflow: hidden; }
                         if (artEl.getAttribute('src') !== art) artEl.setAttribute('src', art);
                         $('ss-np-title').textContent = np.title;
                         $('ss-np-artist').textContent = np.artist || '';
+                        $('ss-live-dot').classList.toggle('is-paused', !np.isPlaying);
                         tracker.update(np);
                         upcoming = np.upcoming || [];
                     }
@@ -3440,14 +3440,15 @@ body.has-player { overflow: hidden; }
             const show = hasTrack && currentView !== 'play';
             bar.classList.toggle('is-visible', show);
             document.body.classList.toggle('has-now-playing-bar', show);
-            if (!show) { if (miniTicker) { smoothStop(miniTicker); miniTicker = null; } return; }
+            if (!show) { if (miniTicker) { clearInterval(miniTicker); miniTicker = null; } return; }
             const art = safeImageUrl(nowPlaying.artwork);
             const artEl = $('now-playing-artwork');
             if (artEl.getAttribute('src') !== art) artEl.setAttribute('src', art);
             $('now-playing-title').innerHTML = escapeHtml(nowPlaying.title) + bpmTag(nowPlaying.trackId);
             $('now-playing-artist').textContent = nowPlaying.artist || '';
+            $('now-playing-live-dot').classList.toggle('is-paused', !nowPlaying.isPlaying);
             paintMiniProgress();
-            if (!miniTicker) miniTicker = smoothTick(paintMiniProgress);
+            if (!miniTicker) miniTicker = setInterval(paintMiniProgress, 250);
         }
 
         // ---- Start up ----
