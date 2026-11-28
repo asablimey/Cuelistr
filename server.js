@@ -3112,13 +3112,29 @@ async function pushNextTrackToSpotifyIfNeeded(event) {
     }
 }
 
+// Played history holds every song that has played: guest requests (source 'request') and songs
+// Spotify played on its own (source 'spotify'). Newest first, capped so a long event can't grow it forever.
+const PLAYED_HISTORY_MAX = 500;
+function pushPlayedHistory(event, entry) {
+    event.playedHistory.unshift(entry);
+    if (event.playedHistory.length > PLAYED_HISTORY_MAX) event.playedHistory.length = PLAYED_HISTORY_MAX;
+}
+// Guests and kiosks only ever saw requested songs in history, so they keep getting just those.
+// (Entries saved before 'source' existed have none and were all requests.)
+function requestedHistoryOnly(event) {
+    return event.playedHistory.filter(h => h.source !== 'spotify');
+}
+
 // Shared by the admin "Played" button and the auto-sync poller below - moves a
 // track out of the live local queue into playedHistory/stats. trackIndex must
 // already be a valid index into activeQueue.
 function markTrackPlayedByIndex(event, trackIndex) {
     const [track] = event.activeQueue.splice(trackIndex, 1);
     markRequestLogStatus(event, track.id, 'played');
-    event.playedHistory.unshift({
+    pushPlayedHistory(event, {
+        trackId: track.id,
+        source: 'request',
+        playedAt: Date.now(),
         title: track.title,
         artist: track.artist,
         artwork: track.artwork,
@@ -4770,7 +4786,7 @@ app.get('/e/:slug/data', publicReadLimiter, voterIdentityMiddleware, (req, res) 
         decadeFilter: event.systemConfigs.decadeFilter || [],
         spotifyConnectEnabled: event.systemConfigs.guestSpotifyConnectEnabled,
         queue: buildSortedQueue(event),
-        history: event.playedHistory,
+        history: requestedHistoryOnly(event),
         // This guest's own block status (Blocked tab) - lets the guest page
         // grey out the search bar for just this one browser/device, instead
         // of only finding out when a request/vote gets rejected.
@@ -4798,7 +4814,7 @@ app.get('/e/:slug/kiosk-data', publicReadLimiter, voterIdentityMiddleware, (req,
         spotifyConnectEnabled: event.kioskConfigs.spotifyConnectEnabled,
         displayOnlyMode: event.kioskConfigs.displayOnlyMode,
         queue: buildSortedQueue(event),
-        history: event.playedHistory,
+        history: requestedHistoryOnly(event),
         blocked: isVoterBlocked(event, req.serverVoterId)
     });
 });
@@ -6522,6 +6538,23 @@ async function syncNowPlayingForEvent(event) {
             const track = markTrackPlayedByIndex(event, trackIndex);
             events.scheduleSave(event.slug);
             console.log(`[SPOTIFY SYNC] (${event.slug}) Now playing, removed from local queue:`, track.title);
+        } else if (!(event.playedHistory[0] && event.playedHistory[0].trackId === nowPlayingId)) {
+            // Not a guest request - Spotify just moved on to its own next song. Log it so the admin
+            // Song History "All" view shows everything that played. (The check above stops the same
+            // song being logged twice, e.g. when the server restarts mid-song.)
+            pushPlayedHistory(event, {
+                trackId: nowPlayingId,
+                source: 'spotify',
+                playedAt: Date.now(),
+                title: item.name,
+                artist: (item.artists || []).map(a => a.name).join(', ') || 'Unknown Artist',
+                artwork: item.album?.images?.[0]?.url || null,
+                explicit: !!item.explicit,
+                year: parseInt((item.album?.release_date || '').slice(0, 4), 10) || null,
+                duration: formatDuration(item.duration_ms || 0),
+                requesters: []
+            });
+            events.scheduleSave(event.slug);
         }
     } catch (err) {
         console.error(`[SPOTIFY SYNC] (${event.slug}) Poll failed:`, err.message);
