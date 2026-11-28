@@ -276,6 +276,10 @@ const BREVO_API_KEY = (process.env.BREVO_API_KEY || '').trim();
 const BREVO_FROM_EMAIL = (process.env.BREVO_FROM_EMAIL || '').trim();
 const BREVO_FROM_NAME = process.env.BREVO_FROM_NAME || 'Song Request Station';
 
+if (!BREVO_API_KEY || !BREVO_FROM_EMAIL) {
+    console.warn('[EMAIL] BREVO_API_KEY and/or BREVO_FROM_EMAIL are not set - password-reset emails will NOT be sent until both are added to the environment variables.');
+}
+
 async function sendPasswordResetEmail(toEmail, resetUrl) {
     if (!BREVO_API_KEY || !BREVO_FROM_EMAIL) {
         console.error('[EMAIL] Missing BREVO_API_KEY / BREVO_FROM_EMAIL env vars - reset email not sent.');
@@ -293,6 +297,8 @@ async function sendPasswordResetEmail(toEmail, resetUrl) {
                 sender: { email: BREVO_FROM_EMAIL, name: BREVO_FROM_NAME },
                 to: [{ email: toEmail }],
                 subject: 'Reset your Song Request Station password',
+                // Plain-text twin of the HTML below - mail without one is more likely to be marked as spam.
+                textContent: `Someone requested a password reset for your Song Request Station account.\n\nSet a new password here (expires in 30 minutes):\n${resetUrl}\n\nIf this wasn't you, you can safely ignore this email - your password hasn't changed.`,
                 htmlContent: `
                     <p>Someone requested a password reset for your Song Request Station account.</p>
                     <p><a href="${resetUrl}">Click here to set a new password</a> (expires in 30 minutes).</p>
@@ -305,6 +311,7 @@ async function sendPasswordResetEmail(toEmail, resetUrl) {
             console.error(`[EMAIL] Brevo send failed (${res.status}):`, text);
             return false;
         }
+        console.log('[EMAIL] Password-reset email accepted by Brevo.');
         return true;
     } catch (err) {
         console.error('[EMAIL] Brevo send error:', err.message);
@@ -3261,18 +3268,24 @@ app.get('/api/account/my-events', requireAccountAuth, async (req, res) => {
 app.post('/api/account/forgot-password', forgotPasswordLimiter, async (req, res) => {
     const { email } = req.body || {};
     const generic = { success: true, message: 'If that email is registered, a reset link has been sent.' };
-    if (!events.isValidEmail(email)) return res.json(generic);
+    // The reasons below are only ever written to the server log, never sent to the browser,
+    // so this endpoint still can't be used to find out which emails have accounts.
+    if (!events.isValidEmail(email)) {
+        console.log('[EMAIL] Forgot-password: not a valid email address, nothing sent.');
+        return res.json(generic);
+    }
     const user = await events.getUserByEmail(email);
-    if (user) {
+    if (!user) {
+        console.log('[EMAIL] Forgot-password: no account found for that email (accounts made before the email index existed, or a typo), nothing sent.');
+    } else {
         const token = await events.createPasswordResetToken(user.username);
-        if (token) {
+        if (!token) {
+            console.error(`[EMAIL] Forgot-password: could not save a reset token for "${user.username}" (database problem), nothing sent.`);
+        } else {
             const origin = `${req.protocol}://${req.get('host')}`;
             const resetUrl = `${origin}/reset-password.html?username=${encodeURIComponent(user.username)}&token=${encodeURIComponent(token)}`;
             sendPasswordResetEmail(user.email, resetUrl).catch(err => console.error('[EMAIL] Unexpected send error:', err.message));
         }
-        // If token creation failed (DB hiccup), we still return the generic
-        // response below rather than surfacing that - same reasoning as the
-        // no-such-email case, so this endpoint never confirms which emails exist.
     }
     res.json(generic);
 });
@@ -7389,6 +7402,13 @@ app.get('/manager', (req, res) => {
 // here since there's no :slug yet to scope a cookie to.
 app.get('/new', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'new-event.html'));
+});
+
+// Clean URL for the page the reset email links to (the link itself uses /reset-password.html).
+app.get('/reset-password', (req, res, next) => {
+    const file = path.join(__dirname, 'public', 'reset-password.html');
+    if (!require('fs').existsSync(file)) return next();
+    res.sendFile(file);
 });
 
 // Public list of songs that have a music video: Artist | Title | Video Type, A-Z by artist then title.
